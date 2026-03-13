@@ -1,0 +1,1037 @@
+import pygame
+import math
+from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE,
+                       MAP_COLS, MAP_ROWS, TOP_BAR_H, BOTTOM_PANEL_H,
+                       GAME_AREA_Y, GAME_AREA_H, ZOOM_STEP,
+                       MINIMAP_SIZE, MINIMAP_MARGIN, MINIMAP_X, MINIMAP_Y,
+                       TERRAIN_TREE, TERRAIN_GOLD, TERRAIN_IRON, TERRAIN_STONE,
+                       TERRAIN_COLORS, BUILDING_DEFS, BUILDING_LABELS,
+                       COL_BG, COL_SELECT, COL_TEXT,
+                       DIFFICULTY_PROFILES,
+                       HEAL_RATE_NEAR_TH, HEAL_RADIUS_TH,
+                       GROUND_ARROW_MAX, RANK_COLORS,
+                       SELECT_RADIUS, DRAG_THRESHOLD,
+                       TOWER_UPGRADE_COST, TOWER_CANNON_DAMAGE,
+                       TOWER_CANNON_CD, TOWER_EXPLOSIVE_DIRECT,
+                       MAX_CONTROL_GROUPS, RALLY_POINT_COLOR)
+from utils import dist, pos_to_tile, draw_text, ruin_rebuild_cost
+from game_map import GameMap
+from camera import Camera
+from resources import ResourceManager
+from entities import Unit, Building
+from squads import SquadManager
+from enemy_ai import EnemyAI
+from gui import GUI
+from event_logger import EventLogger
+
+
+class Game:
+    def __init__(self, screen, difficulty="medium"):
+        # close previous logger on restart (R key re-calls __init__)
+        if hasattr(self, 'logger') and self.logger:
+            self.logger.close(self)
+
+        self.screen = screen
+        self.clock = pygame.time.Clock()
+        self.running = True
+        self.game_over = False
+        self.game_won = False
+        self.game_surrendered = False
+
+        # difficulty
+        self.difficulty = difficulty
+        self.difficulty_profile = DIFFICULTY_PROFILES[difficulty]
+        profile = self.difficulty_profile
+
+        self.game_map = GameMap()
+        self.camera = Camera()
+        self.resources = ResourceManager(
+            gold=profile["start_gold"],
+            wood=profile["start_wood"],
+            iron=profile["start_iron"],
+            steel=profile["start_steel"])
+        self.gui = GUI()
+        self.gui.init_fonts()
+        self.enemy_ai = EnemyAI(difficulty)
+        self.game_time = 0.0
+        self.logger = EventLogger(difficulty)
+
+        self.player_units = []
+        self.player_buildings = []
+        self.enemy_units = []
+        self.arrows = []           # v9: ballistic arrows in flight
+        self.ground_arrows = []    # v9: grounded arrows (visual only)
+        self.cannonballs = []      # v10c: tower cannonballs in flight
+        self.explosions = []       # v10c: explosion VFX
+        self.escaped_enemies = []  # enemies that fled to map edge
+
+        # v9: squad managers
+        self.player_squad_mgr = SquadManager()
+        self.enemy_squad_mgr = SquadManager()
+
+        self.selected = []  # list of entities
+
+        # input state
+        self.selecting = False
+        self.select_start = None
+        self.placing_building = None  # building type str or None
+
+        # font cache
+        self.font = pygame.font.SysFont(None, 22)
+        self.font_sm = pygame.font.SysFont(None, 18)
+        self.font_lg = pygame.font.SysFont(None, 48)
+        self.font_notif = pygame.font.SysFont(None, 26)
+
+        # minimap
+        self.minimap_surf = None
+        self.minimap_timer = 0.0
+
+        # notifications
+        self._notifications = []  # list of [text, timer, color]
+
+        # wave clear tracking
+        self._had_enemies = False
+
+        # v10_1: control groups (Ctrl+0-9 to assign, 0-9 to recall)
+        self.control_groups = [[] for _ in range(MAX_CONTROL_GROUPS)]
+
+        # v10_1: attack-move mode (A key, then click)
+        self.attack_move_mode = False
+
+        # v10_2: inspected enemy (left-click enemy to view stats, no commands)
+        self.inspected_enemy = None
+
+        # v10_1: minimap combat heat overlay
+        self._combat_heat = []  # list of [x, y, timer]  (world coords)
+
+        self._setup_start()
+
+    def _setup_start(self):
+        profile = self.difficulty_profile
+        center_c, center_r = MAP_COLS // 2, MAP_ROWS // 2
+        # place town hall
+        th = Building(center_c - 1, center_r - 1, "town_hall", "player")
+        th.built = True
+        # mark tiles as occupied
+        for tc, tr in th.get_tiles():
+            self.game_map.tiles[tr][tc] = 0  # TERRAIN_GRASS
+        self.player_buildings.append(th)
+
+        # starting workers (from difficulty profile)
+        num_workers = profile.get("start_workers", 3)
+        for i in range(num_workers):
+            wx = th.x + 50 + i * 25
+            wy = th.y + 50
+            w = Unit(wx, wy, "worker", "player")
+            self.player_units.append(w)
+
+    def add_notification(self, text, duration=3.0, color=(255, 255, 100)):
+        """Add a floating notification message."""
+        self._notifications.append([text, duration, color])
+
+    def run(self):
+        while self.running:
+            dt = self.clock.tick(FPS) / 1000.0
+            dt = min(dt, 0.05)
+            self.game_time += dt
+            self.handle_events()
+            if not self.game_over and not self.game_won:
+                self.update(dt)
+            self.render()
+        self.logger.close(self)
+
+    def handle_events(self):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+                return
+
+            if self.game_over or self.game_won:
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    self.running = False
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_r:
+                    self.__init__(self.screen, self.difficulty)
+                    return
+                continue
+
+            if event.type == pygame.KEYDOWN:
+                self._handle_key(event.key)
+
+            elif event.type == pygame.MOUSEWHEEL:
+                mx, my = pygame.mouse.get_pos()
+                if GAME_AREA_Y <= my < GAME_AREA_Y + GAME_AREA_H:
+                    self.camera.apply_zoom(event.y * ZOOM_STEP, mx, my)
+
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:
+                    self._handle_left_down(event.pos)
+                elif event.button == 3:
+                    self._handle_right_click(event.pos)
+
+            elif event.type == pygame.MOUSEBUTTONUP:
+                if event.button == 1:
+                    self._handle_left_up(event.pos)
+
+    def _handle_key(self, key):
+        # F10: surrender — end the suffering
+        if key == pygame.K_F10:
+            self.game_over = True
+            self.game_surrendered = True
+            self.logger.log(self.game_time, "SURRENDER",
+                            self.enemy_ai.wave_number, "surrender", self.difficulty,
+                            note="player surrendered")
+            return
+
+        if key == pygame.K_ESCAPE:
+            if self.attack_move_mode:
+                self.attack_move_mode = False
+                return
+            if self.placing_building:
+                self.placing_building = None
+            else:
+                for e in self.selected:
+                    e.selected = False
+                self.selected.clear()
+                self.inspected_enemy = None
+
+        # v10_1: attack-move — press A to enter mode
+        if key == pygame.K_a:
+            units_sel = [e for e in self.selected if isinstance(e, Unit) and e.unit_type != "worker"]
+            if units_sel:
+                self.attack_move_mode = True
+                return
+
+        # cache worker selection (used by both control groups and build hotkeys)
+        workers_selected = [u for u in self.selected if isinstance(u, Unit) and u.unit_type == "worker"]
+
+        # v10_1: control groups — Ctrl+0-9 assigns, 0-9 recalls
+        mods = pygame.key.get_mods()
+        num_keys = {pygame.K_0: 0, pygame.K_1: 1, pygame.K_2: 2, pygame.K_3: 3,
+                    pygame.K_4: 4, pygame.K_5: 5, pygame.K_6: 6, pygame.K_7: 7,
+                    pygame.K_8: 8, pygame.K_9: 9}
+        if key in num_keys:
+            group_idx = num_keys[key]
+            if mods & pygame.KMOD_CTRL:
+                # assign current selection to control group
+                units_sel = [e for e in self.selected if isinstance(e, Unit)]
+                if units_sel:
+                    self.control_groups[group_idx] = [u.eid for u in units_sel]
+                    self.add_notification(f"Group {group_idx}: {len(units_sel)} units", 1.5, (180, 220, 255))
+                    return
+            else:
+                # recall control group — check if workers selected first (build hotkeys 1-4)
+                if workers_selected and group_idx in (1, 2, 3, 4):
+                    # fall through to build hotkeys below
+                    pass
+                elif self.control_groups[group_idx]:
+                    # recall: select units in this group
+                    for e in self.selected:
+                        e.selected = False
+                    self.selected.clear()
+                    eids = set(self.control_groups[group_idx])
+                    for u in self.player_units:
+                        if u.alive and u.eid in eids:
+                            u.selected = True
+                            self.selected.append(u)
+                    # clean dead units from group
+                    alive_eids = {u.eid for u in self.player_units if u.alive}
+                    self.control_groups[group_idx] = [eid for eid in self.control_groups[group_idx] if eid in alive_eids]
+                    if self.selected:
+                        # center camera on first unit
+                        e = self.selected[0]
+                        z = self.camera.zoom
+                        self.camera.x = e.x - SCREEN_WIDTH / (2 * z)
+                        self.camera.y = e.y - GAME_AREA_H / (2 * z)
+                    return
+
+        # build hotkeys (need worker selected)
+        if workers_selected:
+            if key == pygame.K_1:
+                self.start_placement("town_hall")
+            elif key == pygame.K_2:
+                self.start_placement("barracks")
+            elif key == pygame.K_3:
+                self.start_placement("refinery")
+            elif key == pygame.K_4:
+                self.start_placement("tower")
+
+        # train hotkeys (need building selected)
+        buildings_selected = [e for e in self.selected if isinstance(e, Building) and e.built]
+        for b in buildings_selected:
+            if key == pygame.K_q and b.building_type == "town_hall":
+                b.start_train("worker", self)
+            elif key == pygame.K_w and b.building_type == "barracks":
+                b.start_train("soldier", self)
+            elif key == pygame.K_e and b.building_type == "barracks":
+                b.start_train("archer", self)
+            elif key == pygame.K_u and b.can_upgrade_tower():
+                # v10c: upgrade tower to explosive cannon via hotkey
+                cost = TOWER_UPGRADE_COST
+                if self.resources.can_afford(steel=cost["steel"]):
+                    self.resources.spend(steel=cost["steel"])
+                    # find a nearby idle worker to do the upgrade
+                    best_worker = None
+                    best_d = float("inf")
+                    for u in self.player_units:
+                        if u.alive and u.unit_type == "worker" and u.state == "idle":
+                            wd = dist(u.x, u.y, b.x, b.y)
+                            if wd < best_d:
+                                best_d = wd
+                                best_worker = u
+                    if best_worker:
+                        best_worker.command_tower_upgrade(b, self)
+                        self.add_notification("Upgrading tower to Explosive Cannon (15 steel)", 2.0, (255, 140, 40))
+                    else:
+                        # refund if no worker available
+                        self.resources.steel += cost["steel"]
+                        self.add_notification("No idle workers available for upgrade!", 2.0, (255, 80, 80))
+
+        if key == pygame.K_SPACE and self.selected:
+            e = self.selected[0]
+            z = self.camera.zoom
+            self.camera.x = e.x - SCREEN_WIDTH / (2 * z)
+            self.camera.y = e.y - GAME_AREA_H / (2 * z)
+
+    def _handle_left_down(self, pos):
+        sx, sy = pos
+
+        # check minimap click
+        if self._minimap_click(sx, sy):
+            return
+
+        # check GUI first
+        if sy >= SCREEN_HEIGHT - BOTTOM_PANEL_H:
+            if self.gui.handle_click(pos):
+                return
+
+        if sy < GAME_AREA_Y or sy >= GAME_AREA_Y + GAME_AREA_H:
+            return
+
+        # v10_1: attack-move click — move to position, auto-attack anything in range
+        if self.attack_move_mode:
+            self.attack_move_mode = False
+            wx, wy = self.camera.screen_to_world(sx, sy)
+            units_sel = [e for e in self.selected if isinstance(e, Unit) and e.unit_type != "worker"]
+            for u in units_sel:
+                u.command_move(wx, wy, self)
+                # set a flag so idle behavior triggers aggro on arrival
+                u._attack_move_target = (wx, wy)
+            return
+
+        # building placement
+        if self.placing_building:
+            wx, wy = self.camera.screen_to_world(sx, sy)
+            col, row = pos_to_tile(wx, wy)
+            if self._can_place_building(self.placing_building, col, row):
+                self._place_building(self.placing_building, col, row)
+            return
+
+        # start drag select
+        self.selecting = True
+        self.select_start = pos
+
+    def _handle_left_up(self, pos):
+        if not self.selecting:
+            return
+        self.selecting = False
+
+        sx, sy = pos
+        start_sx, start_sy = self.select_start
+
+        if abs(sx - start_sx) < DRAG_THRESHOLD and abs(sy - start_sy) < DRAG_THRESHOLD:
+            # single click select
+            self._single_select(pos)
+        else:
+            # drag select
+            self._box_select(self.select_start, pos)
+
+        self.select_start = None
+
+    def _single_select(self, pos):
+        sx, sy = pos
+        wx, wy = self.camera.screen_to_world(sx, sy)
+
+        # deselect all
+        for e in self.selected:
+            e.selected = False
+        self.selected.clear()
+        self.inspected_enemy = None
+
+        # check player units first
+        best = None
+        best_d = SELECT_RADIUS
+        for u in self.player_units:
+            if not u.alive:
+                continue
+            d = dist(wx, wy, u.x, u.y)
+            if d < best_d:
+                best_d = d
+                best = u
+
+        # check buildings
+        if not best:
+            best = self._find_building_at(wx, wy)
+
+        if best:
+            best.selected = True
+            self.selected.append(best)
+        else:
+            # v10_2: check enemy units for inspection (info only, no commands)
+            best_enemy = None
+            best_ed = SELECT_RADIUS
+            for e in self.enemy_units:
+                if not e.alive:
+                    continue
+                d = dist(wx, wy, e.x, e.y)
+                if d < best_ed:
+                    best_ed = d
+                    best_enemy = e
+            if best_enemy:
+                self.inspected_enemy = best_enemy
+
+    def _box_select(self, start, end):
+        for e in self.selected:
+            e.selected = False
+        self.selected.clear()
+
+        x1 = min(start[0], end[0])
+        y1 = min(start[1], end[1])
+        x2 = max(start[0], end[0])
+        y2 = max(start[1], end[1])
+
+        for u in self.player_units:
+            if not u.alive:
+                continue
+            sx, sy = self.camera.world_to_screen(u.x, u.y)
+            if x1 <= sx <= x2 and y1 <= sy <= y2:
+                u.selected = True
+                self.selected.append(u)
+
+    def _handle_right_click(self, pos):
+        sx, sy = pos
+        if sy < GAME_AREA_Y or sy >= GAME_AREA_Y + GAME_AREA_H:
+            return
+
+        # cancel placement
+        if self.placing_building:
+            self.placing_building = None
+            return
+
+        wx, wy = self.camera.screen_to_world(sx, sy)
+
+        units_sel = [e for e in self.selected if isinstance(e, Unit)]
+        if not units_sel:
+            # v10_1: rally point — right-click with building selected sets rally
+            buildings_sel = [e for e in self.selected if isinstance(e, Building) and e.built
+                             and e.building_type in ("town_hall", "barracks")]
+            if buildings_sel:
+                for b in buildings_sel:
+                    b.rally_point = (wx, wy)
+                self.add_notification("Rally point set", 1.5, RALLY_POINT_COLOR)
+            return
+
+        # check enemy at position
+        for e in self.enemy_units:
+            if not e.alive:
+                continue
+            if dist(wx, wy, e.x, e.y) < SELECT_RADIUS:
+                for u in units_sel:
+                    u.command_attack(e, self)
+                return
+
+        # check resource tile
+        col, row = pos_to_tile(wx, wy)
+        tile_t = self.game_map.get_tile(col, row)
+        if tile_t in (TERRAIN_TREE, TERRAIN_GOLD, TERRAIN_IRON, TERRAIN_STONE):
+            workers = [u for u in units_sel if u.unit_type == "worker"]
+            for w in workers:
+                w.command_gather(col, row, self)
+            # move non-workers near the spot
+            others = [u for u in units_sel if u.unit_type != "worker"]
+            for u in others:
+                u.command_move(wx, wy, self)
+            return
+
+        # check player building -- ruin rebuild, resume build, or repair
+        b = self._find_building_at(wx, wy)
+        if b:
+            workers = [u for u in units_sel if u.unit_type == "worker"]
+            handled = False
+            if b.ruined:
+                # rebuild from ruin at reduced cost
+                gold_cost, wood_cost, iron_cost, steel_cost, stone_cost = ruin_rebuild_cost(b.building_type)
+                if workers and self.resources.can_afford(
+                        gold=gold_cost, wood=wood_cost,
+                        iron=iron_cost, steel=steel_cost,
+                        stone=stone_cost):
+                    self.resources.spend(
+                        gold=gold_cost, wood=wood_cost,
+                        iron=iron_cost, steel=steel_cost,
+                        stone=stone_cost)
+                    b.ruined = False
+                    for w in workers:
+                        w.command_build(b, self)
+                    self.add_notification(
+                        f"Rebuilding {b.building_type.replace('_', ' ').title()} from ruins",
+                        2.0, (180, 180, 255))
+                    handled = True
+            elif not b.built:
+                # resume/assist construction
+                for w in workers:
+                    w.command_build(b, self)
+                handled = True
+            elif b.hp < b.max_hp:
+                # repair damaged building
+                for w in workers:
+                    w.command_repair(b, self)
+                handled = True
+            elif b.can_upgrade_tower():
+                # v10c: upgrade tower to explosive cannon
+                cost = TOWER_UPGRADE_COST
+                if workers and self.resources.can_afford(steel=cost["steel"]):
+                    self.resources.spend(steel=cost["steel"])
+                    for w in workers:
+                        w.command_tower_upgrade(b, self)
+                    self.add_notification("Upgrading tower to Explosive Cannon (15 steel)", 2.0, (255, 140, 40))
+                    handled = True
+            # else: fully built and healthy -- fall through to move
+            if handled:
+                others = [u for u in units_sel if u.unit_type != "worker"]
+                for u in others:
+                    u.command_move(wx, wy, self)
+                return
+
+        # move command
+        for u in units_sel:
+            u.command_move(wx, wy, self)
+
+    def start_placement(self, building_type):
+        d = BUILDING_DEFS[building_type]
+        if self.resources.can_afford(gold=d["gold"], wood=d["wood"], iron=d.get("iron", 0),
+                                     steel=d.get("steel", 0), stone=d.get("stone", 0)):
+            self.placing_building = building_type
+
+    def _can_place_building(self, btype, col, row):
+        d = BUILDING_DEFS[btype]
+        size = d["size"]
+        if not self.resources.can_afford(gold=d["gold"], wood=d["wood"], iron=d.get("iron", 0),
+                                         steel=d.get("steel", 0), stone=d.get("stone", 0)):
+            return False
+        for dr in range(size):
+            for dc in range(size):
+                tc, tr = col + dc, row + dr
+                if not self.game_map.is_buildable(tc, tr):
+                    return False
+                # check overlap with other buildings (including ruins)
+                for b in self.player_buildings:
+                    if not b.alive:
+                        continue
+                    for bc, br in b.get_tiles():
+                        if tc == bc and tr == br:
+                            return False
+        return True
+
+    def _place_building(self, btype, col, row):
+        d = BUILDING_DEFS[btype]
+        self.resources.spend(gold=d["gold"], wood=d["wood"], iron=d.get("iron", 0),
+                             steel=d.get("steel", 0), stone=d.get("stone", 0))
+        b = Building(col, row, btype, "player")
+        self.player_buildings.append(b)
+        self.placing_building = None
+        self.logger.log(
+            self.game_time, "BUILDING_PLACED",
+            self.enemy_ai.wave_number,
+            btype, f"{d['gold']}g {d['wood']}w")
+
+        # assign a selected worker to build
+        workers = [u for u in self.selected if isinstance(u, Unit) and u.unit_type == "worker"]
+        if workers:
+            workers[0].command_build(b, self)
+
+    def get_blocked_tiles(self):
+        """Return set of tiles occupied by alive buildings (both player and enemy)."""
+        blocked = set()
+        for b in self.player_buildings + getattr(self, 'enemy_buildings', []):
+            if not b.alive:
+                continue
+            for tile in b.get_tiles():
+                blocked.add(tile)
+        return blocked
+
+    def _find_building_at(self, wx, wy):
+        """Return the first alive player building at world coordinates, or None."""
+        for b in self.player_buildings:
+            if not b.alive:
+                continue
+            bx1 = b.col * TILE_SIZE
+            by1 = b.row * TILE_SIZE
+            bx2 = bx1 + b.size * TILE_SIZE
+            by2 = by1 + b.size * TILE_SIZE
+            if bx1 <= wx <= bx2 and by1 <= wy <= by2:
+                return b
+        return None
+
+    def get_nearest_town_hall(self, x, y):
+        best = None
+        best_d = 1e9
+        for b in self.player_buildings:
+            if b.alive and b.built and b.building_type == "town_hall":
+                d = dist(x, y, b.x, b.y)
+                if d < best_d:
+                    best_d = d
+                    best = b
+        return best
+
+    def update(self, dt):
+        mx, my = pygame.mouse.get_pos()
+        keys = pygame.key.get_pressed()
+        # suppress WASD camera scroll when units/buildings selected
+        # (A=attack-move, W=train soldier, E=train archer, Q=train worker conflict)
+        suppress = bool(self.selected) or self.attack_move_mode
+        self.camera.update(keys, dt, mx, my, suppress_wasd=suppress)
+
+        self.enemy_ai.update(dt, self)
+
+        # track whether enemies exist before updates
+        had_enemies = len(self.enemy_units) > 0
+
+        for u in self.player_units:
+            u.update(dt, self)
+        for u in self.enemy_units:
+            u.update(dt, self)
+        for b in self.player_buildings:
+            b.update(dt, self)
+
+        # v9: update ballistic arrows
+        for a in self.arrows:
+            a.update(dt, self)
+        # partition: newly grounded arrows move to ground_arrows list
+        still_flying = []
+        for a in self.arrows:
+            if a.grounded and a.alive:
+                self.ground_arrows.append(a)
+            elif a.alive and not a.grounded:
+                still_flying.append(a)
+        self.arrows = still_flying
+        # cull ground arrows: remove expired, cap at max
+        self.ground_arrows = [a for a in self.ground_arrows if a.alive]
+        if len(self.ground_arrows) > GROUND_ARROW_MAX:
+            self.ground_arrows = self.ground_arrows[-GROUND_ARROW_MAX:]
+
+        # v10c: update cannonballs and explosions
+        for c in self.cannonballs:
+            c.update(dt, self)
+        self.cannonballs = [c for c in self.cannonballs if c.alive]
+        for ex in self.explosions:
+            ex.update(dt)
+        self.explosions = [ex for ex in self.explosions if ex.alive]
+
+        # v9: update squad managers
+        self.player_squad_mgr.update(dt, self.player_units)
+        self.enemy_squad_mgr.update(dt, self.enemy_units)
+
+        # passive healing near town hall
+        town_halls = [b for b in self.player_buildings
+                      if b.alive and b.built and not b.ruined
+                      and b.building_type == "town_hall"]
+        for u in self.player_units:
+            if not u.alive or u.hp >= u.max_hp:
+                continue
+            for th in town_halls:
+                if dist(u.x, u.y, th.x, th.y) <= HEAL_RADIUS_TH:
+                    u.hp = min(u.max_hp, u.hp + HEAL_RATE_NEAR_TH * dt)
+                    break
+
+        # v10_1: record combat heat for dead units (minimap overlay)
+        for u in self.enemy_units:
+            if not u.alive:
+                self._combat_heat.append([u.x, u.y, 30.0])  # 30 sec decay
+        for u in self.player_units:
+            if not u.alive and u.unit_type != "worker":
+                self._combat_heat.append([u.x, u.y, 30.0])
+        # decay heat
+        self._combat_heat = [[x, y, t - dt] for x, y, t in self._combat_heat if t - dt > 0]
+
+        # remove dead
+        self.player_units = [u for u in self.player_units if u.alive]
+        self.enemy_units = [u for u in self.enemy_units if u.alive]
+        self.player_buildings = [b for b in self.player_buildings if b.alive]
+        self.selected = [e for e in self.selected if e.alive]
+        # v10_2: clear inspected enemy if dead
+        if self.inspected_enemy and not self.inspected_enemy.alive:
+            self.inspected_enemy = None
+
+        # wave cleared check
+        enemies_now = len(self.enemy_units) > 0
+        if had_enemies and not enemies_now and self.enemy_ai.wave_number > 0:
+            self._on_wave_cleared()
+
+        # update notifications (filter uses timer - dt so no negative timers survive)
+        self._notifications = [[t, timer - dt, c]
+                                for t, timer, c in self._notifications if timer - dt > 0]
+
+        # check game over
+        if not self.player_buildings:
+            self.game_over = True
+            self.logger.log(self.game_time, "GAME_OVER",
+                            self.enemy_ai.wave_number, "defeat", self.difficulty)
+
+        if self.enemy_ai.game_won and not self.enemy_units:
+            self.game_won = True
+            self.logger.log(self.game_time, "GAME_OVER",
+                            self.enemy_ai.wave_number, "victory", self.difficulty)
+
+    def _on_wave_cleared(self):
+        """Award wave completion bonus and apply veterancy."""
+        wn = self.enemy_ai.wave_number
+        profile = self.difficulty_profile
+
+        # wave completion bonus (scales slightly with wave number)
+        bonus_gold = profile["wave_bonus_gold"] + wn * 2
+        bonus_wood = profile["wave_bonus_wood"] + wn
+        bonus_steel = profile["wave_bonus_steel"] + wn // 3
+        self.resources.gold += bonus_gold
+        self.resources.wood += bonus_wood
+        self.resources.steel += bonus_steel
+
+        self.add_notification(
+            f"Wave {wn} cleared! +{bonus_gold}g +{bonus_wood}w +{bonus_steel}s",
+            3.5, (255, 255, 100))
+
+        # count escaped enemies for notification
+        esc = len(self.escaped_enemies)
+        if esc > 0:
+            self.add_notification(
+                f"{esc} {'enemy' if esc == 1 else 'enemies'} escaped — they will return stronger!",
+                3.5, (255, 140, 80))
+
+        self.logger.log(self.game_time, "WAVE_CLEARED", wn,
+                        str(bonus_gold), str(bonus_wood), str(bonus_steel),
+                        esc, f"enemies_escaped:{esc}")
+
+        # v9: rank-up notifications (XP is granted per-hit during combat, not here)
+        # Clear projectiles between waves for visual cleanliness
+        self.ground_arrows.clear()
+        self.cannonballs.clear()
+
+    def render(self):
+        self.screen.fill(COL_BG)
+
+        # clip game area
+        clip_rect = pygame.Rect(0, GAME_AREA_Y, SCREEN_WIDTH, GAME_AREA_H)
+        self.screen.set_clip(clip_rect)
+
+        self._render_map()
+        self._render_ground_arrows()   # v9: stuck arrows on ground (below units)
+        self._render_buildings()
+        self._render_units()
+        self._render_arrows()          # v9: flying arrows (above units)
+        self._render_cannonballs()     # v10c: tower cannonballs + explosions
+        self._render_placement_ghost()
+        self._render_rally_points()     # v10_1: rally point flags
+        self._render_select_rect()
+        self._render_enemy_inspect()    # v10_2: red ring on inspected enemy
+
+        self.screen.set_clip(None)
+
+        # GUI
+        self.gui.draw_top_bar(self.screen, self.resources, self.enemy_ai, self.player_units)
+        self.gui.draw_bottom_panel(self.screen, self.selected, self,
+                                   inspected_enemy=self.inspected_enemy)
+
+        # minimap
+        self._render_minimap()
+
+        # v10_2: attack-move cursor indicator
+        if self.attack_move_mode:
+            mx, my = pygame.mouse.get_pos()
+            draw_text(self.screen, "ATTACK MOVE", mx + 12, my - 12, self.font_sm, (255, 80, 80))
+
+        # notifications
+        self._render_notifications()
+
+        # game over / win overlay
+        if self.game_over:
+            label = "SURRENDERED" if self.game_surrendered else "DEFEAT"
+            self._draw_overlay(label, (200, 50, 50))
+        elif self.game_won:
+            label = self.difficulty_profile.get("label", "Medium")
+            self._draw_overlay(f"VICTORY! ({label})", (50, 200, 50))
+
+        pygame.display.flip()
+
+    def _render_notifications(self):
+        """Draw floating notification messages."""
+        y = GAME_AREA_Y + 50
+        for text, timer, color in self._notifications:
+            fade_color = tuple(max(0, min(255, int(c * max(0.0, min(1.0, timer))))) for c in color)
+            draw_text(self.screen, text, SCREEN_WIDTH // 2, y, self.font_notif,
+                      fade_color, center=True)
+            y += 28
+
+    def _render_map(self):
+        vr = self.camera.visible_rect()
+        z = self.camera.zoom
+        ts = int(TILE_SIZE * z) + 1  # screen-space tile size (+ 1 to avoid gaps)
+        c_min = max(0, int(vr.x // TILE_SIZE))
+        r_min = max(0, int(vr.y // TILE_SIZE))
+        c_max = min(MAP_COLS, int((vr.x + vr.width) // TILE_SIZE) + 1)
+        r_max = min(MAP_ROWS, int((vr.y + vr.height) // TILE_SIZE) + 1)
+
+        for r in range(r_min, r_max):
+            for c in range(c_min, c_max):
+                t = self.game_map.tiles[r][c]
+                color = TERRAIN_COLORS.get(t, (40, 118, 74))
+                sx, sy = self.camera.world_to_screen(c * TILE_SIZE, r * TILE_SIZE)
+                pygame.draw.rect(self.screen, color, (sx, sy, ts, ts))
+
+                # decorations (scale sizes with zoom)
+                if t == TERRAIN_TREE:
+                    cx = sx + ts // 2
+                    cy = sy + ts // 2
+                    r1 = max(2, int(10 * z))
+                    r2 = max(2, int(8 * z))
+                    pygame.draw.circle(self.screen, (0, 60, 0), (cx, cy - int(4 * z)), r1)
+                    pygame.draw.circle(self.screen, (10, 80, 10), (cx, cy - int(4 * z)), r2)
+                elif t == TERRAIN_GOLD:
+                    cx = sx + ts // 2
+                    cy = sy + ts // 2
+                    pygame.draw.circle(self.screen, (255, 230, 80), (cx, cy), max(2, int(6 * z)))
+                elif t == TERRAIN_IRON:
+                    cx = sx + ts // 2
+                    cy = sy + ts // 2
+                    s = int(7 * z)
+                    s2 = int(6 * z)
+                    s3 = int(5 * z)
+                    pts = [(cx, cy - s), (cx - s2, cy + s3), (cx + s2, cy + s3)]
+                    pygame.draw.polygon(self.screen, (180, 180, 195), pts)
+                elif t == TERRAIN_STONE:
+                    cx = sx + ts // 2
+                    cy = sy + ts // 2
+                    s = int(6 * z)
+                    pts = [(cx, cy - s), (cx + s, cy), (cx, cy + s), (cx - s, cy)]
+                    pygame.draw.polygon(self.screen, (185, 175, 155), pts)
+
+        # grid lines (only at zoom >= 0.7 to avoid clutter)
+        # use dark grass tint instead of RGBA (screen is non-alpha surface)
+        if z >= 0.7:
+            grid_col = (30, 90, 56)  # darkened grass — subtle grid
+            for r in range(r_min, r_max + 1):
+                sy = self.camera.world_to_screen(0, r * TILE_SIZE)[1]
+                sx_start = self.camera.world_to_screen(c_min * TILE_SIZE, 0)[0]
+                sx_end = self.camera.world_to_screen(c_max * TILE_SIZE, 0)[0]
+                pygame.draw.line(self.screen, grid_col, (sx_start, sy), (sx_end, sy))
+            for c in range(c_min, c_max + 1):
+                sx = self.camera.world_to_screen(c * TILE_SIZE, 0)[0]
+                sy_start = self.camera.world_to_screen(0, r_min * TILE_SIZE)[1]
+                sy_end = self.camera.world_to_screen(0, r_max * TILE_SIZE)[1]
+                pygame.draw.line(self.screen, grid_col, (sx, sy_start), (sx, sy_end))
+
+    def _render_buildings(self):
+        for b in self.player_buildings:
+            b.draw(self.screen, self.camera)
+
+    def _render_units(self):
+        all_units = self.player_units + self.enemy_units
+        all_units.sort(key=lambda u: u.y)
+        for u in all_units:
+            u.draw(self.screen, self.camera)
+
+    def _render_ground_arrows(self):
+        """Draw grounded arrows (stuck in terrain, below units)."""
+        for a in self.ground_arrows:
+            a.draw(self.screen, self.camera)
+
+    def _render_arrows(self):
+        """Draw flying arrows (above units)."""
+        for a in self.arrows:
+            a.draw(self.screen, self.camera)
+
+    def _render_cannonballs(self):
+        """v10c: Draw tower cannonballs and explosion VFX."""
+        for c in self.cannonballs:
+            c.draw(self.screen, self.camera)
+        for ex in self.explosions:
+            ex.draw(self.screen, self.camera)
+
+    def _render_placement_ghost(self):
+        if not self.placing_building:
+            return
+        mx, my = pygame.mouse.get_pos()
+        if my < GAME_AREA_Y or my >= GAME_AREA_Y + GAME_AREA_H:
+            return
+        wx, wy = self.camera.screen_to_world(mx, my)
+        col, row = pos_to_tile(wx, wy)
+        d = BUILDING_DEFS[self.placing_building]
+        size = d["size"]
+        sx, sy = self.camera.world_to_screen(col * TILE_SIZE, row * TILE_SIZE)
+        z = self.camera.zoom
+        px_size = int(size * TILE_SIZE * z)
+
+        valid = self._can_place_building(self.placing_building, col, row)
+
+        ghost = pygame.Surface((px_size, px_size), pygame.SRCALPHA)
+        if valid:
+            ghost.fill((0, 200, 0, 80))
+        else:
+            ghost.fill((200, 0, 0, 80))
+        self.screen.blit(ghost, (sx, sy))
+
+        label = BUILDING_LABELS.get(self.placing_building, "??")
+        draw_text(self.screen, label, sx + px_size // 2, sy + px_size // 2, self.font, (255, 255, 255), center=True)
+
+        # cost tooltip above ghost
+        cost = GUI.building_cost_str(self.placing_building)
+        name = self.placing_building.replace("_", " ").title()
+        draw_text(self.screen, f"{name} - {cost}", sx + px_size // 2, sy - 14, self.font_sm, (255, 255, 200), center=True)
+
+    def _render_rally_points(self):
+        """v10_1: Draw rally point flags for selected buildings."""
+        for b in self.player_buildings:
+            if b.alive and b.built and b.rally_point and b.selected:
+                sx, sy = self.camera.world_to_screen(b.rally_point[0], b.rally_point[1])
+                z = self.camera.zoom
+                # flag pole
+                pole_h = max(8, int(18 * z))
+                pygame.draw.line(self.screen, RALLY_POINT_COLOR, (sx, sy), (sx, sy - pole_h), max(1, int(2 * z)))
+                # flag triangle
+                flag_w = max(4, int(8 * z))
+                flag_h = max(3, int(6 * z))
+                pts = [(sx, sy - pole_h), (sx + flag_w, sy - pole_h + flag_h // 2), (sx, sy - pole_h + flag_h)]
+                pygame.draw.polygon(self.screen, RALLY_POINT_COLOR, pts)
+                # connecting line from building
+                bsx, bsy = self.camera.world_to_screen(b.x, b.y)
+                pygame.draw.line(self.screen, (60, 200, 60), (bsx, bsy), (sx, sy), 1)
+
+    def _render_select_rect(self):
+        if not self.selecting or not self.select_start:
+            return
+        mx, my = pygame.mouse.get_pos()
+        x1, y1 = self.select_start
+        w = mx - x1
+        h = my - y1
+        rect_surf = pygame.Surface((abs(w), abs(h)), pygame.SRCALPHA)
+        rect_surf.fill((0, 255, 0, 30))
+        rx = min(x1, mx)
+        ry = min(y1, my)
+        self.screen.blit(rect_surf, (rx, ry))
+        pygame.draw.rect(self.screen, COL_SELECT, (rx, ry, abs(w), abs(h)), 1)
+
+    def _render_enemy_inspect(self):
+        """v10_2: Draw red selection ring around inspected enemy."""
+        if not self.inspected_enemy or not self.inspected_enemy.alive:
+            return
+        e = self.inspected_enemy
+        sx, sy = self.camera.world_to_screen(e.x, e.y)
+        z = self.camera.zoom
+        from constants import UNIT_RADIUS
+        r = max(2, int(UNIT_RADIUS.get(e.unit_type, 12) * z))
+        pygame.draw.circle(self.screen, (255, 60, 60), (sx, sy), r + max(1, int(3 * z)), 2)
+
+    def _build_minimap_base(self):
+        """Build the static terrain layer of the minimap."""
+        scale = MINIMAP_SIZE / max(MAP_COLS, MAP_ROWS)
+        surf = pygame.Surface((MINIMAP_SIZE, MINIMAP_SIZE))
+        surf.fill((20, 20, 20))
+        for r in range(MAP_ROWS):
+            for c in range(MAP_COLS):
+                t = self.game_map.tiles[r][c]
+                color = TERRAIN_COLORS.get(t, (40, 118, 74))
+                px = int(c * scale)
+                py = int(r * scale)
+                pw = max(1, int(scale) + 1)
+                ph = max(1, int(scale) + 1)
+                pygame.draw.rect(surf, color, (px, py, pw, ph))
+        return surf
+
+    def _render_minimap(self):
+        # rebuild base terrain every 2 seconds (resource tiles can deplete)
+        self.minimap_timer -= 1.0 / FPS
+        if self.minimap_surf is None or self.minimap_timer <= 0:
+            self.minimap_surf = self._build_minimap_base()
+            self.minimap_timer = 2.0
+
+        mm = self.minimap_surf.copy()
+        scale = MINIMAP_SIZE / max(MAP_COLS, MAP_ROWS)
+        tile_scale = scale / TILE_SIZE  # world coords to minimap coords
+
+        # draw player buildings
+        for b in self.player_buildings:
+            px = int(b.col * scale)
+            py = int(b.row * scale)
+            ps = max(2, int(b.size * scale))
+            color = (50, 50, 80) if b.ruined else (80, 140, 255)
+            pygame.draw.rect(mm, color, (px, py, ps, ps))
+
+        # draw player units (v9: rank-based color on minimap)
+        for u in self.player_units:
+            px = int(u.x * tile_scale)
+            py = int(u.y * tile_scale)
+            if u.rank > 0 and u.unit_type != "worker":
+                color = RANK_COLORS.get(u.rank, (100, 200, 255))
+            else:
+                color = (100, 200, 255)
+            pygame.draw.circle(mm, color, (px, py), 2)
+
+        # draw enemy units
+        for u in self.enemy_units:
+            px = int(u.x * tile_scale)
+            py = int(u.y * tile_scale)
+            pygame.draw.circle(mm, (255, 80, 80), (px, py), 2)
+
+        # v10_1: combat heat overlay (fading red hotspots where kills occurred)
+        if self._combat_heat:
+            heat_surf = pygame.Surface((MINIMAP_SIZE, MINIMAP_SIZE), pygame.SRCALPHA)
+            for hx, hy, ht in self._combat_heat:
+                px = int(hx * tile_scale)
+                py = int(hy * tile_scale)
+                intensity = min(1.0, ht / 15.0)  # fades over 15 sec
+                alpha = int(80 * intensity)
+                r_heat = max(2, int(6 * intensity))
+                pygame.draw.circle(heat_surf, (255, 40, 40, alpha), (px, py), r_heat)
+            mm.blit(heat_surf, (0, 0))
+
+        # v10_1: rally point flags on minimap
+        for b in self.player_buildings:
+            if b.alive and b.built and b.rally_point:
+                rpx = int(b.rally_point[0] * tile_scale)
+                rpy = int(b.rally_point[1] * tile_scale)
+                pygame.draw.circle(mm, RALLY_POINT_COLOR, (rpx, rpy), 3, 1)
+
+        # draw camera viewport rectangle
+        vr = self.camera.visible_rect()
+        vx = int(vr.x * tile_scale)
+        vy = int(vr.y * tile_scale)
+        vw = max(4, int(vr.width * tile_scale))
+        vh = max(4, int(vr.height * tile_scale))
+        pygame.draw.rect(mm, (255, 255, 255), (vx, vy, vw, vh), 1)
+
+        # draw border and blit to screen
+        pygame.draw.rect(mm, (180, 180, 180), (0, 0, MINIMAP_SIZE, MINIMAP_SIZE), 1)
+        self.screen.blit(mm, (MINIMAP_X, MINIMAP_Y))
+
+    def _minimap_rect(self):
+        return pygame.Rect(MINIMAP_X, MINIMAP_Y, MINIMAP_SIZE, MINIMAP_SIZE)
+
+    def _minimap_click(self, sx, sy):
+        """Jump camera to the clicked position on the minimap."""
+        mr = self._minimap_rect()
+        if not mr.collidepoint(sx, sy):
+            return False
+        # convert minimap coords to world coords
+        scale = MINIMAP_SIZE / max(MAP_COLS, MAP_ROWS)
+        tile_scale = scale / TILE_SIZE
+        wx = (sx - MINIMAP_X) / tile_scale
+        wy = (sy - MINIMAP_Y) / tile_scale
+        z = self.camera.zoom
+        self.camera.x = wx - SCREEN_WIDTH / (2 * z)
+        self.camera.y = wy - GAME_AREA_H / (2 * z)
+        self.camera._clamp()
+        return True
+
+    def _draw_overlay(self, text, color):
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 150))
+        self.screen.blit(overlay, (0, 0))
+        draw_text(self.screen, text, SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 30, self.font_lg, color, center=True)
+        draw_text(self.screen, "Press R to restart or ESC for menu", SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 30, self.font, COL_TEXT, center=True)
