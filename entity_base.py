@@ -84,6 +84,18 @@ class Entity:
         return pos_to_tile(self.x, self.y)
 
     def take_damage(self, dmg, attacker=None):
+        # v10_6: frontal armor (Shieldbearer) — reduce damage from the front
+        armor = getattr(self, 'frontal_armor', 0.0)
+        if armor > 0 and attacker is not None:
+            ax = getattr(attacker, 'x', self.x) - self.x
+            ay = getattr(attacker, 'y', self.y) - self.y
+            facing = getattr(self, 'facing_angle', 0.0)
+            attack_angle = math.atan2(ay, ax)
+            diff = abs(attack_angle - facing)
+            if diff > math.pi:
+                diff = 2 * math.pi - diff
+            if diff < math.pi / 2:  # within ±90° of front
+                dmg = int(dmg * (1.0 - armor))
         self.hp -= dmg
         if attacker is not None:
             self.last_attacker = attacker

@@ -41,10 +41,14 @@ from constants import (UNIT_DEFS, ENEMY_DEFS, UNIT_COLORS, ENEMY_COLORS,
                        DROPOFF_BUILDING_TYPES,
                        SCAFFOLD_AURA_RANGE, SCAFFOLD_SPEED_BONUS,
                        PRODUCTION_RATES,
-                       TOWER_UPGRADE_TIME)
+                       TOWER_UPGRADE_TIME,
+                       STANCE_AGGRESSIVE, STANCE_DEFENSIVE, STANCE_GUARD,
+                       STANCE_HUNT,
+                       FORMATION_SLOT_ARRIVAL, FORMATION_REGROUP_DELAY)
 from utils import dist, pos_to_tile, tile_center, draw_text
 from pathfinding import a_star
 from entity_base import Entity, _process_combat_hit
+from squads import formation_slot
 
 # ---------------------------------------------------------------------------
 # Lazy imports to avoid circular dependencies
@@ -82,6 +86,13 @@ class Unit(Entity):
         self.attack_cd = d.get("cd", 1.0)
         self.attack_timer = 0.0
         self.building_mult = d.get("building_mult", 1.0)  # siege bonus vs buildings
+        # v10_6: new enemy type attributes
+        self.self_destruct = d.get("self_destruct", False)
+        self.frontal_armor = d.get("frontal_armor", 0.0)
+        self.heal_rate = d.get("heal_rate", 0.0)
+        self.economy_only = d.get("economy_only", False)
+        self.aoe_radius = d.get("aoe_radius", 0)
+        self.facing_angle = 0.0
 
         # state: idle, moving, gathering, building, attacking, returning
         self.state = "idle"
@@ -126,9 +137,12 @@ class Unit(Entity):
             self._roll_traits()
         # v10_1: attack-move destination (enhanced aggro on arrival)
         self._attack_move_target = None
-        # v10_2: hold ground stance — fight in range, never chase
-        self.hold_ground = False
-        self.hold_after_move = False
+        # v10_6: stance system (replaces hold_ground)
+        self.stance = STANCE_AGGRESSIVE
+        # v10_6: formation slot tracking
+        self._formation_slot_index = -1
+        self._formation_target = None
+        self._out_of_combat_timer = 0.0
         # v10_2: garrison
         self.garrison_target = None
         # v10_2: station target (production buildings)
@@ -142,8 +156,6 @@ class Unit(Entity):
         self.gather_tile = None
         self.build_target = None
         self.repair_target = None
-        self.hold_ground = False
-        self.hold_after_move = False
         self.garrison_target = None
         self.station_target = None
         self._attack_move_target = None
@@ -443,7 +455,11 @@ class Unit(Entity):
         """Stop and hold position — fight in range, never chase."""
         self._clear_tasks()
         self.state = "idle"
-        self.hold_ground = True
+        self.stance = STANCE_DEFENSIVE
+
+    def command_set_stance(self, stance):
+        """Set unit stance (Aggressive/Defensive/Guard/Hunt)."""
+        self.stance = stance
 
     def command_garrison(self, building, game):
         """Move to a town hall and enter garrison."""
@@ -560,7 +576,13 @@ class Unit(Entity):
     def _idle_behavior(self, dt, game):
         # combat units auto-aggro
         if self.unit_type in ("soldier", "archer", "enemy_soldier", "enemy_archer",
-                               "enemy_elite", "enemy_siege"):
+                               "enemy_elite", "enemy_siege",
+                               "enemy_sapper", "enemy_shieldbearer", "enemy_healer",
+                               "enemy_raider", "enemy_warlock"):
+            # v10_6: Healer — heal allies instead of fighting
+            if self.unit_type == "enemy_healer":
+                if self._healer_tick(dt, game):
+                    return
             # v9 squad follower: assist leader's target or follow leader
             squad_mgr = game.player_squad_mgr if self.owner == "player" else game.enemy_squad_mgr
             leader = squad_mgr.get_leader(self)
@@ -578,11 +600,14 @@ class Unit(Entity):
                     self.state = "moving"
                     return
 
-            # normal auto-aggro (for leaders, unassigned, and idle followers)
-            # v10_2: hold ground — only engage what's in weapon range
-            if self.hold_ground:
+            # v10_6: stance-based aggro range
+            if self.stance == STANCE_DEFENSIVE:
                 aggro_range = self.attack_range
-            else:
+            elif self.stance == STANCE_GUARD:
+                aggro_range = self.attack_range + 40
+            elif self.stance == STANCE_HUNT:
+                aggro_range = (self.attack_range + IDLE_AGGRO_RANGE) * 1.5
+            else:  # AGGRESSIVE (default)
                 aggro_range = self.attack_range + IDLE_AGGRO_RANGE
             # v10_1: aggressive/cautious trait modifies aggro range
             aggro_range *= self.trait_modifiers.get("aggro_range_mult", 1.0)
@@ -601,10 +626,28 @@ class Unit(Entity):
                 for b in game.player_buildings:
                     if b.alive and dist(self.x, self.y, b.x, b.y) < aggro_range:
                         candidates.append(b)
+            # v10_6: Hunt stance — prioritize sappers and raiders
+            if self.stance == STANCE_HUNT and candidates:
+                hunt_targets = [e for e in candidates
+                                if getattr(e, 'unit_type', '') in
+                                ("enemy_sapper", "enemy_raider")]
+                if hunt_targets:
+                    candidates = hunt_targets
             if candidates:
                 best = max(candidates, key=lambda e: self._score_target(e))
                 self.target_entity = best
                 self.state = "attacking"
+                return
+            # v10_6: Guard stance — return to guard position when no enemies
+            if self.stance == STANCE_GUARD:
+                squad_mgr = game.player_squad_mgr if self.owner == "player" else game.enemy_squad_mgr
+                squad = squad_mgr.get_squad(self)
+                if squad and squad.guard_position:
+                    gx, gy = squad.guard_position
+                    if dist(self.x, self.y, gx, gy) > 20:
+                        tc, tr = pos_to_tile(gx, gy)
+                        self._path_to(tc, tr, game)
+                        self.state = "moving"
 
     def _move_along_path(self, dt, game):
         if not self.path or self.path_index >= len(self.path):
@@ -660,10 +703,6 @@ class Unit(Entity):
                     self.station_target = None
                     self.state = "idle"
             else:
-                # v10_2: hold_after_move — enable hold ground on arrival
-                if self.hold_after_move:
-                    self.hold_ground = True
-                    self.hold_after_move = False
                 self.state = "idle"
             return
 
@@ -674,6 +713,8 @@ class Unit(Entity):
         if d < PATH_ARRIVAL_THRESHOLD:
             self.path_index += 1
             return
+        # v10_6: update facing angle for frontal armor
+        self.facing_angle = math.atan2(dy, dx)
         # terrain slows movement (trees 2×, resources 1.8×)
         cur_tile = game.game_map.get_tile(*pos_to_tile(self.x, self.y))
         move_cost = TERRAIN_MOVE_COST.get(cur_tile, 1.0)
@@ -1308,51 +1349,51 @@ class Unit(Entity):
             if game.game_map.is_passable(nc, nr):
                 self.x, self.y = nx, ny
 
-        # v9 squad cohesion: gentle pull toward leader
+        # v10_6: slot-based fractal formation positioning
         if self.unit_type != "worker":
             squad_mgr = game.player_squad_mgr if self.owner == "player" else game.enemy_squad_mgr
-            leader = squad_mgr.get_leader(self)
-            if leader and leader.alive:
-                lx = leader.x - self.x
-                ly = leader.y - self.y
-                ld = math.hypot(lx, ly)
-                if ld > SQUAD_FOLLOW_DIST * 0.5:
-                    pull = min(1.0, (ld - SQUAD_FOLLOW_DIST * 0.5) / SQUAD_FOLLOW_DIST)
-                    # v10_1: loyal trait multiplies cohesion force
-                    cohesion = SQUAD_COHESION_FORCE * self.trait_modifiers.get("cohesion_mult", 1.0)
-                    nx = self.x + (lx / ld) * cohesion * pull * dt
-                    ny = self.y + (ly / ld) * cohesion * pull * dt
-                    nc, nr = pos_to_tile(nx, ny)
-                    if game.game_map.is_passable(nc, nr):
-                        self.x, self.y = nx, ny
-
-        # v9.2 formation hints: soldiers forward, archers back, low rank as shield
-        if (self.owner == "player" and self.unit_type in ("soldier", "archer")
-                and self.state in ("idle", "attacking")):
-            squad_mgr = game.player_squad_mgr
-            leader = squad_mgr.get_leader(self)
-            if leader and leader.alive:
-                front_x, front_y = self._get_front_direction(game)
-                # Offset: positive = forward, negative = back
-                if self.unit_type == "soldier":
-                    offset = FORMATION_FRONT_OFFSET
-                else:
-                    offset = -FORMATION_REAR_OFFSET
-                # Rank adjustment: lower rank pushed more forward
-                offset += (leader.rank - self.rank) * FORMATION_RANK_PUSH
-                # Target position along front axis
-                tx = leader.x + front_x * offset
-                ty = leader.y + front_y * offset
-                fx = tx - self.x
-                fy = ty - self.y
-                fd = math.hypot(fx, fy)
-                if fd > 5:  # dead zone to prevent jitter
-                    pull = min(1.0, fd / SQUAD_FOLLOW_DIST)
-                    nx = self.x + (fx / fd) * FORMATION_FORCE * pull * dt
-                    ny = self.y + (fy / fd) * FORMATION_FORCE * pull * dt
-                    nc, nr = pos_to_tile(nx, ny)
-                    if game.game_map.is_passable(nc, nr):
-                        self.x, self.y = nx, ny
+            squad = squad_mgr.get_squad(self)
+            if squad and squad.leader and squad.leader.alive and squad.leader is not self:
+                leader = squad.leader
+                slot_idx = squad.get_slot_index(self)
+                if slot_idx > 0:
+                    # Track out-of-combat time for regroup delay
+                    if self.state == "attacking":
+                        self._out_of_combat_timer = 0.0
+                    else:
+                        self._out_of_combat_timer += dt
+                    # Only pull toward slot after regroup delay
+                    if self._out_of_combat_timer >= FORMATION_REGROUP_DELAY:
+                        front_x, front_y = self._get_front_direction(game)
+                        ox, oy = formation_slot(
+                            squad.formation, squad.alive_count,
+                            slot_idx, front_x, front_y)
+                        tx = leader.x + ox
+                        ty = leader.y + oy
+                        fx = tx - self.x
+                        fy = ty - self.y
+                        fd = math.hypot(fx, fy)
+                        if fd > FORMATION_SLOT_ARRIVAL:
+                            pull = min(1.0, fd / SQUAD_FOLLOW_DIST)
+                            cohesion = SQUAD_COHESION_FORCE * self.trait_modifiers.get("cohesion_mult", 1.0)
+                            nx = self.x + (fx / fd) * cohesion * pull * dt
+                            ny = self.y + (fy / fd) * cohesion * pull * dt
+                            nc, nr = pos_to_tile(nx, ny)
+                            if game.game_map.is_passable(nc, nr):
+                                self.x, self.y = nx, ny
+                elif slot_idx < 0:
+                    # Not assigned a slot yet — basic cohesion pull toward leader
+                    lx = leader.x - self.x
+                    ly = leader.y - self.y
+                    ld = math.hypot(lx, ly)
+                    if ld > SQUAD_FOLLOW_DIST * 0.5:
+                        pull = min(1.0, (ld - SQUAD_FOLLOW_DIST * 0.5) / SQUAD_FOLLOW_DIST)
+                        cohesion = SQUAD_COHESION_FORCE * self.trait_modifiers.get("cohesion_mult", 1.0)
+                        nx = self.x + (lx / ld) * cohesion * pull * dt
+                        ny = self.y + (ly / ld) * cohesion * pull * dt
+                        nc, nr = pos_to_tile(nx, ny)
+                        if game.game_map.is_passable(nc, nr):
+                            self.x, self.y = nx, ny
 
     # -- Combat ----------------------------------------------------------------
 
@@ -1371,6 +1412,22 @@ class Unit(Entity):
             candidates = [e for e in game.enemy_units if e.alive]
         if not candidates:
             return None
+        # v10_6: Sapper — only target buildings
+        if self.self_destruct:
+            buildings = [c for c in candidates if isinstance(c, Building)
+                         and not getattr(c, 'ruined', False)]
+            if not buildings:
+                buildings = [c for c in candidates if isinstance(c, Building)]
+            if buildings:
+                return min(buildings, key=lambda b: dist(self.x, self.y, b.x, b.y))
+        # v10_6: Raider — prioritize workers and economy buildings
+        if self.economy_only:
+            econ_targets = [c for c in candidates
+                            if (hasattr(c, 'unit_type') and c.unit_type == 'worker')
+                            or (isinstance(c, Building) and getattr(c, 'building_type', '')
+                                in ('refinery', 'town_hall', 'smelter'))]
+            if econ_targets:
+                candidates = econ_targets
         # siege units: strongly prefer non-ruined buildings
         if self.building_mult > 1.0:
             buildings = [c for c in candidates if isinstance(c, Building)
@@ -1408,7 +1465,11 @@ class Unit(Entity):
         d = dist(self.x, self.y, t.x, t.y)
         if d <= self.attack_range:
             if self.attack_timer <= 0:
-                if self.attack_range > 60:
+                # v10_6: Warlock AOE attack
+                if self.aoe_radius > 0:
+                    self._warlock_aoe(t, game)
+                    self.attack_timer = self.attack_cd
+                elif self.attack_range > 60:
                     # --- ranged: fire ballistic arrow ---
                     self._fire_arrow(t, game)
                 else:
@@ -1428,16 +1489,23 @@ class Unit(Entity):
                         dmg = int(dmg * self.building_mult)
                     t.take_damage(dmg, self)
                     _process_combat_hit(self, t, game, "melee")
+                    # v10_6: Sapper self-destruct on hit
+                    if self.self_destruct:
+                        self.hp = 0
+                        self.alive = False
+                        return
                 self.attack_timer = self.attack_cd
         else:
-            # v10_2: hold ground — don't chase, drop target and idle
-            if self.hold_ground:
+            # v10_6: defensive/guard stance — don't chase, drop target and idle
+            if self.stance in (STANCE_DEFENSIVE, STANCE_GUARD):
                 self.target_entity = None
                 self.state = "idle"
                 return
             # move towards target (terrain-slowed)
             self._repath_cooldown = max(0, self._repath_cooldown - dt)
             dx, dy = t.x - self.x, t.y - self.y
+            # v10_6: update facing angle during chase
+            self.facing_angle = math.atan2(dy, dx)
             nd = math.hypot(dx, dy)
             if nd > 0:
                 cur_tile = game.game_map.get_tile(*pos_to_tile(self.x, self.y))
@@ -1519,6 +1587,44 @@ class Unit(Entity):
         arrow = Arrow(self.x, self.y, aim_x, aim_y, dmg, self.owner,
                       source_unit=self, spread_angle=spread_angle)
         game.arrows.append(arrow)
+
+    def _warlock_aoe(self, target, game):
+        """Warlock: AOE damage centered on target. Falloff from center to edge."""
+        center_x, center_y = target.x, target.y
+        r = self.aoe_radius
+        # hit all player entities within radius
+        for e in game.player_units + game.player_buildings:
+            if not e.alive:
+                continue
+            d = dist(center_x, center_y, e.x, e.y)
+            if d <= r:
+                falloff = 1.0 - 0.5 * (d / max(1, r))  # 100% center, 50% edge
+                dmg = int(self.attack_power * falloff)
+                e.take_damage(max(1, dmg), self)
+
+    def _healer_tick(self, dt, game):
+        """Healer: find and heal nearest wounded ally. Called from _idle_behavior."""
+        if self.heal_rate <= 0:
+            return False
+        # find nearest wounded ally within range
+        best = None
+        best_d = self.attack_range + 1
+        for e in game.enemy_units:
+            if e is self or not e.alive or e.hp >= e.max_hp:
+                continue
+            d = dist(self.x, self.y, e.x, e.y)
+            if d < best_d:
+                best_d = d
+                best = e
+        if best:
+            best.hp = min(best.max_hp, best.hp + self.heal_rate * dt)
+            # follow healing target to stay in range
+            if best_d > self.attack_range * 0.7:
+                tc, tr = best.get_tile()
+                self._path_to(tc, tr, game)
+                self.state = "moving"
+            return True
+        return False
 
     # -- Drawing (v10f: algorithmic shapes) ------------------------------------
 
@@ -1702,6 +1808,75 @@ class Unit(Entity):
         # central glow — muted
         pygame.draw.circle(surf, (180, 40, 140), (sx, sy), max(2, r // 5))
 
+    def _draw_sapper_shape(self, surf, sx, sy, r, z):
+        """Sapper: Cardioid r = 1 + cos(θ) — heart/bomb shape, dark olive."""
+        color = ENEMY_COLORS.get("enemy_sapper", (90, 100, 30))
+        pts = self._polar_points(sx, sy, r * 0.55,
+                                 lambda t: 1.0 + math.cos(t), 36, -math.pi / 2)
+        if len(pts) >= 3:
+            pygame.draw.polygon(surf, color, pts)
+        # fuse spark at top
+        pygame.draw.circle(surf, (255, 200, 50), (sx, sy - r), max(1, int(2 * z)))
+
+    def _draw_shieldbearer_shape(self, surf, sx, sy, r, z):
+        """Shieldbearer: Thick polar rose with flat front — shield shape, dark steel."""
+        color = ENEMY_COLORS.get("enemy_shieldbearer", (80, 90, 110))
+        pts = self._polar_points(sx, sy, r,
+                                 lambda t: 0.6 + 0.4 * abs(math.cos(t)), 36, self.facing_angle)
+        if len(pts) >= 3:
+            pygame.draw.polygon(surf, color, pts)
+        # shield front bar
+        fa = self.facing_angle
+        fx, fy = math.cos(fa) * r * 0.8, math.sin(fa) * r * 0.8
+        perp_x, perp_y = -fy * 0.6, fx * 0.6
+        p1 = (int(sx + fx + perp_x), int(sy + fy + perp_y))
+        p2 = (int(sx + fx - perp_x), int(sy + fy - perp_y))
+        pygame.draw.line(surf, (160, 170, 190), p1, p2, max(2, int(3 * z)))
+
+    def _draw_healer_shape(self, surf, sx, sy, r, z):
+        """Healer: Lissajous curve x=sin(2t), y=sin(3t) — flowing organic, dark green."""
+        color = ENEMY_COLORS.get("enemy_healer", (30, 100, 50))
+        pts = []
+        for i in range(48):
+            t = 2 * math.pi * i / 48
+            px = sx + r * 0.8 * math.sin(2 * t)
+            py = sy + r * 0.8 * math.sin(3 * t)
+            pts.append((int(px), int(py)))
+        if len(pts) >= 3:
+            pygame.draw.polygon(surf, color, pts)
+        # healing cross
+        cr = max(2, r // 3)
+        pygame.draw.line(surf, (100, 255, 130), (sx - cr, sy), (sx + cr, sy), max(1, int(2 * z)))
+        pygame.draw.line(surf, (100, 255, 130), (sx, sy - cr), (sx, sy + cr), max(1, int(2 * z)))
+
+    def _draw_raider_shape(self, surf, sx, sy, r, z):
+        """Raider: Star polygon (pentagram) — sharp aggressive, dark magenta."""
+        color = ENEMY_COLORS.get("enemy_raider", (130, 30, 80))
+        pts = []
+        for i in range(10):
+            angle = -math.pi / 2 + 2 * math.pi * i / 10
+            rad = r if i % 2 == 0 else r * 0.4
+            pts.append((int(sx + rad * math.cos(angle)), int(sy + rad * math.sin(angle))))
+        if len(pts) >= 3:
+            pygame.draw.polygon(surf, color, pts)
+        pygame.draw.circle(surf, (200, 60, 120), (sx, sy), max(1, r // 4))
+
+    def _draw_warlock_shape(self, surf, sx, sy, r, z):
+        """Warlock: Epitrochoid (spirograph) — arcane complexity, dark purple."""
+        color = ENEMY_COLORS.get("enemy_warlock", (70, 20, 100))
+        R_val, r_val, d_val = 5.0, 3.0, 3.0
+        pts = []
+        for i in range(72):
+            t = 2 * math.pi * i / 72
+            px = (R_val - r_val) * math.cos(t) + d_val * math.cos((R_val - r_val) / r_val * t)
+            py = (R_val - r_val) * math.sin(t) - d_val * math.sin((R_val - r_val) / r_val * t)
+            scale = r / 8.0
+            pts.append((int(sx + px * scale), int(sy + py * scale)))
+        if len(pts) >= 3:
+            pygame.draw.polygon(surf, color, pts)
+        # arcane center glow
+        pygame.draw.circle(surf, (160, 80, 200), (sx, sy), max(2, r // 4))
+
     def draw(self, surf, cam):
         sx, sy = cam.world_to_screen(self.x, self.y)
         z = cam.zoom
@@ -1727,6 +1902,16 @@ class Unit(Entity):
             self._draw_siege_shape(surf, sx, sy, r, z, is_enemy=True)
         elif self.unit_type == "enemy_elite":
             self._draw_elite_shape(surf, sx, sy, r, z)
+        elif self.unit_type == "enemy_sapper":
+            self._draw_sapper_shape(surf, sx, sy, r, z)
+        elif self.unit_type == "enemy_shieldbearer":
+            self._draw_shieldbearer_shape(surf, sx, sy, r, z)
+        elif self.unit_type == "enemy_healer":
+            self._draw_healer_shape(surf, sx, sy, r, z)
+        elif self.unit_type == "enemy_raider":
+            self._draw_raider_shape(surf, sx, sy, r, z)
+        elif self.unit_type == "enemy_warlock":
+            self._draw_warlock_shape(surf, sx, sy, r, z)
         else:
             # fallback: simple circle for any unmapped type
             color = UNIT_COLORS.get(self.unit_type) or ENEMY_COLORS.get(self.unit_type, (150, 150, 150))

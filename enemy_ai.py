@@ -2,7 +2,12 @@ import random
 import math
 from collections import Counter
 from constants import (DIFFICULTY_PROFILES, ENEMY_DEFS, ENEMY_VETERAN_BONUS,
-                       MAP_COLS, MAP_ROWS, SPAWN_MARGIN, SPAWN_RETRIES)
+                       MAP_COLS, MAP_ROWS, SPAWN_MARGIN, SPAWN_RETRIES,
+                       PRESSURE_ESCALATE_THRESHOLD, PRESSURE_DEESCALATE_THRESHOLD,
+                       PRESSURE_ESCALATE_STREAK, PRESSURE_COUNT_BONUS,
+                       PRESSURE_COUNT_PENALTY, PRESSURE_INTERVAL_COMPRESS,
+                       PRESSURE_INTERVAL_EXPAND, PRESSURE_BUILDING_WEIGHT,
+                       PRESSURE_UNIT_WEIGHT, PRESSURE_ESCAPE_WEIGHT)
 from utils import dist, clamp, tile_center
 from entities import Unit, Building
 
@@ -32,6 +37,19 @@ class EnemyAI:
         self.wave_bonus_gold = profile["wave_bonus_gold"]
         self.wave_bonus_wood = profile["wave_bonus_wood"]
         self.wave_bonus_steel = profile["wave_bonus_steel"]
+        # v10_6: new enemy type unlock waves
+        self.sapper_wave = profile.get("sapper_wave", 99)
+        self.raider_wave = profile.get("raider_wave", 99)
+        self.shieldbearer_wave = profile.get("shieldbearer_wave", 99)
+        self.healer_wave = profile.get("healer_wave", 99)
+        self.warlock_wave = profile.get("warlock_wave", 99)
+        # v10_6: adaptive difficulty state
+        self.pressure_history = []
+        self.escalation_modifier = 1.0
+        self.interval_modifier = 0
+        self.buildings_lost_this_wave = 0
+        self.units_lost_this_wave = 0
+        self.enemies_escaped_this_wave = 0
 
     def update(self, dt, game):
         if self.game_won:
@@ -39,7 +57,8 @@ class EnemyAI:
         self.wave_timer += dt
 
         # first wave comes at first_wave_time, subsequent at wave_interval
-        threshold = self.first_wave_time if not self.first_wave_sent else self.wave_interval
+        interval = self.wave_interval + self.interval_modifier
+        threshold = self.first_wave_time if not self.first_wave_sent else max(15, interval)
         if self.wave_timer >= threshold:
             self.wave_timer = 0.0
             self.wave_number += 1
@@ -50,7 +69,8 @@ class EnemyAI:
             self.spawn_wave(game)
 
     def get_wave_count(self, n):
-        return int(self.wave_base + self.wave_scale * math.sqrt(n))
+        base = int(self.wave_base + self.wave_scale * math.sqrt(n))
+        return max(1, int(base * self.escalation_modifier))
 
     def get_kill_bounty(self):
         return self.kill_bounty_base + self.wave_number
@@ -66,11 +86,19 @@ class EnemyAI:
             return [random.choice(edges)]
 
     def _pick_composition(self, n, count, game):
-        """Adaptive composition: reads player defenses and counter-picks."""
-        # base probabilities
-        p_elite = 0.10 if n >= self.elite_wave else 0
-        p_siege = 0.15 if n >= self.siege_wave else 0
-        p_archer = 0.30 if n >= self.archer_wave else 0
+        """Adaptive composition: reads player defenses and counter-picks. v10_6: 9 types."""
+        # base probabilities for all types
+        probs = {
+            "enemy_soldier": 0.0,  # fills remainder
+            "enemy_archer":  0.30 if n >= self.archer_wave else 0,
+            "enemy_siege":   0.15 if n >= self.siege_wave else 0,
+            "enemy_elite":   0.10 if n >= self.elite_wave else 0,
+            "enemy_sapper":  0.10 if n >= self.sapper_wave else 0,
+            "enemy_raider":  0.08 if n >= self.raider_wave else 0,
+            "enemy_shieldbearer": 0.08 if n >= self.shieldbearer_wave else 0,
+            "enemy_healer":  0.06 if n >= self.healer_wave else 0,
+            "enemy_warlock": 0.06 if n >= self.warlock_wave else 0,
+        }
 
         # count player defenses for adaptation
         tower_count = sum(1 for b in game.player_buildings
@@ -80,42 +108,62 @@ class EnemyAI:
                             if u.unit_type == "soldier" and u.alive)
         archer_count = sum(1 for u in game.player_units
                            if u.unit_type == "archer" and u.alive)
+        worker_count = sum(1 for u in game.player_units
+                           if u.unit_type == "worker" and u.alive)
         total_military = soldier_count + archer_count
 
-        # adapt: more towers -> more siege
+        # counter-pick: many towers, no mobile army → more sappers
+        if n >= self.sapper_wave and tower_count >= 3 and total_military < 5:
+            probs["enemy_sapper"] += 0.10
+        # counter-pick: player clumps units → more warlocks
+        if n >= self.warlock_wave and total_military >= 6:
+            probs["enemy_warlock"] += 0.06
+        # counter-pick: strong economy → more raiders
+        if n >= self.raider_wave and worker_count >= 6:
+            probs["enemy_raider"] += 0.08
+        # counter-pick: archer-heavy → more shieldbearers
+        if n >= self.shieldbearer_wave and total_military > 0:
+            if archer_count / max(1, total_military) > 0.5:
+                probs["enemy_shieldbearer"] += 0.08
+        # counter-pick: high kill rate → add healers
+        if n >= self.healer_wave and total_military >= 8:
+            probs["enemy_healer"] += 0.05
+        # existing adaptations
         if n >= self.siege_wave:
             if tower_count >= 2:
-                p_siege += 0.10
+                probs["enemy_siege"] += 0.10
             if tower_count >= 4:
-                p_siege += 0.10
-
-        # adapt: archer-heavy -> more elites (tanky melee counters ranged)
+                probs["enemy_siege"] += 0.10
         if n >= self.elite_wave and total_military > 0:
             if archer_count / max(1, total_military) > 0.5:
-                p_elite += 0.08
-
-        # adapt: soldier-heavy -> more enemy archers (ranged counters melee)
+                probs["enemy_elite"] += 0.08
         if n >= self.archer_wave and total_military > 0:
             if soldier_count / max(1, total_military) > 0.6:
-                p_archer += 0.10
+                probs["enemy_archer"] += 0.10
 
-        # ensure soldier gets a minimum share and normalize
-        p_soldier = max(0.20, 1.0 - p_elite - p_siege - p_archer)
-        total = p_elite + p_siege + p_archer + p_soldier
-        p_elite /= total
-        p_siege /= total
-        p_archer /= total
-        # soldier fills remaining probability (1 - p_elite - p_siege - p_archer)
+        # ensure soldier gets minimum 15% and normalize
+        spec_total = sum(v for k, v in probs.items() if k != "enemy_soldier")
+        probs["enemy_soldier"] = max(0.15, 1.0 - spec_total)
+        total = sum(probs.values())
+        # normalize
+        for k in probs:
+            probs[k] /= total
+
+        # build cumulative distribution
+        keys = list(probs.keys())
+        cum = []
+        running = 0.0
+        for k in keys:
+            running += probs[k]
+            cum.append(running)
 
         types = []
         for _ in range(count):
             roll = random.random()
-            if roll < p_elite:
-                types.append("enemy_elite")
-            elif roll < p_elite + p_siege:
-                types.append("enemy_siege")
-            elif roll < p_elite + p_siege + p_archer:
-                types.append("enemy_archer")
+            for i, threshold in enumerate(cum):
+                if roll < threshold:
+                    types.append(keys[i])
+                    break
             else:
                 types.append("enemy_soldier")
         return types
@@ -233,6 +281,34 @@ class EnemyAI:
             if game.game_map.is_walkable(c, r):
                 return c, r
         return None, None
+
+    def record_wave_pressure(self, wave_enemy_count):
+        """Calculate pressure score for the completed wave and apply adaptive scaling."""
+        count = max(1, wave_enemy_count)
+        pressure = (self.buildings_lost_this_wave * PRESSURE_BUILDING_WEIGHT
+                     + self.units_lost_this_wave * PRESSURE_UNIT_WEIGHT
+                     + self.enemies_escaped_this_wave * PRESSURE_ESCAPE_WEIGHT) / count
+        self.pressure_history.append(pressure)
+        # reset per-wave counters
+        self.buildings_lost_this_wave = 0
+        self.units_lost_this_wave = 0
+        self.enemies_escaped_this_wave = 0
+        self._apply_adaptive_scaling()
+
+    def _apply_adaptive_scaling(self):
+        """Adjust difficulty based on recent pressure history."""
+        if len(self.pressure_history) < PRESSURE_ESCALATE_STREAK:
+            return
+        recent = self.pressure_history[-PRESSURE_ESCALATE_STREAK:]
+        # all recent waves dominated → escalate
+        if all(p < PRESSURE_ESCALATE_THRESHOLD for p in recent):
+            self.escalation_modifier = min(2.0, self.escalation_modifier + PRESSURE_COUNT_BONUS)
+            self.interval_modifier = max(-self.wave_interval + 15,
+                                          self.interval_modifier - PRESSURE_INTERVAL_COMPRESS)
+        # any recent wave was a struggle → de-escalate
+        elif any(p > PRESSURE_DEESCALATE_THRESHOLD for p in recent):
+            self.escalation_modifier = max(0.5, self.escalation_modifier - PRESSURE_COUNT_PENALTY)
+            self.interval_modifier = min(60, self.interval_modifier + PRESSURE_INTERVAL_EXPAND)
 
     def _find_target(self, unit, game, prefer_buildings=False):
         """v9.1: utility-scored target selection for spawned enemies."""

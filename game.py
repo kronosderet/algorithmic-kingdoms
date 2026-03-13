@@ -16,7 +16,11 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE,
                        MAX_CONTROL_GROUPS, RALLY_POINT_COLOR,
                        GARRISON_COST,
                        DROPOFF_BUILDING_TYPES, PRODUCTION_RATES,
-                       UPGRADE_PATH)
+                       UPGRADE_PATH,
+                       STANCE_AGGRESSIVE, STANCE_DEFENSIVE, STANCE_GUARD,
+                       STANCE_HUNT, STANCE_NAMES, STANCE_COLORS,
+                       FORMATION_POLAR_ROSE, FORMATION_GOLDEN_SPIRAL,
+                       FORMATION_SIERPINSKI, FORMATION_KOCH, FORMATION_NAMES)
 from utils import dist, pos_to_tile, draw_text, ruin_rebuild_cost
 from game_map import GameMap
 from camera import Camera
@@ -254,6 +258,39 @@ class Game:
                         self.camera.x = e.x - SCREEN_WIDTH / (2 * z)
                         self.camera.y = e.y - GAME_AREA_H / (2 * z)
                     return
+
+        # v10_6: Formation hotkeys F1-F4, Stance hotkeys F5-F8
+        combat_sel = [e for e in self.selected
+                      if isinstance(e, Unit) and e.unit_type in ("soldier", "archer")]
+        if combat_sel:
+            formation_keys = {
+                pygame.K_F1: FORMATION_POLAR_ROSE,
+                pygame.K_F2: FORMATION_GOLDEN_SPIRAL,
+                pygame.K_F3: FORMATION_SIERPINSKI,
+                pygame.K_F4: FORMATION_KOCH,
+            }
+            stance_keys = {
+                pygame.K_F5: STANCE_AGGRESSIVE,
+                pygame.K_F6: STANCE_DEFENSIVE,
+                pygame.K_F7: STANCE_GUARD,
+                pygame.K_F8: STANCE_HUNT,
+            }
+            if key in formation_keys:
+                fmt = formation_keys[key]
+                for u in combat_sel:
+                    self.player_squad_mgr.set_formation(u, fmt)
+                self.add_notification(f"Formation: {FORMATION_NAMES[fmt]}", 1.5, (180, 220, 255))
+                return
+            if key in stance_keys:
+                st = stance_keys[key]
+                for u in combat_sel:
+                    u.command_set_stance(st)
+                    self.player_squad_mgr.set_stance(u, st)
+                    if st == STANCE_GUARD:
+                        self.player_squad_mgr.set_guard_position(u, u.x, u.y)
+                color = STANCE_COLORS.get(st, (180, 220, 255))
+                self.add_notification(f"Stance: {STANCE_NAMES[st]}", 1.5, color)
+                return
 
         # build hotkeys (need worker selected)
         if workers_selected:
@@ -670,7 +707,9 @@ class Game:
         for u in self.player_units:
             if u.unit_type in ("soldier", "archer") and u.state != "garrisoned":
                 u.command_move(def_x, def_y, self)
-                u.hold_after_move = True
+                u.command_set_stance(STANCE_GUARD)
+                # set guard position for squad
+                self.player_squad_mgr.set_guard_position(u, def_x, def_y)
 
     def global_attack(self):
         """All combat units hunt down enemies."""
@@ -818,6 +857,12 @@ class Game:
         # decay heat
         self._combat_heat = [[x, y, t - dt] for x, y, t in self._combat_heat if t - dt > 0]
 
+        # v10_6: count player losses for adaptive difficulty
+        dead_player_units = sum(1 for u in self.player_units if not u.alive and u.unit_type != "worker")
+        dead_player_buildings = sum(1 for b in self.player_buildings if not b.alive)
+        self.enemy_ai.units_lost_this_wave += dead_player_units
+        self.enemy_ai.buildings_lost_this_wave += dead_player_buildings
+
         # remove dead
         self.player_units = [u for u in self.player_units if u.alive]
         self.enemy_units = [u for u in self.enemy_units if u.alive]
@@ -874,6 +919,11 @@ class Game:
         self.logger.log(self.game_time, "WAVE_CLEARED", wn,
                         str(bonus_gold), str(bonus_wood), str(bonus_steel),
                         esc, f"enemies_escaped:{esc}")
+
+        # v10_6: record wave pressure for adaptive difficulty
+        self.enemy_ai.enemies_escaped_this_wave = esc
+        wave_count = self.enemy_ai.get_wave_count(wn)
+        self.enemy_ai.record_wave_pressure(wave_count)
 
         # v9: rank-up notifications (XP is granted per-hit during combat, not here)
         # Clear projectiles between waves for visual cleanliness

@@ -65,6 +65,8 @@ DIFFICULTY_PROFILES = {
         "multi_dir_wave": 14, "three_dir_wave": 20,
         "kill_bounty_base": 5,
         "wave_bonus_gold": 30, "wave_bonus_wood": 15, "wave_bonus_steel": 3,
+        "sapper_wave": 7, "raider_wave": 8, "shieldbearer_wave": 10,
+        "healer_wave": 13, "warlock_wave": 17,
         "label": "Easy",
     },
     "medium": {
@@ -77,6 +79,8 @@ DIFFICULTY_PROFILES = {
         "multi_dir_wave": 12, "three_dir_wave": 18,
         "kill_bounty_base": 4,                                           # v10g: 3→4 more reward
         "wave_bonus_gold": 25, "wave_bonus_wood": 15, "wave_bonus_steel": 3,  # v10g: better bonuses
+        "sapper_wave": 5, "raider_wave": 6, "shieldbearer_wave": 8,
+        "healer_wave": 10, "warlock_wave": 14,
         "label": "Medium",
     },
     "hard": {
@@ -89,6 +93,8 @@ DIFFICULTY_PROFILES = {
         "multi_dir_wave": 8, "three_dir_wave": 14,
         "kill_bounty_base": 2,
         "wave_bonus_gold": 15, "wave_bonus_wood": 8, "wave_bonus_steel": 2,  # v10g: better bonuses
+        "sapper_wave": 3, "raider_wave": 4, "shieldbearer_wave": 6,
+        "healer_wave": 8, "warlock_wave": 11,
         "label": "Hard",
     },
 }
@@ -154,9 +160,13 @@ UNIT_COLORS = {
 }
 
 UNIT_LABELS = {"worker": "W", "soldier": "S", "archer": "A",
-               "enemy_soldier": "E", "enemy_archer": "E", "enemy_siege": "SG", "enemy_elite": "EL"}
+               "enemy_soldier": "E", "enemy_archer": "E", "enemy_siege": "SG", "enemy_elite": "EL",
+               "enemy_sapper": "SP", "enemy_shieldbearer": "SB", "enemy_healer": "HL",
+               "enemy_raider": "RD", "enemy_warlock": "WK"}
 UNIT_RADIUS = {"worker": 10, "soldier": 12, "archer": 11,
-               "enemy_soldier": 12, "enemy_archer": 11, "enemy_siege": 14, "enemy_elite": 12}
+               "enemy_soldier": 12, "enemy_archer": 11, "enemy_siege": 14, "enemy_elite": 12,
+               "enemy_sapper": 11, "enemy_shieldbearer": 14, "enemy_healer": 10,
+               "enemy_raider": 11, "enemy_warlock": 12}
 
 # Enemy defs (base stats, scaled per wave)
 ENEMY_DEFS = {
@@ -164,6 +174,12 @@ ENEMY_DEFS = {
     "enemy_archer": {"hp": 60, "speed": 50, "attack": 6, "range": 140, "cd": 1.8},
     "enemy_siege": {"hp": 200, "speed": 35, "attack": 20, "range": 40, "cd": 3.0, "building_mult": 2.0},
     "enemy_elite": {"hp": 160, "speed": 60, "attack": 18, "range": 40, "cd": 1.0},
+    # v10_6: New enemy types
+    "enemy_sapper":       {"hp": 80,  "speed": 70, "attack": 5,  "range": 40,  "cd": 2.0, "building_mult": 3.0, "self_destruct": True},
+    "enemy_shieldbearer": {"hp": 250, "speed": 40, "attack": 8,  "range": 40,  "cd": 1.5, "frontal_armor": 0.50},
+    "enemy_healer":       {"hp": 60,  "speed": 45, "attack": 0,  "range": 120, "cd": 0,   "heal_rate": 5.0},
+    "enemy_raider":       {"hp": 70,  "speed": 80, "attack": 10, "range": 40,  "cd": 1.0, "economy_only": True},
+    "enemy_warlock":      {"hp": 90,  "speed": 45, "attack": 15, "range": 100, "cd": 3.0, "aoe_radius": 30},
 }
 
 ENEMY_COLORS = {  # v10g2: black-dominant with faint color accents
@@ -171,6 +187,12 @@ ENEMY_COLORS = {  # v10g2: black-dominant with faint color accents
     "enemy_archer": (35, 10, 30),
     "enemy_siege": (50, 25, 5),
     "enemy_elite": (50, 10, 25),
+    # v10_6: new enemy type colors
+    "enemy_sapper":       (45, 40, 10),   # dark olive
+    "enemy_shieldbearer": (40, 40, 45),   # dark steel
+    "enemy_healer":       (15, 40, 20),   # dark green
+    "enemy_raider":       (45, 15, 35),   # dark magenta
+    "enemy_warlock":      (30, 10, 45),   # dark purple
 }
 
 # Gather config
@@ -320,6 +342,12 @@ UNIT_PRIORITY = {
     "soldier": 4.0, "archer": 4.5, "worker": 1.0,
     "enemy_soldier": 4.0, "enemy_archer": 4.5,
     "enemy_elite": 6.0, "enemy_siege": 7.0,
+    # v10_6: new enemy type priorities
+    "enemy_sapper": 8.0,        # highest — beelines buildings, must intercept
+    "enemy_healer": 9.0,        # must focus-fire to break sustain
+    "enemy_raider": 7.0,        # economy threat
+    "enemy_warlock": 6.0,       # ranged AOE danger
+    "enemy_shieldbearer": 3.0,  # low — tanky, skip if possible
 }
 RUIN_PRIORITY_MULT = 0.15          # ruins are worth much less
 DISTANCE_NORMALIZATION = 300.0     # px — at this distance priority halved
@@ -328,7 +356,7 @@ RANK_TARGETING_NOISE = {           # higher rank = less noise = smarter picks
 }
 TOWER_LOW_HP_BONUS = 2.0           # finish off wounded targets
 TOWER_LOW_HP_THRESHOLD = 0.30      # HP fraction for bonus
-TOWER_HIGH_THREAT_TYPES = {"enemy_elite": 1.5, "enemy_siege": 1.8}
+TOWER_HIGH_THREAT_TYPES = {"enemy_elite": 1.5, "enemy_siege": 1.8, "enemy_sapper": 2.0, "enemy_warlock": 1.3}
 LOW_HP_FINISH_BONUS = 1.3          # unit targeting: prefer wounded
 LOW_HP_FINISH_THRESHOLD = 0.40
 ENGAGED_TARGET_BONUS = 1.15        # slight preference for current target
@@ -348,11 +376,53 @@ MORALE_RANK_RESISTANCE = {         # multiplier on flee ratio (higher = braver)
     0: 1.0, 1: 1.3, 2: 1.6, 3: 999, 4: 999,
 }
 
-# v9.2: Player Formation Hints (soft positional forces)
+# v9.2: Player Formation Hints (soft positional forces — legacy, used as fallback)
 FORMATION_FRONT_OFFSET = 30        # px — soldiers position forward of leader
 FORMATION_REAR_OFFSET = 35         # px — archers position behind leader
 FORMATION_FORCE = 25               # px/sec — gentle positional pull
 FORMATION_RANK_PUSH = 5            # px per rank diff — low rank more forward
+
+# ---------------------------------------------------------------------------
+# v10_6: Stance System (replaces hold_ground boolean)
+# ---------------------------------------------------------------------------
+STANCE_AGGRESSIVE = 0    # Chase targets, auto-engage, break formation
+STANCE_DEFENSIVE = 1     # Hold formation, weapon-range only
+STANCE_GUARD = 2         # Protect building/area, return to post after engagement
+STANCE_HUNT = 3          # Prioritize Sappers/Raiders, ignore frontline
+STANCE_NAMES = ["Aggressive", "Defensive", "Guard", "Hunt"]
+STANCE_COLORS = {0: (220, 50, 50), 1: (50, 140, 220), 2: (50, 200, 80), 3: (200, 160, 50)}
+
+# ---------------------------------------------------------------------------
+# v10_6: Fractal Formation System (self-similar mathematical formations)
+# ---------------------------------------------------------------------------
+FORMATION_POLAR_ROSE = 0       # r = cos(kθ) — soldiers on petals, archers in valleys
+FORMATION_GOLDEN_SPIRAL = 1    # Vogel sunflower θ_n = n*2π/φ² — assault/flanking
+FORMATION_SIERPINSKI = 2       # Recursive triangles — spread/anti-AOE
+FORMATION_KOCH = 3             # Koch snowflake perimeter — guard/defensive ring
+FORMATION_NAMES = ["Rose", "Spiral", "Sierpinski", "Koch"]
+FORMATION_SLOT_ARRIVAL = 15        # px — snap threshold for reaching formation slot
+FORMATION_REGROUP_DELAY = 2.0      # seconds after last combat before auto-reform
+FORMATION_MOVE_SPEED_MULT = 0.85   # squads move at 85% speed to stay cohesive
+
+# Formation spacing parameters (tunable)
+FORMATION_ROSE_SPACING = 25.0      # px between polar rose slots
+FORMATION_SPIRAL_C = 18.0          # Vogel sunflower spacing constant
+FORMATION_SIERPINSKI_SPACING = 30.0  # base triangle side length
+FORMATION_KOCH_RADIUS = 40.0      # snowflake perimeter radius
+
+# ---------------------------------------------------------------------------
+# v10_6: Adaptive Difficulty Engine
+# ---------------------------------------------------------------------------
+PRESSURE_ESCALATE_THRESHOLD = 0.1    # pressure below this = player dominating
+PRESSURE_DEESCALATE_THRESHOLD = 0.5  # pressure above this = player struggling
+PRESSURE_ESCALATE_STREAK = 3        # consecutive easy waves to trigger escalation
+PRESSURE_COUNT_BONUS = 0.15         # +15% enemy count on escalation
+PRESSURE_COUNT_PENALTY = 0.10       # -10% enemy count on de-escalation
+PRESSURE_INTERVAL_COMPRESS = 75     # seconds — compressed wave interval when snowballing
+PRESSURE_INTERVAL_EXPAND = 110      # seconds — expanded interval when struggling
+PRESSURE_BUILDING_WEIGHT = 3        # pressure weight for buildings lost
+PRESSURE_UNIT_WEIGHT = 2            # pressure weight for units lost
+PRESSURE_ESCAPE_WEIGHT = 1          # pressure weight for enemies escaped
 
 # Gameplay tuning (extracted from inline magic numbers)
 PATH_ARRIVAL_THRESHOLD = 3            # px distance to snap to next path waypoint
@@ -426,16 +496,16 @@ GARRISON_COST = {"wood": 20, "iron": 5, "stone": 10}  # cost per bell ring
 # ---------------------------------------------------------------------------
 TRAIT_POOL = {
     # trait_name: (rarity_weight, allowed_types)
-    "brave":        (30, {"soldier", "archer", "enemy_soldier", "enemy_archer", "enemy_elite"}),
-    "cowardly":     (30, {"soldier", "archer", "enemy_soldier", "enemy_archer"}),
-    "aggressive":   (30, {"soldier", "archer", "enemy_soldier", "enemy_archer", "enemy_elite"}),
-    "cautious":     (30, {"soldier", "archer", "enemy_soldier", "enemy_archer"}),
-    "loyal":        (15, {"soldier", "archer", "enemy_soldier", "enemy_archer"}),
-    "lone_wolf":    (15, {"soldier", "archer", "enemy_soldier", "enemy_archer"}),
-    "sharpshooter": (8,  {"archer", "enemy_archer"}),
-    "berserker":    (8,  {"soldier", "enemy_soldier", "enemy_elite"}),
-    "inspiring":    (4,  {"soldier", "archer", "enemy_soldier", "enemy_archer", "enemy_elite"}),
-    "nimble":       (25, {"soldier", "archer", "enemy_soldier", "enemy_archer", "enemy_elite", "enemy_siege"}),
+    "brave":        (30, {"soldier", "archer", "enemy_soldier", "enemy_archer", "enemy_elite", "enemy_shieldbearer"}),
+    "cowardly":     (30, {"soldier", "archer", "enemy_soldier", "enemy_archer", "enemy_raider"}),
+    "aggressive":   (30, {"soldier", "archer", "enemy_soldier", "enemy_archer", "enemy_elite", "enemy_raider"}),
+    "cautious":     (30, {"soldier", "archer", "enemy_soldier", "enemy_archer", "enemy_healer"}),
+    "loyal":        (15, {"soldier", "archer", "enemy_soldier", "enemy_archer", "enemy_shieldbearer"}),
+    "lone_wolf":    (15, {"soldier", "archer", "enemy_soldier", "enemy_archer", "enemy_raider"}),
+    "sharpshooter": (8,  {"archer", "enemy_archer", "enemy_warlock"}),
+    "berserker":    (8,  {"soldier", "enemy_soldier", "enemy_elite", "enemy_sapper"}),
+    "inspiring":    (4,  {"soldier", "archer", "enemy_soldier", "enemy_archer", "enemy_elite", "enemy_shieldbearer"}),
+    "nimble":       (25, {"soldier", "archer", "enemy_soldier", "enemy_archer", "enemy_elite", "enemy_siege", "enemy_raider", "enemy_sapper"}),
 }
 
 TRAIT_CONFLICTS = {

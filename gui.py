@@ -19,7 +19,9 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, TOP_BAR_H, BOTTOM_PANEL_H,
                        FOREMAN_BUILDINGS, DROPOFF_BUILDING_TYPES,
                        UPGRADE_PATH, PRODUCTION_RATES,
                        PRODUCTION_TICK_INTERVAL, BUILD_PROXIMITY,
-                       FORGE_TIME, SMELTER_REFINERY_BONUS)
+                       FORGE_TIME, SMELTER_REFINERY_BONUS,
+                       STANCE_AGGRESSIVE, STANCE_NAMES, STANCE_COLORS,
+                       FORMATION_NAMES)
 from utils import draw_text, ruin_rebuild_cost
 from entities import Building, Unit
 
@@ -285,9 +287,20 @@ class GUI:
             rank_col = RANK_COLORS.get(e.rank, (180, 180, 180))
             draw_text(surf, f"Rank {e.rank} — XP: {e.xp}", 80, py + 94, self.font_xs, rank_col)
 
-        # special info for siege
+        # special info for siege and v10_6 types
+        ability_y = py + 108
         if e.unit_type == "enemy_siege":
-            draw_text(surf, "Siege: 2x damage to buildings", 80, py + 108, self.font_xs, (220, 160, 60))
+            draw_text(surf, "Siege: 2x damage to buildings", 80, ability_y, self.font_xs, (220, 160, 60))
+        elif e.unit_type == "enemy_sapper":
+            draw_text(surf, f"Sapper: {e.building_mult:.0f}x building dmg, self-destruct", 80, ability_y, self.font_xs, (200, 200, 60))
+        elif e.unit_type == "enemy_shieldbearer":
+            draw_text(surf, f"Frontal Armor: {int(e.frontal_armor*100)}% — flank to bypass!", 80, ability_y, self.font_xs, (140, 160, 200))
+        elif e.unit_type == "enemy_healer":
+            draw_text(surf, f"Healer: {e.heal_rate:.0f} HP/s to allies", 80, ability_y, self.font_xs, (80, 220, 120))
+        elif e.unit_type == "enemy_raider":
+            draw_text(surf, "Raider: targets workers & economy", 80, ability_y, self.font_xs, (220, 100, 150))
+        elif e.unit_type == "enemy_warlock":
+            draw_text(surf, f"Warlock: AOE {e.aoe_radius}px splash damage", 80, ability_y, self.font_xs, (180, 100, 220))
 
         # right-side hint
         draw_text(surf, "Right-click with units to attack", SCREEN_WIDTH - 250, py + 100,
@@ -522,8 +535,8 @@ class GUI:
         state_str = u.state
         if u.state == "fleeing" and u.owner == "player":
             state_str = "fleeing!"
-        if u.hold_ground:
-            state_str += " [HOLD]"
+        if u.stance != STANCE_AGGRESSIVE:
+            state_str += f" [{STANCE_NAMES[u.stance]}]"
         draw_text(surf, f"ATK: {u.attack_power}  SPD: {u.speed}  |  {state_str}",
                   80, py + 54, self.font_sm, (180, 180, 200))
 
@@ -735,22 +748,48 @@ class GUI:
         btn_y_start = py + 5
         btn_w, btn_h = 140, 38
 
-        # check if any selected unit is already holding
         combat_sel = [e for e in game.selected
                       if hasattr(e, 'unit_type') and e.unit_type in ("soldier", "archer")]
-        any_holding = any(u.hold_ground for u in combat_sel)
 
         self._add_button(surf, btn_x, btn_y_start, btn_w, btn_h, "Attack Move",
                          lambda: setattr(game, 'attack_move_mode', True))
 
-        hold_label = "HOLDING" if any_holding else "Hold Ground"
-        self._add_button(surf, btn_x + btn_w + 6, btn_y_start, btn_w, btn_h, hold_label,
-                         lambda: self._do_hold_ground(game))
+        # Stance cycle button
+        if combat_sel:
+            cur_stance = combat_sel[0].stance
+            stance_label = STANCE_NAMES[cur_stance]
+            self._add_button(surf, btn_x + btn_w + 6, btn_y_start, btn_w, btn_h, stance_label,
+                             lambda: self._cycle_stance(game))
 
-    def _do_hold_ground(self, game):
+            # Formation row: F1-F4 buttons
+            fmt_y = btn_y_start + btn_h + 4
+            fmt_w = 68
+            squad = game.player_squad_mgr.get_squad(combat_sel[0])
+            cur_fmt = squad.formation if squad else 0
+            for i, fname in enumerate(FORMATION_NAMES):
+                fx = btn_x + i * (fmt_w + 4)
+                label = f"F{i+1}:{fname}"
+                is_active = (i == cur_fmt)
+                def _set_fmt(idx=i):
+                    self._set_formation(game, idx)
+                self._add_button(surf, fx, fmt_y, fmt_w, 28, label, _set_fmt,
+                                 enabled=True)
+                if is_active:
+                    pygame.draw.rect(surf, (180, 220, 255),
+                                     (fx, fmt_y, fmt_w, 28), 2)
+
+    def _cycle_stance(self, game):
         for e in game.selected:
             if hasattr(e, 'unit_type') and e.unit_type in ("soldier", "archer"):
-                e.command_hold_ground()
+                next_stance = (e.stance + 1) % 4
+                e.command_set_stance(next_stance)
+                squad_mgr = game.player_squad_mgr
+                squad_mgr.set_stance(e, next_stance)
+
+    def _set_formation(self, game, fmt_idx):
+        for e in game.selected:
+            if hasattr(e, 'unit_type') and e.unit_type in ("soldier", "archer"):
+                game.player_squad_mgr.set_formation(e, fmt_idx)
 
     # ------------------------------------------------------------------
     # BUTTONS
