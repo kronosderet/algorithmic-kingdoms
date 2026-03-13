@@ -7,7 +7,8 @@ from constants import (DIFFICULTY_PROFILES, ENEMY_DEFS, ENEMY_VETERAN_BONUS,
                        PRESSURE_ESCALATE_STREAK, PRESSURE_COUNT_BONUS,
                        PRESSURE_COUNT_PENALTY, PRESSURE_INTERVAL_COMPRESS,
                        PRESSURE_INTERVAL_EXPAND, PRESSURE_BUILDING_WEIGHT,
-                       PRESSURE_UNIT_WEIGHT, PRESSURE_ESCAPE_WEIGHT)
+                       PRESSURE_UNIT_WEIGHT, PRESSURE_ESCAPE_WEIGHT,
+                       STRAGGLER_ROOT_WAVES, STRAGGLER_METAMORPH_WAVES)
 from utils import dist, clamp, tile_center
 from entities import Unit, Building
 
@@ -168,7 +169,23 @@ class EnemyAI:
                 types.append("enemy_soldier")
         return types
 
+    def _process_stragglers(self, game):
+        """v10_7: Root and metamorphose surviving enemies from prior waves."""
+        n = self.wave_number
+        for e in game.enemy_units:
+            if not e.alive:
+                continue
+            wave_age = n - getattr(e, 'spawn_wave', n)
+            if wave_age >= STRAGGLER_METAMORPH_WAVES and not e.metamorphosed:
+                e.metamorphose()
+                game.add_notification("A straggler has metamorphosed into an Entrenched Titan!",
+                                      2.5, (255, 60, 60))
+            elif wave_age >= STRAGGLER_ROOT_WAVES and not e.rooted and not e.metamorphosed:
+                e.root()
+
     def spawn_wave(self, game):
+        # v10_7: process stragglers before spawning new wave
+        self._process_stragglers(game)
         n = self.wave_number
         count = self.get_wave_count(n)
 
@@ -251,6 +268,7 @@ class EnemyAI:
         enemy._base_hp = enemy.max_hp
         enemy._base_attack = enemy.attack_power
         enemy._base_range = enemy.attack_range
+        enemy.spawn_wave = self.wave_number  # v10_7: track origin wave for straggler system
         target = self._find_target(enemy, game,
                                    prefer_buildings=(enemy.building_mult > 1.0))
         if target:

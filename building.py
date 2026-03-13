@@ -7,8 +7,8 @@ from constants import (UNIT_DEFS, BUILDING_DEFS, BUILDING_COLORS,
                        COL_SELECT,
                        REFINE_IRON_COST, REFINE_STEEL_YIELD, REFINE_TIME,
                        TOWER_CANNON_DAMAGE, TOWER_CANNON_CD,
-                       TOWER_CANNON_RANGE, TOWER_CANNON_SPREAD,
-                       TOWER_UPGRADE_TIME,
+                       TOWER_CANNON_RANGE, TOWER_MIN_RANGE, TOWER_CANNON_SPREAD,
+                       TOWER_UPGRADE_TIME, TOWER_UPGRADE_FIRE_MULT,
                        TOWER_EXPLOSIVE_DIRECT,
                        TOWER_LOW_HP_BONUS, TOWER_LOW_HP_THRESHOLD,
                        TOWER_HIGH_THREAT_TYPES,
@@ -19,7 +19,9 @@ from constants import (UNIT_DEFS, BUILDING_DEFS, BUILDING_COLORS,
                        UPGRADE_PATH, PRODUCTION_RATES, PRODUCTION_TICK_INTERVAL,
                        FORGE_STONE_COST, FORGE_IRON_COST,
                        FORGE_STEEL_YIELD, FORGE_TIME,
-                       SMELTER_REFINERY_BONUS)
+                       SMELTER_REFINERY_BONUS,
+                       SENTINEL_CRY_COOLDOWN, SENTINEL_CRY_RADIUS,
+                       SENTINEL_CRY_BUFF_DURATION, SENTINEL_CRY_PULSE_DURATION)
 from entity_base import Entity
 from building_shapes import (_l_system_expand, _l_system_render, _sierpinski,
                              _koch_snowflake,
@@ -103,6 +105,9 @@ class Building(Entity):
         self.stationed_workers = []
         # v10.2: smelter boost flag (refinery only)
         self.smelter_boosted = False
+        # v10_7: Sentinel's Cry — tower dead zone mechanic
+        self.cry_timer = 0.0
+        self.cry_pulse_timer = 0.0
 
     def take_damage(self, dmg, attacker=None):
         """Override: completed player buildings become ruins instead of dying."""
@@ -242,7 +247,7 @@ class Building(Entity):
                     if not e.alive:
                         continue
                     d = dist(self.x, self.y, e.x, e.y)
-                    if d > TOWER_CANNON_RANGE:
+                    if d > TOWER_CANNON_RANGE or d < TOWER_MIN_RANGE:
                         continue
                     score = UNIT_PRIORITY.get(e.unit_type, 3.0)
                     score *= TOWER_HIGH_THREAT_TYPES.get(e.unit_type, 1.0)
@@ -271,7 +276,28 @@ class Building(Entity):
                     ball = CannonballClass(self.x, self.y, aim_x, aim_y, dmg,
                                           "player", explosive=is_explosive)
                     game.cannonballs.append(ball)
-                    self.tower_timer = TOWER_CANNON_CD
+                    # v10_7: 50% fire rate while upgrading
+                    cd_mult = TOWER_UPGRADE_FIRE_MULT if self.tower_upgrading else 1.0
+                    self.tower_timer = TOWER_CANNON_CD * cd_mult
+
+        # v10_7: Sentinel's Cry — tower detects enemies in dead zone, buffs nearby allies
+        if self.building_type == "tower" and self.built and not self.ruined:
+            self.cry_pulse_timer = max(0, self.cry_pulse_timer - dt)
+            self.cry_timer = max(0, self.cry_timer - dt)  # cooldown ticks always
+            if self.cry_timer <= 0:
+                # only scan for dead zone enemies when ready to fire
+                dead_zone_enemies = [e for e in game.enemy_units
+                                     if e.alive and dist(self.x, self.y, e.x, e.y) < TOWER_MIN_RANGE]
+                if dead_zone_enemies:
+                    self.cry_timer = SENTINEL_CRY_COOLDOWN
+                    self.cry_pulse_timer = SENTINEL_CRY_PULSE_DURATION
+                    # buff nearby friendly units
+                    for u in game.player_units:
+                        if u.alive and dist(self.x, self.y, u.x, u.y) <= SENTINEL_CRY_RADIUS:
+                            u.sentinel_cry_buff = SENTINEL_CRY_BUFF_DURATION
+                    # highlight dead zone enemies
+                    for e in dead_zone_enemies:
+                        e.sentinel_highlighted = SENTINEL_CRY_BUFF_DURATION
 
         # v10_2: garrison attack — garrisoned workers hurl stones at enemies
         if self.building_type == "town_hall" and self.garrison:
@@ -358,26 +384,44 @@ class Building(Entity):
     # -- v10_1: VDD Phase 3 — Algorithmic building shape renderers ----------
 
     def _draw_town_hall_shape(self, surf, cx, cy, size, build_pct, is_ruin):
-        """L-system Tree of Life — symmetric, wide canopy. Furls into
-        protective bush when garrison is active."""
+        """L-system Tree of Life — large, visible tree with thick trunk,
+        root system, and dense canopy. Furls into protective bush when
+        garrison is active."""
         trunk_c = (46, 30, 14) if is_ruin else _TH_BROWN
         tip_c = (20, 40, 20) if is_ruin else _TH_GREEN
-        iters = max(0, min(4, int(build_pct * 4 + 0.5)))
+        root_c = (90, 60, 30) if not is_ruin else (35, 25, 12)
+        iters = max(0, min(5, int(build_pct * 5 + 0.5)))
         if is_ruin:
             iters = min(1, iters)
-        if size < 20:
+        if size < 30:
             iters = min(2, iters)
         if iters == 0:
-            pygame.draw.line(surf, trunk_c, (cx, cy), (cx, cy - size // 4), 3)
+            pygame.draw.line(surf, trunk_c, (cx, cy), (cx, cy - size // 3), 3)
             return
-        # Symmetric rule: balanced left/right branching
-        instructions = _l_system_expand("F", {"F": "F[+F][-F]F[+F][-F]"}, iters)
-        # wider, shorter step for a broader, lower canopy
-        step = size / (4.0 * (1.6 ** iters))
+
+        # Draw visible root system at base
+        if iters >= 2 and not is_ruin:
+            root_spread = size * 0.35
+            root_depth = size * 0.08
+            for angle_off in (-0.7, -0.35, 0.35, 0.7):
+                rx = cx + root_spread * math.sin(angle_off)
+                ry = cy + root_depth * abs(math.sin(angle_off * 2))
+                rw = max(1, 3 - abs(int(angle_off * 2)))
+                pygame.draw.line(surf, root_c, (int(cx), int(cy)),
+                                 (int(rx), int(ry)), rw)
+
+        # Thick trunk segment before branching
+        trunk_h = size * 0.18
+        trunk_w = max(2, int(size * 0.06))
+        pygame.draw.line(surf, trunk_c, (cx, int(cy)),
+                         (cx, int(cy - trunk_h)), trunk_w)
+
+        # Symmetric rule: dense branching for full crown
+        instructions = _l_system_expand("F", {"F": "FF[+F[-F]F][-F[+F]F]"}, iters)
+        step = size / (4.5 * (1.7 ** iters))
         # garrison furl: animate toward target (smooth lerp)
         furl_target = 1.0 if (self.garrison and not is_ruin) else 0.0
         self._garrison_furl = getattr(self, '_garrison_furl', 0.0)
-        # smooth transition ~2s at 60fps
         furl_speed = 1.2
         if self._garrison_furl < furl_target:
             self._garrison_furl = min(furl_target,
@@ -385,10 +429,10 @@ class Building(Entity):
         elif self._garrison_furl > furl_target:
             self._garrison_furl = max(furl_target,
                                        self._garrison_furl - furl_speed / 60.0)
-        # wider branch angle for symmetric canopy (25 deg), lower start
-        _l_system_render(surf, cx, cy, instructions, angle_deg=25.0,
+        # branch from top of trunk, wider angle for broad crown
+        _l_system_render(surf, cx, cy - trunk_h, instructions, angle_deg=22.0,
                          step=step, col_trunk=trunk_c, col_tip=tip_c,
-                         line_width=max(1, 4 - iters),
+                         line_width=max(1, 5 - iters),
                          furl=self._garrison_furl)
 
     def _draw_barracks_shape(self, surf, cx, cy, size, build_pct, is_ruin):
@@ -597,15 +641,26 @@ class Building(Entity):
             surf.blit(foundation, (sx, sy))
 
         if self.building_type == "town_hall":
-            # tree grows from bottom center upward
+            # tree grows from bottom center upward — 2x visual height
             tree_base_y = sy + px_size - int(4 * z)
-            self._draw_town_hall_shape(surf, cx, tree_base_y, px_size, build_pct, is_ruin)
+            tree_size = int(px_size * 2.0)
+            self._draw_town_hall_shape(surf, cx, tree_base_y, tree_size, build_pct, is_ruin)
         elif self.building_type == "barracks":
             self._draw_barracks_shape(surf, cx, cy, px_size, build_pct, is_ruin)
         elif self.building_type == "refinery":
             self._draw_refinery_shape(surf, cx, cy, px_size, build_pct, is_ruin)
         elif self.building_type == "tower":
             self._draw_tower_shape(surf, cx, cy, px_size, build_pct, is_ruin, self.tower_level)
+            # v10_7: Sentinel's Cry pulse ring VFX
+            if self.cry_pulse_timer > 0 and not is_ruin:
+                pulse_progress = 1.0 - self.cry_pulse_timer / SENTINEL_CRY_PULSE_DURATION
+                pulse_r = int((SENTINEL_CRY_RADIUS * z) * pulse_progress)
+                pulse_alpha = int(180 * (1.0 - pulse_progress))
+                if pulse_r > 0 and pulse_alpha > 0:
+                    cry_surf = pygame.Surface((pulse_r * 2, pulse_r * 2), pygame.SRCALPHA)
+                    pygame.draw.circle(cry_surf, (80, 180, 255, pulse_alpha),
+                                       (pulse_r, pulse_r), pulse_r, max(1, int(2 * z)))
+                    surf.blit(cry_surf, (cx - pulse_r, cy - pulse_r))
         elif self.building_type in ("goldmine_hut", "lumber_camp", "quarry_hut",
                                      "iron_depot", "scaffold",
                                      "sawmill", "goldmine", "stoneworks",

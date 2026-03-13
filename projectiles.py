@@ -67,7 +67,10 @@ class Arrow:
 
         # Flight time scales with distance (farther = longer arc)
         self.flight_time = max(0.3, ARROW_FLIGHT_TIME * (d / 180.0))
-        self.arc_height = ARROW_ARC_HEIGHT * min(1.5, d / 150.0)
+        # v10_7: bow angle scales with distance — flat at close range, high arc at long
+        range_frac = max(0.0, min(1.0, d / 200.0))  # 0 at melee, 1 at ~max range
+        # quadratic ramp: nearly flat below 60px, steep lob above 120px
+        self.arc_height = ARROW_ARC_HEIGHT * range_frac * range_frac * 1.8
         self.elapsed = 0.0
 
         # Current interpolated position
@@ -308,8 +311,41 @@ class Cannonball:
 
 
 # ---------------------------------------------------------------------------
-# Crater VFX  (v10_5 — ground scar with optional burning embers)
+# Crater VFX  (v10_7 — fractal ground scar with optional burning embers)
 # ---------------------------------------------------------------------------
+
+def _fractal_crater_points(cx, cy, radius, n_verts=10, jaggedness=0.3, seed=0):
+    """Generate irregular crater polygon using fractal displacement.
+    Creates a Koch-like jagged edge that looks like fractured ground."""
+    rng = random.Random(seed)
+    # base polygon with random radius variation
+    base_pts = []
+    for i in range(n_verts):
+        angle = 2 * math.pi * i / n_verts
+        r_var = radius * (1.0 + rng.uniform(-jaggedness, jaggedness))
+        base_pts.append((cx + r_var * math.cos(angle),
+                         cy + r_var * math.sin(angle)))
+    # one pass of midpoint displacement for fractal edge detail
+    detailed = []
+    for i in range(len(base_pts)):
+        p1 = base_pts[i]
+        p2 = base_pts[(i + 1) % len(base_pts)]
+        detailed.append(p1)
+        mx = (p1[0] + p2[0]) * 0.5
+        my = (p1[1] + p2[1]) * 0.5
+        dx = p2[0] - p1[0]
+        dy = p2[1] - p1[1]
+        seg_len = math.hypot(dx, dy)
+        # perpendicular displacement
+        nx, ny = -dy, dx
+        if seg_len > 0:
+            nx /= seg_len
+            ny /= seg_len
+        disp = seg_len * jaggedness * rng.uniform(-1, 1)
+        detailed.append((mx + nx * disp, my + ny * disp))
+    return detailed
+
+
 class Crater:
     def __init__(self, x, y, explosive=False):
         self.x, self.y = x, y
@@ -318,17 +354,24 @@ class Crater:
         self.duration = CRATER_DURATION
         self.alive = True
         self.radius = CRATER_RADIUS_EXPLOSIVE if explosive else CRATER_RADIUS_NORMAL
+        # pre-compute fractal shape (deterministic per crater)
+        self._seed = random.randint(0, 999999)
+        n_verts = 14 if explosive else 8
+        jagged = 0.35 if explosive else 0.25
+        self._shape = _fractal_crater_points(0, 0, 1.0, n_verts, jagged, self._seed)
+        # inner ring for depth effect (smaller, more jagged)
+        self._inner = _fractal_crater_points(0, 0, 0.55, n_verts, jagged * 1.3, self._seed + 1)
 
-        # Burning embers for explosive craters
+        # Burning embers for explosive craters — launch upward (screen -y)
         self.embers = []
         if explosive:
             for _ in range(CRATER_BURN_PARTICLES):
-                angle = random.uniform(0, 2 * math.pi)
-                speed = random.uniform(8, 25)
+                angle = random.uniform(-math.pi, 0)
+                speed = random.uniform(15, 40)
                 self.embers.append({
                     'x': x, 'y': y,
-                    'vx': math.cos(angle) * speed,
-                    'vy': math.sin(angle) * speed - random.uniform(5, 15),  # slight upward
+                    'vx': math.cos(angle) * speed * random.uniform(0.5, 1.0),
+                    'vy': -abs(math.sin(angle) * speed) - random.uniform(10, 25),
                     'life': CRATER_BURN_DURATION * random.uniform(0.5, 1.0),
                     'max_life': CRATER_BURN_DURATION,
                     'size': random.uniform(1.5, 3.5),
@@ -339,13 +382,12 @@ class Crater:
         if self.timer >= self.duration:
             self.alive = False
             return
-        # Update burning embers
         for e in self.embers:
             if e['life'] > 0:
                 e['x'] += e['vx'] * dt
                 e['y'] += e['vy'] * dt
-                e['vy'] += 30 * dt  # gravity pulls embers down
-                e['vx'] *= 0.97     # air drag
+                e['vy'] += 30 * dt
+                e['vx'] *= 0.97
                 e['life'] -= dt
 
     def draw(self, surf, cam):
@@ -353,17 +395,33 @@ class Crater:
         z = cam.zoom
         progress = self.timer / self.duration
         fade = max(0.0, 1.0 - progress)
-
-        # Scorched ground circle
         r = max(2, int(self.radius * z))
+
         if fade > 0.05:
-            # Dark brown/black scar
-            darkness = int(30 * fade)
-            scar_col = (darkness, int(darkness * 0.7), int(darkness * 0.3))
-            pygame.draw.circle(surf, scar_col, (sx, sy), r)
-            # Slightly lighter rim
-            rim_col = (int(50 * fade), int(35 * fade), int(15 * fade))
-            pygame.draw.circle(surf, rim_col, (sx, sy), r, max(1, int(z)))
+            # Outer fractal rim — scorched earth
+            rim_pts = [(int(sx + px * r), int(sy + py * r)) for px, py in self._shape]
+            darkness = int(40 * fade)
+            rim_col = (int(55 * fade), int(35 * fade), int(12 * fade))
+            if len(rim_pts) >= 3:
+                pygame.draw.polygon(surf, rim_col, rim_pts)
+                # cracks: draw edges with slightly lighter color
+                crack_col = (int(70 * fade), int(45 * fade), int(18 * fade))
+                pygame.draw.polygon(surf, crack_col, rim_pts, max(1, int(z)))
+
+            # Inner fractal pit — darker center for depth
+            inner_pts = [(int(sx + px * r), int(sy + py * r)) for px, py in self._inner]
+            pit_col = (int(darkness * 0.5), int(darkness * 0.3), int(darkness * 0.1))
+            if len(inner_pts) >= 3:
+                pygame.draw.polygon(surf, pit_col, inner_pts)
+
+            # Explosive: outer blast ring with fractal edge
+            if self.explosive and fade > 0.3:
+                blast_fade = (fade - 0.3) / 0.7
+                blast_pts = [(int(sx + px * r * 1.4), int(sy + py * r * 1.4))
+                             for px, py in self._shape]
+                blast_col = (int(35 * blast_fade), int(20 * blast_fade), int(5 * blast_fade))
+                if len(blast_pts) >= 3:
+                    pygame.draw.polygon(surf, blast_col, blast_pts, max(1, int(z)))
 
         # Burning embers (explosive only)
         for e in self.embers:
@@ -371,9 +429,8 @@ class Crater:
                 continue
             ex, ey = cam.world_to_screen(e['x'], e['y'])
             ember_fade = e['life'] / e['max_life']
-            # orange → dark red as they cool
             er = min(255, int(255 * ember_fade))
-            eg = min(255, int(140 * ember_fade * ember_fade))  # fades faster
+            eg = min(255, int(140 * ember_fade * ember_fade))
             eb = min(255, int(20 * ember_fade))
             esize = max(1, int(e['size'] * z * ember_fade))
             pygame.draw.circle(surf, (er, eg, eb), (ex, ey), esize)
@@ -402,6 +459,10 @@ class Explosion:
         fade = max(0.0, 1.0 - progress)
         max_r = TOWER_EXPLOSIVE_RADIUS * z
 
+        # bloom drifts upward (screen -y) as it expands
+        rise = int(max_r * progress * 0.4)
+        bx, by = sx, sy - rise
+
         # Lissajous figure: expanding, rotating star-flower
         a_ratio, b_ratio = 3, 2  # 3:2 produces a trefoil-like figure
         delta = self._phase + progress * math.pi * 2
@@ -413,7 +474,7 @@ class Explosion:
             t = 2 * math.pi * i / n_pts
             lx = A * math.sin(a_ratio * t + delta)
             ly = B * math.sin(b_ratio * t)
-            pts.append((sx + int(lx), sy + int(ly)))
+            pts.append((bx + int(lx), by + int(ly)))
 
         if len(pts) >= 3:
             # bright core → fading outer
@@ -424,8 +485,8 @@ class Explosion:
             width = max(1, int(3 * z * fade))
             pygame.draw.polygon(surf, color, pts, width)
 
-        # inner ring for extra glow
+        # inner ring for extra glow — also drifts up
         if progress < 0.6:
             inner_r = max(2, int(max_r * progress * 0.4))
             pygame.draw.circle(surf, (255, min(255, 200 + int(55 * progress)), 80),
-                               (sx, sy), inner_r, max(1, int(2 * z * fade)))
+                               (bx, by), inner_r, max(1, int(2 * z * fade)))

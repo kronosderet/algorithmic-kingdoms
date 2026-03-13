@@ -44,7 +44,10 @@ from constants import (UNIT_DEFS, ENEMY_DEFS, UNIT_COLORS, ENEMY_COLORS,
                        TOWER_UPGRADE_TIME,
                        STANCE_AGGRESSIVE, STANCE_DEFENSIVE, STANCE_GUARD,
                        STANCE_HUNT,
-                       FORMATION_SLOT_ARRIVAL, FORMATION_REGROUP_DELAY)
+                       FORMATION_SLOT_ARRIVAL, FORMATION_REGROUP_DELAY,
+                       SAPPER_BLAST_RADIUS, SENTINEL_CRY_SPEED_BONUS,
+                       METAMORPH_HP_MULT, METAMORPH_ATK_MULT,
+                       METAMORPH_SPEED_MULT)
 from utils import dist, pos_to_tile, tile_center, draw_text
 from pathfinding import a_star
 from entity_base import Entity, _process_combat_hit
@@ -118,6 +121,7 @@ class Unit(Entity):
         self._base_hp = self.max_hp
         self._base_attack = self.attack_power
         self._base_range = self.attack_range
+        self._base_speed = self.speed
         # v10: worker skill XP system (replaces old single-specialization)
         self.skill_xp = {"lumberjack": 0, "gold_miner": 0, "iron_miner": 0,
                          "stone_mason": 0, "builder": 0, "smelter": 0}
@@ -147,6 +151,14 @@ class Unit(Entity):
         self.garrison_target = None
         # v10_2: station target (production buildings)
         self.station_target = None
+        # v10_7: Sentinel's Cry buff (attack speed bonus from nearby tower)
+        self.sentinel_cry_buff = 0.0
+        # v10_7: highlighted by Sentinel's Cry (enemy in dead zone)
+        self.sentinel_highlighted = 0.0
+        # v10_7: Straggler metamorphosis
+        self.spawn_wave = 0       # wave this enemy was spawned in
+        self.rooted = False       # straggler has taken root
+        self.metamorphosed = False  # straggler has transformed
 
     # -- Helpers ---------------------------------------------------------------
 
@@ -371,7 +383,16 @@ class Unit(Entity):
     def update(self, dt, game):
         if not self.alive:
             return
-        self.attack_timer = max(0, self.attack_timer - dt)
+        # v10_7: Sentinel's Cry buff decay + attack speed bonus
+        if self.sentinel_cry_buff > 0:
+            self.sentinel_cry_buff = max(0, self.sentinel_cry_buff - dt)
+        if self.sentinel_highlighted > 0:
+            self.sentinel_highlighted = max(0, self.sentinel_highlighted - dt)
+        # v10_7: rooted enemies cannot act (waiting to metamorphose)
+        if self.rooted:
+            return
+        cry_bonus = SENTINEL_CRY_SPEED_BONUS if self.sentinel_cry_buff > 0 else 0.0
+        self.attack_timer = max(0, self.attack_timer - dt * (1.0 + cry_bonus))
 
         # worker flee check -- before state dispatch
         if (self.unit_type == "worker" and self.owner == "player"
@@ -460,6 +481,25 @@ class Unit(Entity):
     def command_set_stance(self, stance):
         """Set unit stance (Aggressive/Defensive/Guard/Hunt)."""
         self.stance = stance
+
+    def root(self):
+        """v10_7: Straggler takes root — stops moving, becomes stationary."""
+        self.rooted = True
+        self.speed = 0
+        self.state = "idle"
+        self.target_entity = None
+        self.path = []
+
+    def metamorphose(self):
+        """v10_7: Rooted straggler transforms into an Entrenched Titan."""
+        self.metamorphosed = True
+        self.rooted = False
+        self.max_hp = int(self.max_hp * METAMORPH_HP_MULT)
+        self.hp = self.max_hp
+        self.attack_power = int(self.attack_power * METAMORPH_ATK_MULT)
+        self.speed = int(self._base_speed * METAMORPH_SPEED_MULT) if hasattr(self, '_base_speed') else 35
+        self._base_hp = self.max_hp
+        self._base_attack = self.attack_power
 
     def command_garrison(self, building, game):
         """Move to a town hall and enter garrison."""
@@ -1489,8 +1529,17 @@ class Unit(Entity):
                         dmg = int(dmg * self.building_mult)
                     t.take_damage(dmg, self)
                     _process_combat_hit(self, t, game, "melee")
-                    # v10_6: Sapper self-destruct on hit
+                    # v10_7: Sapper self-destruct — sympathetic detonation AOE
                     if self.self_destruct:
+                        # AOE blast damages nearby player entities
+                        blast_targets = game.player_units + game.player_buildings
+                        for bt in blast_targets:
+                            if bt.alive and bt is not t:
+                                bd = dist(self.x, self.y, bt.x, bt.y)
+                                if bd <= SAPPER_BLAST_RADIUS:
+                                    falloff = 1.0 - bd / SAPPER_BLAST_RADIUS
+                                    aoe_dmg = max(1, int(self.attack_power * falloff))
+                                    bt.take_damage(aoe_dmg, self)
                         self.hp = 0
                         self.alive = False
                         return
@@ -1917,6 +1966,30 @@ class Unit(Entity):
             color = UNIT_COLORS.get(self.unit_type) or ENEMY_COLORS.get(self.unit_type, (150, 150, 150))
             pygame.draw.circle(surf, color, (sx, sy), r)
             pygame.draw.circle(surf, (0, 0, 0), (sx, sy), r, 1)
+
+        # v10_7: Rooted straggler — draw root tendrils below
+        if self.rooted and r >= 3:
+            root_c = (90, 60, 30)
+            for i in range(4):
+                angle = math.pi * 0.25 + i * math.pi * 0.5
+                rx = sx + int(r * 1.3 * math.cos(angle))
+                ry = sy + int(r * 1.1 * math.sin(angle)) + r // 2
+                pygame.draw.line(surf, root_c, (sx, sy + r // 2), (rx, ry), max(1, int(2 * z)))
+                # small root tip
+                pygame.draw.circle(surf, (60, 40, 20), (rx, ry), max(1, int(1.5 * z)))
+
+        # v10_7: Metamorphosed — pulsing red-black aura, larger visual
+        if self.metamorphosed and r >= 3:
+            aura_r = int(r * 1.5)
+            aura_alpha = 60 + int(40 * abs(math.sin(pygame.time.get_ticks() * 0.003)))
+            aura_surf = pygame.Surface((aura_r * 2, aura_r * 2), pygame.SRCALPHA)
+            pygame.draw.circle(aura_surf, (180, 30, 30, aura_alpha), (aura_r, aura_r), aura_r)
+            surf.blit(aura_surf, (sx - aura_r, sy - aura_r))
+
+        # v10_7: Sentinel Cry highlighted enemy — blue-white outline
+        if self.sentinel_highlighted > 0 and r >= 3:
+            hi_alpha = int(200 * min(1.0, self.sentinel_highlighted))
+            pygame.draw.circle(surf, (120, 200, 255), (sx, sy), r + max(2, int(3 * z)), max(1, int(2 * z)))
 
         # v10f: orbiting resource indicators when carrying
         if self.carry_amount > 0 and r >= 4:

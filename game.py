@@ -20,7 +20,8 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE,
                        STANCE_AGGRESSIVE, STANCE_DEFENSIVE, STANCE_GUARD,
                        STANCE_HUNT, STANCE_NAMES, STANCE_COLORS,
                        FORMATION_POLAR_ROSE, FORMATION_GOLDEN_SPIRAL,
-                       FORMATION_SIERPINSKI, FORMATION_KOCH, FORMATION_NAMES)
+                       FORMATION_SIERPINSKI, FORMATION_KOCH, FORMATION_NAMES,
+                       display_name)
 from utils import dist, pos_to_tile, draw_text, ruin_rebuild_cost
 from game_map import GameMap
 from camera import Camera
@@ -499,7 +500,7 @@ class Game:
                     for w in workers:
                         w.command_build(b, self)
                     self.add_notification(
-                        f"Rebuilding {b.building_type.replace('_', ' ').title()} from ruins",
+                        f"Rebuilding {display_name(b.building_type)} from ruins",
                         2.0, (180, 180, 255))
                     handled = True
             elif not b.built:
@@ -1147,7 +1148,7 @@ class Game:
 
         # cost tooltip above ghost
         cost = GUI.building_cost_str(self.placing_building)
-        name = self.placing_building.replace("_", " ").title()
+        name = display_name(self.placing_building)
         draw_text(self.screen, f"{name} - {cost}", sx + px_size // 2, sy - 14, self.font_sm, (255, 255, 200), center=True)
 
     def _render_rally_points(self):

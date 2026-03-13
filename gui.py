@@ -2,7 +2,7 @@ import pygame
 from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, TOP_BAR_H, BOTTOM_PANEL_H,
                        UNIT_DEFS, BUILDING_DEFS, UNIT_COLORS, UNIT_LABELS,
                        ENEMY_COLORS, ENEMY_DEFS,
-                       BUILDING_COLORS, BUILDING_LABELS,
+                       BUILDING_COLORS, BUILDING_LABELS, display_name,
                        COL_GUI_BG, COL_GUI_BORDER, COL_TEXT, COL_GOLD,
                        COL_WOOD, COL_IRON_C, COL_STEEL, COL_STONE, COL_BTN,
                        COL_BTN_HOVER, COL_BTN_DISABLED, COL_BTN_TEXT,
@@ -254,7 +254,7 @@ class GUI:
         draw_text(surf, "ENEMY", 80, py + 8, self.font_xs, (255, 80, 80))
 
         # name + rank
-        name = e.unit_type.replace("enemy_", "").replace("_", " ").title()
+        name = display_name(e.unit_type)
         if e.rank > 0 and e.rank < len(MILITARY_RANKS):
             rank_name = MILITARY_RANKS[e.rank]
             name += f" [{rank_name}]"
@@ -320,14 +320,14 @@ class GUI:
         draw_text(surf, label, 40, py + 35, self.font_lg, (255, 255, 255), center=True)
 
         # name
-        name = b.building_type.replace("_", " ").title()
+        name = display_name(b.building_type)
         if b.ruined:
             name += " (RUINS)"
         elif b.building_type == "tower" and b.built:
             if b.tower_level >= 2:
-                name = "Explosive Cannon (Lv.2)"
+                name = "Arc Sentinel (Lv.2)"
             else:
-                name = "Cannon Tower (Lv.1)"
+                name = "Sentinel (Lv.1)"
         draw_text(surf, name, 80, py + 10, self.font)
 
         # HP bar (visual instead of text)
@@ -359,7 +359,7 @@ class GUI:
             pygame.draw.rect(surf, (30, 30, 50), (bar_x, status_y, bar_w, bar_h))
             pygame.draw.rect(surf, (200, 180, 0), (bar_x, status_y, int(bar_w * pct / 100), bar_h))
             pygame.draw.rect(surf, COL_GUI_BORDER, (bar_x, status_y, bar_w, bar_h), 1)
-            unit_name = b.train_queue[0].replace("_", " ").title()
+            unit_name = display_name(b.train_queue[0])
             draw_text(surf, f"{unit_name} ({pct}%)", bar_x + bar_w + 8, status_y - 1,
                       self.font_xs, (255, 200, 0))
             if len(b.train_queue) > 1:
@@ -428,7 +428,7 @@ class GUI:
 
         if b.building_type == "town_hall":
             ud = UNIT_DEFS["worker"]
-            self._add_button(surf, btn_x, btn_y, btn_w, btn_h, "Train Worker (Q)",
+            self._add_button(surf, btn_x, btn_y, btn_w, btn_h, "Train Gatherer (Q)",
                              lambda: b.start_train("worker", game),
                              game.resources.can_afford(gold=ud["gold"]),
                              cost_text=self.unit_cost_str("worker"))
@@ -442,12 +442,12 @@ class GUI:
                                  lambda bld=b: [w.command_ungarrison(game) for w in list(bld.garrison)])
         elif b.building_type == "barracks":
             ud = UNIT_DEFS["soldier"]
-            self._add_button(surf, btn_x, btn_y, btn_w, btn_h, "Train Soldier (W)",
+            self._add_button(surf, btn_x, btn_y, btn_w, btn_h, "Train Warden (W)",
                              lambda: b.start_train("soldier", game),
                              game.resources.can_afford(gold=ud["gold"], steel=ud["steel"]),
                              cost_text=self.unit_cost_str("soldier"))
             ud2 = UNIT_DEFS["archer"]
-            self._add_button(surf, btn_x + btn_w + 8, btn_y, btn_w, btn_h, "Train Archer (E)",
+            self._add_button(surf, btn_x + btn_w + 8, btn_y, btn_w, btn_h, "Train Ranger (E)",
                              lambda: b.start_train("archer", game),
                              game.resources.can_afford(gold=ud2["gold"], wood=ud2["wood"], steel=ud2["steel"]),
                              cost_text=self.unit_cost_str("archer"))
@@ -462,7 +462,7 @@ class GUI:
         elif b.building_type in UPGRADE_PATH and b.built and not b.ruined and not b.upgrading_to:
             upgrade_type = UPGRADE_PATH[b.building_type]
             upgrade_def = BUILDING_DEFS[upgrade_type]
-            upgrade_name = upgrade_type.replace("_", " ").title()
+            upgrade_name = display_name(upgrade_type)
             can_afford = game.resources.can_afford(
                 gold=upgrade_def["gold"], stone=upgrade_def.get("stone", 0),
                 iron=upgrade_def.get("iron", 0))
@@ -512,7 +512,7 @@ class GUI:
         draw_text(surf, label, 40, py + 35, self.font_lg, (255, 255, 255), center=True)
 
         # name + rank
-        name = u.unit_type.replace("_", " ").title()
+        name = display_name(u.unit_type)
         if u.unit_type != "worker" and u.rank < len(MILITARY_RANKS):
             rank_name = MILITARY_RANKS[u.rank]
             rank_col = RANK_COLORS.get(u.rank, COL_TEXT)
@@ -666,19 +666,19 @@ class GUI:
         btn_y_start = py + 5
         btn_w, btn_h = 140, 38
         bd = BUILDING_DEFS
-        self._add_button(surf, btn_x, btn_y_start, btn_w, btn_h, "Town Hall (1)",
+        self._add_button(surf, btn_x, btn_y_start, btn_w, btn_h, "Tree of Life (1)",
                          lambda: game.start_placement("town_hall"),
                          game.resources.can_afford(gold=bd["town_hall"]["gold"], wood=bd["town_hall"]["wood"]),
                          cost_text=self.building_cost_str("town_hall"))
-        self._add_button(surf, btn_x + btn_w + 6, btn_y_start, btn_w, btn_h, "Barracks (2)",
+        self._add_button(surf, btn_x + btn_w + 6, btn_y_start, btn_w, btn_h, "War Nexus (2)",
                          lambda: game.start_placement("barracks"),
                          game.resources.can_afford(gold=bd["barracks"]["gold"], wood=bd["barracks"]["wood"]),
                          cost_text=self.building_cost_str("barracks"))
-        self._add_button(surf, btn_x, btn_y_start + btn_h + 4, btn_w, btn_h, "Refinery (3)",
+        self._add_button(surf, btn_x, btn_y_start + btn_h + 4, btn_w, btn_h, "Crucible (3)",
                          lambda: game.start_placement("refinery"),
                          game.resources.can_afford(gold=bd["refinery"]["gold"], wood=bd["refinery"]["wood"], iron=bd["refinery"]["iron"]),
                          cost_text=self.building_cost_str("refinery"))
-        self._add_button(surf, btn_x + btn_w + 6, btn_y_start + btn_h + 4, btn_w, btn_h, "Tower (4)",
+        self._add_button(surf, btn_x + btn_w + 6, btn_y_start + btn_h + 4, btn_w, btn_h, "Sentinel (4)",
                          lambda: game.start_placement("tower"),
                          game.resources.can_afford(gold=bd["tower"]["gold"], iron=bd["tower"].get("iron", 0),
                                                    stone=bd["tower"].get("stone", 0)),
@@ -700,7 +700,7 @@ class GUI:
                 can_afford = game.resources.can_afford(
                     gold=bd_new["gold"], wood=bd_new["wood"],
                     stone=bd_new.get("stone", 0))
-                label = btype.replace("_", " ").title()
+                label = display_name(btype)
                 self._add_button(surf, fx, row3_y, btn_w, btn_h, label,
                                  lambda bt=btype: game.start_placement(bt),
                                  can_afford,

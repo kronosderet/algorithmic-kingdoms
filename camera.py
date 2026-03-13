@@ -19,16 +19,23 @@ class Camera:
         self._shake_offset_y = 0
 
     def apply_zoom(self, amount, mx, my):
-        """Zoom towards/away from mouse position."""
+        """Zoom towards/away from mouse position.
+        v10_7: round zoom to nearest 0.05 to prevent float drift."""
         old_zoom = self.zoom
-        self.zoom = clamp(self.zoom + amount, ZOOM_MIN, ZOOM_MAX)
+        new_zoom = clamp(self.zoom + amount, ZOOM_MIN, ZOOM_MAX)
+        # snap to clean values to prevent float accumulation
+        new_zoom = round(new_zoom * 20) / 20  # nearest 0.05
+        self.zoom = clamp(new_zoom, ZOOM_MIN, ZOOM_MAX)
         if self.zoom == old_zoom:
             return
         # adjust camera so the world point under the mouse stays fixed
-        wx_mouse = self.x + (mx) / old_zoom
-        wy_mouse = self.y + (my - GAME_AREA_Y) / old_zoom
-        self.x = wx_mouse - (mx) / self.zoom
-        self.y = wy_mouse - (my - GAME_AREA_Y) / self.zoom
+        # subtract shake offset so the calculation uses clean screen coords
+        clean_mx = mx - self._shake_offset_x
+        clean_my = my - self._shake_offset_y
+        wx_mouse = self.x + clean_mx / old_zoom
+        wy_mouse = self.y + (clean_my - GAME_AREA_Y) / old_zoom
+        self.x = wx_mouse - clean_mx / self.zoom
+        self.y = wy_mouse - (clean_my - GAME_AREA_Y) / self.zoom
         self._clamp()
 
     def update(self, keys, dt, mx, my, suppress_wasd=False):
@@ -76,7 +83,10 @@ class Camera:
         return sx, sy
 
     def screen_to_world(self, sx, sy):
-        return sx / self.zoom + self.x, (sy - GAME_AREA_Y) / self.zoom + self.y
+        # v10_7: compensate for shake offset so clicks align with visual grid
+        cx = sx - self._shake_offset_x
+        cy = sy - self._shake_offset_y
+        return cx / self.zoom + self.x, (cy - GAME_AREA_Y) / self.zoom + self.y
 
     def visible_rect(self):
         vw = SCREEN_WIDTH / self.zoom

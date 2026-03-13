@@ -139,12 +139,36 @@ BUILDING_COLORS = {
 }
 
 BUILDING_LABELS = {
-    "town_hall": "TH", "barracks": "BK", "refinery": "RF", "tower": "TW",
-    "goldmine_hut": "GH", "lumber_camp": "LC", "quarry_hut": "QH",
-    "iron_depot": "ID", "scaffold": "SC",
-    "sawmill": "SW", "goldmine": "GM", "stoneworks": "ST",
-    "iron_works": "IW", "forge": "FG",
+    "town_hall": "TL", "barracks": "WN", "refinery": "CR", "tower": "SN",
+    "goldmine_hut": "GN", "lumber_camp": "GT", "quarry_hut": "QN",
+    "iron_depot": "IN", "scaffold": "LT",
+    "sawmill": "TS", "goldmine": "GS", "stoneworks": "SS",
+    "iron_works": "IS", "forge": "FF",
 }
+
+# v10_7: Thematic display names — Algorithmic Kingdoms identity
+DISPLAY_NAMES = {
+    # Buildings
+    "town_hall": "Tree of Life", "barracks": "War Nexus", "refinery": "Crucible",
+    "tower": "Sentinel",
+    "goldmine_hut": "Gold Node", "lumber_camp": "Grove Tap",
+    "quarry_hut": "Stone Node", "iron_depot": "Iron Node", "scaffold": "Lattice",
+    "sawmill": "Timber Spire", "goldmine": "Gold Spire",
+    "stoneworks": "Stone Spire", "iron_works": "Iron Spire", "forge": "Fractal Forge",
+    # Player units
+    "worker": "Gatherer", "soldier": "Warden", "archer": "Ranger",
+    # Enemy units
+    "enemy_soldier": "Dark Warden", "enemy_archer": "Shadow Ranger",
+    "enemy_siege": "Siege Golem", "enemy_elite": "Void Knight",
+    "enemy_sapper": "Blight Sapper", "enemy_shieldbearer": "Iron Bulwark",
+    "enemy_healer": "Plague Mender", "enemy_raider": "Rift Raider",
+    "enemy_warlock": "Chaos Warlock",
+    "entrenched": "Entrenched Titan",
+}
+
+def display_name(key):
+    """Get thematic display name for a building or unit type."""
+    return DISPLAY_NAMES.get(key, key.replace("_", " ").title())
 
 # Unit definitions: (gold, wood, steel, hp, speed, attack, attack_range, attack_cd, train_time)
 UNIT_DEFS = {
@@ -159,10 +183,10 @@ UNIT_COLORS = {
     "archer": (50, 190, 50),
 }
 
-UNIT_LABELS = {"worker": "W", "soldier": "S", "archer": "A",
-               "enemy_soldier": "E", "enemy_archer": "E", "enemy_siege": "SG", "enemy_elite": "EL",
-               "enemy_sapper": "SP", "enemy_shieldbearer": "SB", "enemy_healer": "HL",
-               "enemy_raider": "RD", "enemy_warlock": "WK"}
+UNIT_LABELS = {"worker": "G", "soldier": "W", "archer": "R",
+               "enemy_soldier": "E", "enemy_archer": "E", "enemy_siege": "SG", "enemy_elite": "VK",
+               "enemy_sapper": "SP", "enemy_shieldbearer": "IB", "enemy_healer": "PM",
+               "enemy_raider": "RR", "enemy_warlock": "CW"}
 UNIT_RADIUS = {"worker": 10, "soldier": 12, "archer": 11,
                "enemy_soldier": 12, "enemy_archer": 11, "enemy_siege": 14, "enemy_elite": 12,
                "enemy_sapper": 11, "enemy_shieldbearer": 14, "enemy_healer": 10,
@@ -210,6 +234,7 @@ TOWER_CANNON_DAMAGE = 45         # Level 1: single big hit
 TOWER_CANNON_CD = 3.5            # slower than old 2.0s — massive damage per shot
 TOWER_CANNON_SPEED = 250         # kept for legacy; flight_time governs arc
 TOWER_CANNON_RANGE = 220         # slightly more than old 200
+TOWER_MIN_RANGE = 45             # v10_7: dead zone directly below — can't depress cannon
 TOWER_CANNON_LIFETIME = 2.5      # max flight seconds before despawn
 TOWER_CANNON_HIT_RADIUS = 16    # bigger than arrow (12) — landing proximity
 TOWER_CANNON_SPREAD = 0.10      # radians — less scatter than recruit archer
@@ -233,6 +258,26 @@ CRATER_BURN_DURATION = 3.5       # seconds burning embers persist
 # v10_5: Impact screen shake
 IMPACT_SHAKE_AMOUNT = 3          # pixels of camera displacement
 IMPACT_SHAKE_DURATION = 0.12     # seconds
+
+# v10_7: Tower upgrade fire penalty (50% rate while upgrading)
+TOWER_UPGRADE_FIRE_MULT = 2.0    # cooldown multiplier during upgrade
+
+# v10_7: Sentinel's Cry — tower dead zone mechanic
+SENTINEL_CRY_COOLDOWN = 4.0      # seconds between cries
+SENTINEL_CRY_RADIUS = 120        # px — friendly units within this get attack speed buff
+SENTINEL_CRY_BUFF_DURATION = 3.0 # seconds the buff lasts
+SENTINEL_CRY_SPEED_BONUS = 0.25  # 25% attack speed bonus for buffed units
+SENTINEL_CRY_PULSE_DURATION = 0.6  # visual pulse ring duration
+
+# v10_7: Sapper sympathetic detonation
+SAPPER_BLAST_RADIUS = 40         # px — AOE damage radius on self-destruct
+
+# v10_7: Straggler Metamorphosis — surviving enemies root and transform
+STRAGGLER_ROOT_WAVES = 1         # root after surviving 1 wave beyond their own
+STRAGGLER_METAMORPH_WAVES = 2    # transform after surviving 2 waves beyond their own
+METAMORPH_HP_MULT = 3.0          # HP multiplier on transformation
+METAMORPH_ATK_MULT = 2.0         # Attack multiplier
+METAMORPH_SPEED_MULT = 0.6       # Slower but mobile again after transform
 
 # Unit collision / separation
 UNIT_SEPARATION_DIST = 20
