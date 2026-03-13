@@ -1,7 +1,7 @@
 # GDD Roadmap — Algorithmic Kingdoms
 
 > Living document. Tracks planned versions, design decisions, and the Godot migration path.
-> Current implemented version: **v10_4** (see `GDD_Current_v10.md` for full spec)
+> Current implemented version: **v10_7** (see `GDD_Current_v10.md` for full spec)
 > Last updated: 2026-03-13
 
 ---
@@ -12,6 +12,9 @@
 |---|---|---|---|
 | v9.3 | Tactical Depth | **SHIPPED** | Ballistic archery, XP ranks, squads, morale, formations, retargeting, terrain |
 | v10 Phase 1 | Economy Foundation | **SHIPPED (v10_4)** | Stone, worker skill XP, tower cannon, traits, garrison, global commands, perf |
+| v10_5 | Module Split | **SHIPPED** | entities.py split into 5 modules, parabolic projectiles with lead aiming |
+| v10_6 | Difficulty Rebalance | **SHIPPED** | Fractal formations (4), stances (4), 5 new enemy types, adaptive difficulty engine |
+| v10_7 | Edge Case Polish | **SHIPPED** | Tower upgrade penalty, Sentinel's Cry, sapper detonation, straggler metamorphosis |
 | v10 Phase 2 | Economy Depth | **NEXT** | Helper buildings (drop-offs), production buildings, Forge |
 | v11 | Visual Overhaul | PLANNED | Dynamic unit animations, rank/trait visual pips, terrain water return |
 | v12 | Godot Migration | PLANNED | Full port to Godot 4 + GDScript, same gameplay, new renderer |
@@ -200,8 +203,6 @@ Ideas not scheduled for a specific version. Evaluate during or after Godot migra
 - Damage Types: Pierce (archers) vs Blunt (soldiers) with armor tables
 - Charge Bonus: bonus damage after moving a distance
 - Cavalry/Knight: fast melee, effective vs archers
-- Healer/Priest: mobile healing unit
-- Formations: select group → F for line/wedge/circle
 
 ### Economy & Buildings
 - Wall Segments: 1×1 cheap pathfinding blockers, create choke points
@@ -211,9 +212,6 @@ Ideas not scheduled for a specific version. Evaluate during or after Godot migra
 
 ### Enemy AI
 - Boss Waves: every 5th wave, single high-HP boss
-- Healer Enemies: heal nearby enemies, must be focus-fired
-- Stealth Enemies: skip defenses, target economy
-- Economy Raids: enemies path to resource nodes
 - Wave Negotiation: "dare" for harder wave + bigger bonus
 
 ### Map & Environment
@@ -238,6 +236,10 @@ Ideas not scheduled for a specific version. Evaluate during or after Godot migra
 - Morale Field: invisible territory from buildings/units, +5% stats in friendly territory
 - Resource Ecology: trees regrow, gold regenerates
 - Enemy Diplomacy: "messenger" enemy — spare it for smaller next wave
+- **Fractal Singing Magic:** Formations sing procedural harmonies based on member count/type — increasingly complex harmonics cast reality-warping spells (time/space/matter cancellation, not fireballs). Ties into procedural audio system.
+- **Enemy Blood Magic:** Enemies sacrifice weakest members (or bring sacrificial slaves) to cast dark hexes — chaos-math-themed counterpart to player's harmonic magic
+- **Progressive Depth Unlock:** Game opens simple (Tree of Life, basic gathering) and organically deepens — controls/mechanics unlock at natural breakpoints like adding multiplicator factors to fractals. Noita-level hidden depth for surviving long enough.
+- **Emergent Complexity Curve:** Each new mechanic layer is a mathematical step up (like fractal depth increases), creating an "absurd depth" experience where the game's systems compound
 
 ---
 
@@ -264,6 +266,14 @@ Ideas not scheduled for a specific version. Evaluate during or after Godot migra
 | Global macro commands | **Implemented** (AoE2-style) | v10_2 |
 | Tower splash damage | **Implemented** as Lv2 Explosive Cannon | v10c |
 | Flow field pathfinding | **Deferred** to Godot (NavigationServer2D) | v12 |
+| Fractal formations (4 types) | **Implemented** (Polar Rose, Golden Spiral, Sierpinski, Koch) | v10_6 |
+| Stance system (4 stances) | **Implemented** (Aggressive, Defensive, Guard, Hunt) | v10_6 |
+| Healer enemies | **Implemented** as Enemy Healer (5 HP/s heal) | v10_6 |
+| Stealth/economy raids | **Implemented** as Enemy Raider (targets workers/economy only) | v10_6 |
+| Boss-like enemies | **Implemented** as Shieldbearer (frontal armor) + Warlock (AOE) | v10_6 |
+| Adaptive difficulty | **Implemented** as pressure-based escalation/de-escalation engine | v10_6 |
+| Parabolic projectiles | **Implemented** with lead aiming for arrows + cannonballs | v10_5 |
+| Module architecture split | **Implemented** (entities.py → 5 focused modules) | v10_5 |
 
 ---
 
@@ -271,6 +281,7 @@ Ideas not scheduled for a specific version. Evaluate during or after Godot migra
 
 | File | Purpose |
 |---|---|
-| `GDD_Current_v10.md` | Full specification of currently implemented v10_4 systems |
+| `GDD_Current_v10.md` | Full specification of currently implemented v10_7 systems |
 | `GDD_Roadmap.md` | This file — planned versions and design decisions |
-| `GDD_Current_v9.md` | Historical v9.3 spec (superseded by v10) |
+| `future ideas-crazy stuff.txt` | Raw brainstorm: fractal singing magic, blood magic, progressive depth unlock |
+| `archive/GDD_Current_v9.md` | Historical v9.3 spec (superseded by v10) |

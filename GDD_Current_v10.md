@@ -1,4 +1,4 @@
-# Game Design Document — Algorithmic Kingdoms v10_4 (Current)
+# Game Design Document — Algorithmic Kingdoms v10_7 (Current)
 
 > Reflects the actual implemented state of all systems.
 > Last updated: 2026-03-13
@@ -23,6 +23,9 @@
 - v10_2: Town Hall garrison (workers barricade for armor + stone-hurling), hold ground stance, attack-move
 - v10_3: Water terrain removed (reserved for terrain overhaul), visual pip cleanup
 - v10_4: Performance — spatial grid, map caching, insertion sort, minimap dirty flags, player death logging
+- v10_5: Module split (entities.py → entity_base/unit/building/building_shapes/projectiles), parabolic projectiles with lead aiming
+- v10_6: Major difficulty rebalance — fractal formations (4 types), stances (4 types), 5 new enemy types, adaptive difficulty engine
+- v10_7: Edge case polish — tower upgrade fire penalty, Sentinel's Cry dead zone mechanic, sapper sympathetic detonation, straggler metamorphosis
 
 ---
 
@@ -148,6 +151,12 @@ All buildings are player-side only. Built by workers through right-click assignm
   - 50 direct damage + 35 AoE splash in 60px radius
   - Same speed/range/CD as Level 1
 - Target scoring: threat-type bonuses (Elite 1.5×, Siege 1.8×), low-HP finishing (2.0× below 30%)
+- **v10_7: Upgrade Fire Penalty** — fires at 50% rate while upgrading (not silenced)
+- **v10_7: Sentinel's Cry** — when enemies enter tower dead zone (45px min range):
+  - Tower emits expanding blue pulse ring VFX (0.6s duration)
+  - All friendly units within 120px get 25% attack speed buff for 3.0s
+  - Dead zone enemies highlighted blue-white
+  - 4.0s cooldown, performance-guarded scan (only checks when ready to fire)
 
 ### 5.3 Building Ruin System
 
@@ -178,8 +187,22 @@ When a completed player building reaches 0 HP:
 | Enemy Archer | 60 | 50 | 6 | 140 | 1.8s | — |
 | Enemy Siege | 200 | 35 | 20 | 40 | 3.0s | 2× damage vs buildings |
 | Enemy Elite | 160 | 60 | 18 | 40 | 1.0s | Fast, high DPS |
+| Enemy Sapper | 80 | 70 | 5 | 40 | 2.0s | 3× building damage, self-destruct on contact, sympathetic AOE (40px) |
+| Enemy Shieldbearer | 250 | 40 | 8 | 40 | 1.5s | 50% frontal armor (flanking bypasses) |
+| Enemy Healer | 60 | 45 | 0 | 120 | — | 5 HP/s heal to nearest wounded ally |
+| Enemy Raider | 70 | 80 | 10 | 40 | 1.0s | Targets workers and economy buildings only |
+| Enemy Warlock | 90 | 45 | 15 | 100 | 3.0s | 30px AOE damage with distance falloff |
+
+**v10_6 new enemy types** unlock by wave on Medium: Sapper (wave 5), Raider (6), Shieldbearer (8), Healer (10), Warlock (14).
 
 **Wave Scaling:** `hp = base × (1 + hp_scale × wave#)`, `atk = base × (1 + atk_scale × wave#)`
+
+### 6.9 Straggler Metamorphosis (v10_7)
+
+Enemy units that survive across wave boundaries evolve:
+- **After 1 wave:** Unit roots in place (speed=0, stops attacking, grows root tendrils VFX)
+- **After 2 waves:** Metamorphoses into Entrenched Titan (3× HP at full, 2× ATK, 60% base speed, pulsing red-black aura VFX)
+- Creates strategic pressure: don't ignore leftover enemies
 
 ### 6.3 Unit States
 
@@ -328,9 +351,34 @@ Archers fire real projectiles with accuracy spread. Towers fire ballistic cannon
 
 ## 10. Squad System
 
-- Reassignment every 2.0s. Leader: rank ≥ 1. Max size: 6.
+- Persistent squads with leader promotion (highest rank). Max size: 6.
 - Followers assist leader's target or follow leader when idle.
 - Enemy squads also form — returning veterans become natural leaders.
+
+### 10.1 Fractal Formations (v10_6)
+
+4 formation types, each using math that echoes the game's algorithmic identity:
+
+| Formation | Hotkey | Math | Best For |
+|---|---|---|---|
+| Polar Rose | F1 | `r = cos(kθ)`, k scales with squad size | Default mixed squads |
+| Golden Spiral | F2 | Vogel sunflower `θ_n = n × 2π/φ²` | Assault/flanking |
+| Sierpinski Triangle | F3 | Recursive triangle subdivision | Anti-AOE spread |
+| Koch Snowflake | F4 | Units on Koch curve perimeter | Guard/defensive perimeter |
+
+- Slot-based positioning: units pull toward assigned formation slot after 2.0s out of combat
+- Formation shapes match unit/building shapes (polar rose = soldier, golden spiral = archer, sierpinski = barracks, koch = tower)
+
+### 10.2 Stance System (v10_6)
+
+Replaces simple hold_ground toggle with 4 stance modes:
+
+| Stance | Hotkey | Aggro Behavior | Chase |
+|---|---|---|---|
+| Aggressive | F5 | weapon_range + idle aggro range | Chase targets |
+| Defensive | F6 | weapon_range only | No chase |
+| Guard | F7 | weapon_range + 40px, return to guard position | No chase |
+| Hunt | F8 | 1.5× aggro range, prioritize Sappers/Raiders | Chase targets |
 
 ---
 
@@ -367,11 +415,32 @@ Key modifiers:
 Edges of map, multi-directional after threshold wave. Spawn seeks walkable tile (30 retries).
 
 ### 13.2 Adaptive Composition
-Base: Elite 10%, Siege 15%, Archer 30%, Soldier remainder.
-Adaptations: +siege vs many towers, +elite vs archer-heavy army, +enemy archers vs soldier-heavy.
+Base probabilities across 9 enemy types (soldier minimum 15%). Counter-pick adaptations:
+- Many towers, no mobile army → +sappers
+- Player clumps units → +warlocks
+- Strong economy (many workers) → +raiders
+- Heavy archer meta → +shieldbearers
+- High player kill rate → +healers
 
 ### 13.3 Enemy Flee & Veteran Return
 HP-based (below 20% + outnumbered check) and morale-based. Escaped enemies return next wave as veterans.
+
+### 13.4 Adaptive Difficulty Engine (v10_6)
+
+Tracks "pressure" per wave: `pressure = (buildings_lost × 3 + units_lost × 2 + enemies_escaped) / wave_enemy_count`
+
+| Condition | Trigger | Effect |
+|---|---|---|
+| Dominating | Last 3 waves < 0.1 pressure | +15% enemy count, compress interval 5s, unlock enemies 2 waves early |
+| Struggling | Any of last 3 waves > 0.5 | -10% enemy count, expand interval 5s |
+
+Escalation modifier clamped to [0.5, 2.0]. Smart multi-direction spawning biases toward less tower-defended edges.
+
+### 13.5 Straggler Processing (v10_7)
+
+At each wave spawn, existing enemies are checked by wave age:
+- Wave age ≥ 1: root in place (stationary, cannot attack)
+- Wave age ≥ 2: metamorphose into Entrenched Titan (3× HP, 2× ATK, 60% speed)
 
 ---
 
@@ -548,30 +617,36 @@ CSV-based logging to `logs/` directory. Events:
 
 ```
 rts/
-  main.py          — Entry point, pygame init, menu → game
-  menu.py          — Main menu with algorithmic art background
-  game.py          — Game class: update/render loop, input, global commands
-  constants.py     — All constants, difficulty profiles, unit/building defs, trait system
-  utils.py         — dist, clamp, tile_center, pos_to_tile, draw_text, ruin_rebuild_cost
-  game_map.py      — Procedural terrain gen, harvest, passability
-  camera.py        — Pan/zoom/clamp/transforms
-  resources.py     — ResourceManager (gold, wood, iron, steel, stone)
-  entities.py      — Entity, Unit, Building, Arrow, Projectile + combat helper
-  squads.py        — SquadManager (rank-based leadership)
-  enemy_ai.py      — Wave spawning, adaptive composition, veteran return
-  gui.py           — HUD: top bar, bottom panel, buttons, enemy inspection
-  pathfinding.py   — A* with weighted terrain (4000 node limit)
-  spatial_grid.py  — O(1) spatial neighbor queries for unit interactions
-  event_logger.py  — CSV event recording + game summary
+  main.py            — Entry point, pygame init, menu → game
+  menu.py            — Main menu with algorithmic art background
+  game.py            — Game class: update/render loop, input, global commands
+  constants.py       — All constants, difficulty profiles, unit/building defs, trait system
+  utils.py           — dist, clamp, tile_center, pos_to_tile, draw_text, ruin_rebuild_cost
+  game_map.py        — Procedural terrain gen, harvest, passability
+  camera.py          — Pan/zoom/clamp/transforms
+  resources.py       — ResourceManager (gold, wood, iron, steel, stone)
+  entity_base.py     — Entity base class (v10_5 split from entities.py)
+  unit.py            — Unit class: combat, gathering, stances, formations, metamorphosis
+  building.py        — Building class: construction, tower, garrison, Sentinel's Cry
+  building_shapes.py — Algorithmic building shape drawing functions
+  projectiles.py     — Arrow and Cannonball with parabolic arcs + lead aiming
+  entities.py        — Re-export facade (imports from split modules for backward compat)
+  squads.py          — SquadManager: persistent squads, 4 fractal formation calculators
+  enemy_ai.py        — Wave spawning, adaptive composition, adaptive difficulty, straggler processing
+  gui.py             — HUD: top bar, bottom panel, buttons, formation/stance UI
+  pathfinding.py     — A* with weighted terrain (4000 node limit)
+  spatial_grid.py    — O(1) spatial neighbor queries for unit interactions
+  event_logger.py    — CSV event recording + game summary
 ```
 
 **Entity Hierarchy:**
 ```
-Entity (eid, x, y, hp, max_hp, owner, alive, last_attacker)
+Entity (eid, x, y, hp, max_hp, owner, alive, last_attacker, frontal_armor)
   ├── Unit (state machine, commands, combat, gathering, building,
   │         fleeing, XP/rank, traits, arrow firing, squad behavior,
-  │         target scoring, retargeting, morale, formations,
-  │         worker skills, garrison, hold ground, attack-move)
+  │         target scoring, retargeting, morale, fractal formations,
+  │         stances, worker skills, garrison, attack-move,
+  │         sentinel cry buff, rooting, metamorphosis)
   └── Building (construction, training queue, refinery, tower cannon,
-                ruin system, garrison, rally point)
+                ruin system, garrison, rally point, Sentinel's Cry)
 ```
