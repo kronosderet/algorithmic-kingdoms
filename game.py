@@ -67,6 +67,7 @@ class Game:
         self.ground_arrows = []    # v9: grounded arrows (visual only)
         self.cannonballs = []      # v10c: tower cannonballs in flight
         self.explosions = []       # v10c: explosion VFX
+        self.craters = []          # v10_5: ground craters from cannonball impacts
         self.escaped_enemies = []  # enemies that fled to map edge
 
         # v9: squad managers
@@ -275,26 +276,7 @@ class Game:
             elif key == pygame.K_e and b.building_type == "barracks":
                 b.start_train("archer", self)
             elif key == pygame.K_u and b.can_upgrade_tower():
-                # v10c: upgrade tower to explosive cannon via hotkey
-                cost = TOWER_UPGRADE_COST
-                if self.resources.can_afford(steel=cost["steel"]):
-                    self.resources.spend(steel=cost["steel"])
-                    # find a nearby idle worker to do the upgrade
-                    best_worker = None
-                    best_d = float("inf")
-                    for u in self.player_units:
-                        if u.alive and u.unit_type == "worker" and u.state == "idle":
-                            wd = dist(u.x, u.y, b.x, b.y)
-                            if wd < best_d:
-                                best_d = wd
-                                best_worker = u
-                    if best_worker:
-                        best_worker.command_tower_upgrade(b, self)
-                        self.add_notification("Upgrading tower to Explosive Cannon (15 steel)", 2.0, (255, 140, 40))
-                    else:
-                        # refund if no worker available
-                        self.resources.steel += cost["steel"]
-                        self.add_notification("No idle workers available for upgrade!", 2.0, (255, 80, 80))
+                self.start_tower_upgrade(b)
 
         if key == pygame.K_SPACE and self.selected:
             e = self.selected[0]
@@ -725,6 +707,28 @@ class Game:
                 if th:
                     u.command_garrison(th, self)
 
+    def start_tower_upgrade(self, b):
+        """Upgrade tower to explosive cannon — shared by hotkey U and GUI button."""
+        if not b.can_upgrade_tower():
+            return
+        cost = TOWER_UPGRADE_COST
+        if self.resources.can_afford(steel=cost["steel"]):
+            self.resources.spend(steel=cost["steel"])
+            best_worker = None
+            best_d = float("inf")
+            for u in self.player_units:
+                if u.alive and u.unit_type == "worker" and u.state == "idle":
+                    wd = dist(u.x, u.y, b.x, b.y)
+                    if wd < best_d:
+                        best_d = wd
+                        best_worker = u
+            if best_worker:
+                best_worker.command_tower_upgrade(b, self)
+                self.add_notification("Upgrading tower to Explosive Cannon (15 steel)", 2.0, (255, 140, 40))
+            else:
+                self.resources.steel += cost["steel"]
+                self.add_notification("No idle workers available for upgrade!", 2.0, (255, 80, 80))
+
     def global_resume(self):
         """Ungarrison all workers and resume previous work."""
         for b in self.player_buildings:
@@ -781,6 +785,12 @@ class Game:
         for ex in self.explosions:
             ex.update(dt)
         self.explosions = [ex for ex in self.explosions if ex.alive]
+        # v10_5: update craters (fading ground scars)
+        for cr in self.craters:
+            cr.update(dt)
+        self.craters = [cr for cr in self.craters if cr.alive]
+        # v10_5: update camera shake
+        self.camera.update_shake(dt)
 
         # v9: update squad managers
         self.player_squad_mgr.update(dt, self.player_units)
@@ -869,6 +879,7 @@ class Game:
         # Clear projectiles between waves for visual cleanliness
         self.ground_arrows.clear()
         self.cannonballs.clear()
+        self.craters.clear()
 
     def render(self):
         self.screen.fill(COL_BG)
@@ -879,6 +890,7 @@ class Game:
 
         self._render_map()
         self._render_ground_arrows()   # v9: stuck arrows on ground (below units)
+        self._render_craters()         # v10_5: cannonball impact craters
         self._render_buildings()
         self._render_units()
         self._render_arrows()          # v9: flying arrows (above units)
@@ -1052,6 +1064,11 @@ class Game:
         for ex in self.explosions:
             ex.draw(self.screen, self.camera)
 
+    def _render_craters(self):
+        """v10_5: Draw cannonball impact craters on the ground."""
+        for cr in self.craters:
+            cr.draw(self.screen, self.camera)
+
     def _render_placement_ghost(self):
         if not self.placing_building:
             return
@@ -1108,6 +1125,8 @@ class Game:
         x1, y1 = self.select_start
         w = mx - x1
         h = my - y1
+        if abs(w) < 1 or abs(h) < 1:
+            return
         rect_surf = pygame.Surface((abs(w), abs(h)), pygame.SRCALPHA)
         rect_surf.fill((0, 255, 0, 30))
         rx = min(x1, mx)

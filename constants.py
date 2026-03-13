@@ -56,7 +56,7 @@ TERRAIN_RESOURCE_MAP = {TERRAIN_TREE: "wood", TERRAIN_GOLD: "gold", TERRAIN_IRON
 # Difficulty profiles
 DIFFICULTY_PROFILES = {
     "easy": {
-        "start_gold": 300, "start_wood": 150, "start_iron": 0, "start_steel": 0,
+        "start_gold": 300, "start_wood": 150, "start_iron": 0, "start_steel": 0, "start_stone": 0,
         "start_workers": 4,
         "first_wave_time": 360, "wave_interval": 120, "max_waves": 15,
         "wave_base": 4, "wave_scale": 3,       # count = base + scale*sqrt(n)
@@ -68,7 +68,7 @@ DIFFICULTY_PROFILES = {
         "label": "Easy",
     },
     "medium": {
-        "start_gold": 200, "start_wood": 100, "start_iron": 0, "start_steel": 0,
+        "start_gold": 200, "start_wood": 100, "start_iron": 0, "start_steel": 0, "start_stone": 0,
         "start_workers": 3,
         "first_wave_time": 330, "wave_interval": 90, "max_waves": 20,   # v10g: +30s prep
         "wave_base": 4, "wave_scale": 4,                                # v10g: 5→4 smaller early waves
@@ -80,7 +80,7 @@ DIFFICULTY_PROFILES = {
         "label": "Medium",
     },
     "hard": {
-        "start_gold": 180, "start_wood": 100, "start_iron": 0, "start_steel": 0,  # v10g: +30g +20w
+        "start_gold": 180, "start_wood": 100, "start_iron": 0, "start_steel": 0, "start_stone": 0,  # v10g: +30g +20w
         "start_workers": 3,
         "first_wave_time": 300, "wave_interval": 80, "max_waves": 25,   # v10g: 210→300, 75→80
         "wave_base": 5, "wave_scale": 5,                                # v10g: 8→5 base enemies
@@ -186,11 +186,13 @@ REFINE_TIME = 6.0
 # v10c: Tower Cannon (ballistic, replaces old hitscan)
 TOWER_CANNON_DAMAGE = 45         # Level 1: single big hit
 TOWER_CANNON_CD = 3.5            # slower than old 2.0s — massive damage per shot
-TOWER_CANNON_SPEED = 250         # slower than arrows (350) — can miss movers
+TOWER_CANNON_SPEED = 250         # kept for legacy; flight_time governs arc
 TOWER_CANNON_RANGE = 220         # slightly more than old 200
 TOWER_CANNON_LIFETIME = 2.5      # max flight seconds before despawn
-TOWER_CANNON_HIT_RADIUS = 16    # bigger than arrow (12)
+TOWER_CANNON_HIT_RADIUS = 16    # bigger than arrow (12) — landing proximity
 TOWER_CANNON_SPREAD = 0.10      # radians — less scatter than recruit archer
+CANNONBALL_ARC_HEIGHT = 12       # low flat arc (heavy, fast)
+CANNONBALL_FLIGHT_TIME = 0.4     # seconds to reach target (fast and dangerous)
 
 # v10c: Level 2 — Explosive cannon (steel upgrade)
 TOWER_UPGRADE_COST = {"steel": 15}
@@ -198,6 +200,17 @@ TOWER_UPGRADE_TIME = 12          # seconds of worker build work
 TOWER_EXPLOSIVE_DAMAGE = 35      # AoE splash (less than direct, hits many)
 TOWER_EXPLOSIVE_RADIUS = 60      # blast radius in pixels
 TOWER_EXPLOSIVE_DIRECT = 50      # direct-hit damage (Level 2)
+
+# v10_5: Crater VFX (cannonball ground impact)
+CRATER_DURATION = 6.0            # seconds before full fade
+CRATER_RADIUS_NORMAL = 10        # normal cannonball crater size (px)
+CRATER_RADIUS_EXPLOSIVE = 26     # explosive crater size (px)
+CRATER_BURN_PARTICLES = 8        # ember count for explosive craters
+CRATER_BURN_DURATION = 3.5       # seconds burning embers persist
+
+# v10_5: Impact screen shake
+IMPACT_SHAKE_AMOUNT = 3          # pixels of camera displacement
+IMPACT_SHAKE_DURATION = 0.12     # seconds
 
 # Unit collision / separation
 UNIT_SEPARATION_DIST = 20
@@ -265,14 +278,19 @@ RANK_COLORS = {
     4: (80, 180, 255),    # diamond blue — Captain
 }
 
-# v9: Ballistic Archery
-ARROW_SPEED = 350
+# v9/v10_5: Ballistic Archery — parabolic arc
+ARROW_SPEED = 350               # kept for legacy compat; flight_time governs arc
 ARROW_MAX_LIFETIME = 2.0        # seconds in flight before despawn
 ARROW_HIT_RADIUS = 12           # collision detection radius (px)
 ARROW_BASE_SPREAD = 0.18        # radians — max aim scatter for Recruit
 ARROW_MIN_SPREAD = 0.03         # radians — best accuracy (Captain)
 GROUND_ARROW_LIFETIME = 8.0     # seconds stuck arrows persist as visuals
 GROUND_ARROW_MAX = 50           # oldest culled when exceeded
+ARROW_ARC_HEIGHT = 40           # pixels of peak arc (elegant lob)
+ARROW_FLIGHT_TIME = 0.8         # seconds to reach target
+ARROW_TRAIL_LENGTH = 4          # afterimage ghost points
+ARROW_LEAD_MIN_RANK = 2         # rank threshold for lead aiming
+ARROW_LEAD_FACTOR_PER_RANK = 0.4  # lead accuracy per rank above threshold
 
 # v9: Squad System
 SQUAD_MAX_SIZE = 6
@@ -376,6 +394,7 @@ PRODUCTION_RATES = {
     "goldmine":   {"resource": "gold",  "base_rate": 1.0, "worker_rate": 4.0, "max_workers": 3},
     "stoneworks": {"resource": "stone", "base_rate": 1.0, "worker_rate": 4.0, "max_workers": 3},
     "iron_works": {"resource": "iron",  "base_rate": 0.8, "worker_rate": 3.5, "max_workers": 3},
+    "forge":      {"resource": "steel", "base_rate": 0.0, "worker_rate": 0.0, "max_workers": 2},
 }
 PRODUCTION_TICK_INTERVAL = 5.0  # seconds between ticks
 

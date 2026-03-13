@@ -1,4 +1,4 @@
-import pygame
+import pygame, random
 from constants import (MAP_COLS, MAP_ROWS, TILE_SIZE, SCREEN_WIDTH,
                        SCREEN_HEIGHT, BOTTOM_PANEL_H, GAME_AREA_Y, GAME_AREA_H,
                        CAMERA_SPEED, EDGE_SCROLL_MARGIN, ZOOM_MIN, ZOOM_MAX)
@@ -12,6 +12,11 @@ class Camera:
         cy = (MAP_ROWS // 2) * TILE_SIZE - GAME_AREA_H // 2
         self.x = float(cx)
         self.y = float(cy)
+        # Screen shake state
+        self._shake_amount = 0.0
+        self._shake_timer = 0.0
+        self._shake_offset_x = 0
+        self._shake_offset_y = 0
 
     def apply_zoom(self, amount, mx, my):
         """Zoom towards/away from mouse position."""
@@ -49,8 +54,26 @@ class Camera:
         self.x = clamp(self.x, 0, max(0, max_x))
         self.y = clamp(self.y, 0, max(0, max_y))
 
+    def shake(self, amount, duration):
+        """Trigger screen shake (stacks by taking max)."""
+        self._shake_amount = max(self._shake_amount, amount)
+        self._shake_timer = max(self._shake_timer, duration)
+
+    def update_shake(self, dt):
+        """Update shake decay — call once per frame."""
+        if self._shake_timer > 0:
+            self._shake_timer -= dt
+            intensity = max(0.0, self._shake_timer / 0.12) * self._shake_amount
+            self._shake_offset_x = int(random.uniform(-intensity, intensity))
+            self._shake_offset_y = int(random.uniform(-intensity, intensity))
+        else:
+            self._shake_offset_x = 0
+            self._shake_offset_y = 0
+
     def world_to_screen(self, wx, wy):
-        return int((wx - self.x) * self.zoom), int((wy - self.y) * self.zoom + GAME_AREA_Y)
+        sx = int((wx - self.x) * self.zoom) + self._shake_offset_x
+        sy = int((wy - self.y) * self.zoom + GAME_AREA_Y) + self._shake_offset_y
+        return sx, sy
 
     def screen_to_world(self, sx, sy):
         return sx / self.zoom + self.x, (sy - GAME_AREA_Y) / self.zoom + self.y

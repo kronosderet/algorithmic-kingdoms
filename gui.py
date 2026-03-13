@@ -28,6 +28,7 @@ class GUI:
     def __init__(self):
         self.font = None
         self.font_sm = None
+        self.font_xs = None
         self.font_lg = None
         self.buttons = []  # list of (rect, label, callback, enabled)
 
@@ -328,7 +329,7 @@ class GUI:
             return
 
         if not b.built:
-            pct = int(100 * b.build_progress / b.build_time)
+            pct = int(100 * b.build_progress / b.build_time) if b.build_time > 0 else 0
             # construction progress bar
             bar_x, bar_y, bar_w, bar_h = 80, py + 50, 160, 10
             pygame.draw.rect(surf, (30, 30, 50), (bar_x, bar_y, bar_w, bar_h))
@@ -425,7 +426,7 @@ class GUI:
                           btn_x, btn_y + btn_h + 8, self.font_sm, (220, 180, 80))
                 self._add_button(surf, btn_x + btn_w + 8, btn_y, btn_w, btn_h,
                                  "Ungarrison",
-                                 lambda: game.global_resume())
+                                 lambda bld=b: [w.command_ungarrison(game) for w in list(bld.garrison)])
         elif b.building_type == "barracks":
             ud = UNIT_DEFS["soldier"]
             self._add_button(surf, btn_x, btn_y, btn_w, btn_h, "Train Soldier (W)",
@@ -440,7 +441,7 @@ class GUI:
         elif b.building_type == "tower" and b.can_upgrade_tower():
             cost = TOWER_UPGRADE_COST
             self._add_button(surf, btn_x, btn_y, btn_w + 20, btn_h, "Upgrade (U)",
-                             lambda: None,
+                             lambda bld=b, g=game: g.start_tower_upgrade(bld),
                              game.resources.can_afford(steel=cost["steel"]),
                              cost_text=self.cost_str(steel=cost["steel"]))
 
@@ -503,7 +504,9 @@ class GUI:
             rank_name = MILITARY_RANKS[u.rank]
             rank_col = RANK_COLORS.get(u.rank, COL_TEXT)
             name += f" [{rank_name}]"
-        draw_text(surf, name, 80, py + 8, self.font)
+        else:
+            rank_col = COL_TEXT
+        draw_text(surf, name, 80, py + 8, self.font, rank_col)
 
         # traits (inline, compact)
         if u.traits:
