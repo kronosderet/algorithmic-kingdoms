@@ -26,28 +26,25 @@ MINIMAP_Y = TOP_BAR_H + MINIMAP_MARGIN
 
 # Terrain
 TERRAIN_GRASS = 0
-TERRAIN_WATER = 1          # deep water — impassable
+TERRAIN_WATER = 1          # reserved (water removed in v10_3, will return in terrain overhaul)
 TERRAIN_TREE = 2
 TERRAIN_GOLD = 3
 TERRAIN_IRON = 4
-TERRAIN_SHALLOW_WATER = 5  # v9.3: passable but slow
+TERRAIN_SHALLOW_WATER = 5  # reserved
 TERRAIN_STONE = 6          # v10: stone resource
 
 TERRAIN_COLORS = {
     TERRAIN_GRASS: (40, 118, 74),  # v10g2: desaturated for unit contrast
-    TERRAIN_WATER: (30, 90, 200),
     TERRAIN_TREE: (20, 100, 20),
     TERRAIN_GOLD: (218, 165, 32),
     TERRAIN_IRON: (140, 140, 155),
-    TERRAIN_SHALLOW_WATER: (60, 130, 220),
     TERRAIN_STONE: (160, 150, 130),
 }
 
-# v9.3: movement cost multipliers (deep water omitted = impassable)
+# Movement cost multipliers — all terrain is passable with varying speed penalty
 TERRAIN_MOVE_COST = {
     TERRAIN_GRASS: 1.0,
     TERRAIN_TREE: 2.0,
-    TERRAIN_SHALLOW_WATER: 2.5,
     TERRAIN_GOLD: 1.8,
     TERRAIN_IRON: 1.8,
     TERRAIN_STONE: 1.8,
@@ -312,6 +309,16 @@ DRAG_THRESHOLD = 5                    # min drag pixels before box-select starts
 SPAWN_MARGIN = 2                      # min tiles from map edge for enemy spawn
 SPAWN_RETRIES = 30                    # max attempts to find walkable spawn pos
 IDLE_AGGRO_RANGE = 64                 # bonus px range for idle auto-aggro
+
+# ---------------------------------------------------------------------------
+# v10_2: Town Hall Garrison
+# ---------------------------------------------------------------------------
+GARRISON_MAX_WORKERS = 10              # max workers inside TH
+GARRISON_ARMOR_PER_WORKER = 0.05       # 5% damage reduction per worker (caps at 50%)
+GARRISON_DAMAGE_PER_WORKER = 3         # damage per garrisoned worker per tick
+GARRISON_ATTACK_CD = 2.0               # seconds between garrison attacks
+GARRISON_ATTACK_RANGE = 120            # range of stone-hurling
+GARRISON_COST = {"wood": 20, "iron": 5, "stone": 10}  # cost per bell ring
 
 # ---------------------------------------------------------------------------
 # v10_1: Unit Trait System (procedural personalities)

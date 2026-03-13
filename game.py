@@ -9,14 +9,16 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE,
                        COL_BG, COL_SELECT, COL_TEXT,
                        DIFFICULTY_PROFILES,
                        HEAL_RATE_NEAR_TH, HEAL_RADIUS_TH,
-                       GROUND_ARROW_MAX, RANK_COLORS,
+                       GROUND_ARROW_MAX,
                        SELECT_RADIUS, DRAG_THRESHOLD,
                        TOWER_UPGRADE_COST, TOWER_CANNON_DAMAGE,
                        TOWER_CANNON_CD, TOWER_EXPLOSIVE_DIRECT,
-                       MAX_CONTROL_GROUPS, RALLY_POINT_COLOR)
+                       MAX_CONTROL_GROUPS, RALLY_POINT_COLOR,
+                       GARRISON_COST)
 from utils import dist, pos_to_tile, draw_text, ruin_rebuild_cost
 from game_map import GameMap
 from camera import Camera
+from spatial_grid import SpatialGrid
 from resources import ResourceManager
 from entities import Unit, Building
 from squads import SquadManager
@@ -84,7 +86,6 @@ class Game:
 
         # minimap
         self.minimap_surf = None
-        self.minimap_timer = 0.0
 
         # notifications
         self._notifications = []  # list of [text, timer, color]
@@ -103,6 +104,20 @@ class Game:
 
         # v10_1: minimap combat heat overlay
         self._combat_heat = []  # list of [x, y, timer]  (world coords)
+
+        # v10_4: spatial grids for O(1) neighbor queries
+        self.player_grid = SpatialGrid(cell_size=80)
+        self.enemy_grid = SpatialGrid(cell_size=80)
+
+        # v10_4: cached map terrain surface (redrawn only when tiles change)
+        self._map_cache = None       # pygame.Surface
+        self._map_cache_zoom = None  # zoom level when cache was built
+        self._map_cache_rect = None  # visible_rect when cache was built
+        self._map_dirty = True       # flag to force rebuild
+        self._minimap_dirty = True   # separate flag for minimap rebuild
+
+        # v10_4: pre-sorted unit list (maintained via insertion sort)
+        self._sorted_units = []
 
         self._setup_start()
 
@@ -193,13 +208,6 @@ class Game:
                     e.selected = False
                 self.selected.clear()
                 self.inspected_enemy = None
-
-        # v10_1: attack-move — press A to enter mode
-        if key == pygame.K_a:
-            units_sel = [e for e in self.selected if isinstance(e, Unit) and e.unit_type != "worker"]
-            if units_sel:
-                self.attack_move_mode = True
-                return
 
         # cache worker selection (used by both control groups and build hotkeys)
         workers_selected = [u for u in self.selected if isinstance(u, Unit) and u.unit_type == "worker"]
@@ -313,9 +321,7 @@ class Game:
             wx, wy = self.camera.screen_to_world(sx, sy)
             units_sel = [e for e in self.selected if isinstance(e, Unit) and e.unit_type != "worker"]
             for u in units_sel:
-                u.command_move(wx, wy, self)
-                # set a flag so idle behavior triggers aggro on arrival
-                u._attack_move_target = (wx, wy)
+                u.command_attack_move(wx, wy, self)
             return
 
         # building placement
@@ -361,7 +367,7 @@ class Game:
         best = None
         best_d = SELECT_RADIUS
         for u in self.player_units:
-            if not u.alive:
+            if not u.alive or u.state == "garrisoned":
                 continue
             d = dist(wx, wy, u.x, u.y)
             if d < best_d:
@@ -400,7 +406,7 @@ class Game:
         y2 = max(start[1], end[1])
 
         for u in self.player_units:
-            if not u.alive:
+            if not u.alive or u.state == "garrisoned":
                 continue
             sx, sy = self.camera.world_to_screen(u.x, u.y)
             if x1 <= sx <= x2 and y1 <= sy <= y2:
@@ -582,15 +588,86 @@ class Game:
                     best = b
         return best
 
+    # ------------------------------------------------------------------
+    # v10_2: Global commands (no-selection buttons)
+    # ------------------------------------------------------------------
+    def global_defend(self):
+        """All combat units move to base and hold ground."""
+        th = self.get_nearest_town_hall(MAP_COLS * TILE_SIZE / 2, MAP_ROWS * TILE_SIZE / 2)
+        if not th:
+            return
+        # find nearest tower to TH for defense midpoint
+        towers = [b for b in self.player_buildings
+                  if b.alive and b.built and b.building_type == "tower"]
+        if towers:
+            nearest_tower = min(towers, key=lambda t: dist(th.x, th.y, t.x, t.y))
+            def_x = (th.x + nearest_tower.x) / 2
+            def_y = (th.y + nearest_tower.y) / 2
+        else:
+            def_x, def_y = th.x, th.y
+        for u in self.player_units:
+            if u.unit_type in ("soldier", "archer") and u.state != "garrisoned":
+                u.command_move(def_x, def_y, self)
+                u.hold_after_move = True
+
+    def global_attack(self):
+        """All combat units hunt down enemies."""
+        for u in self.player_units:
+            if u.unit_type not in ("soldier", "archer") or u.state == "garrisoned":
+                continue
+            # find nearest enemy
+            best = None
+            best_d = 1e9
+            for e in self.enemy_units:
+                if not e.alive:
+                    continue
+                d = dist(u.x, u.y, e.x, e.y)
+                if d < best_d:
+                    best_d = d
+                    best = e
+            if best:
+                u.command_attack(best, self)
+            else:
+                # no enemies visible — attack-move to map center
+                cx = MAP_COLS * TILE_SIZE / 2
+                cy = MAP_ROWS * TILE_SIZE / 2
+                u.command_attack_move(cx, cy, self)
+
+    def global_bell(self):
+        """Town Bell — recall all workers into garrison (costs resources)."""
+        gc = GARRISON_COST
+        if not self.resources.can_afford(wood=gc["wood"], iron=gc["iron"], stone=gc["stone"]):
+            return
+        self.resources.spend(wood=gc["wood"], iron=gc["iron"], stone=gc["stone"])
+        for u in self.player_units:
+            if u.unit_type == "worker" and u.state != "garrisoned":
+                th = self.get_nearest_town_hall(u.x, u.y)
+                if th:
+                    u.command_garrison(th, self)
+
+    def global_resume(self):
+        """Ungarrison all workers and resume previous work."""
+        for b in self.player_buildings:
+            if b.building_type == "town_hall" and b.garrison:
+                for w in list(b.garrison):
+                    w.command_ungarrison(self)
+                    # try to resume gathering
+                    rtype = w._last_gather_type
+                    if rtype:
+                        w._auto_resume_gather(rtype, self)
+
     def update(self, dt):
         mx, my = pygame.mouse.get_pos()
         keys = pygame.key.get_pressed()
-        # suppress WASD camera scroll when units/buildings selected
-        # (A=attack-move, W=train soldier, E=train archer, Q=train worker conflict)
-        suppress = bool(self.selected) or self.attack_move_mode
+        # suppress WASD only during attack-move targeting click
+        suppress = self.attack_move_mode
         self.camera.update(keys, dt, mx, my, suppress_wasd=suppress)
 
         self.enemy_ai.update(dt, self)
+
+        # v10_4: rebuild spatial grids once per frame (O(n))
+        self.player_grid.rebuild(self.player_units)
+        self.enemy_grid.rebuild(self.enemy_units)
 
         # track whether enemies exist before updates
         had_enemies = len(self.enemy_units) > 0
@@ -602,21 +679,20 @@ class Game:
         for b in self.player_buildings:
             b.update(dt, self)
 
-        # v9: update ballistic arrows
-        for a in self.arrows:
-            a.update(dt, self)
-        # partition: newly grounded arrows move to ground_arrows list
+        # v9: update ballistic arrows (v10_4: single-pass partition)
         still_flying = []
         for a in self.arrows:
-            if a.grounded and a.alive:
+            a.update(dt, self)
+            if not a.alive:
+                continue
+            if a.grounded:
                 self.ground_arrows.append(a)
-            elif a.alive and not a.grounded:
+            else:
                 still_flying.append(a)
         self.arrows = still_flying
-        # cull ground arrows: remove expired, cap at max
-        self.ground_arrows = [a for a in self.ground_arrows if a.alive]
+        # cull expired ground arrows + cap at max
         if len(self.ground_arrows) > GROUND_ARROW_MAX:
-            self.ground_arrows = self.ground_arrows[-GROUND_ARROW_MAX:]
+            self.ground_arrows = [a for a in self.ground_arrows[-GROUND_ARROW_MAX:] if a.alive]
 
         # v10c: update cannonballs and explosions
         for c in self.cannonballs:
@@ -778,63 +854,105 @@ class Game:
         c_max = min(MAP_COLS, int((vr.x + vr.width) // TILE_SIZE) + 1)
         r_max = min(MAP_ROWS, int((vr.y + vr.height) // TILE_SIZE) + 1)
 
-        for r in range(r_min, r_max):
-            for c in range(c_min, c_max):
-                t = self.game_map.tiles[r][c]
-                color = TERRAIN_COLORS.get(t, (40, 118, 74))
-                sx, sy = self.camera.world_to_screen(c * TILE_SIZE, r * TILE_SIZE)
-                pygame.draw.rect(self.screen, color, (sx, sy, ts, ts))
+        # v10_4: cache map surface — only rebuild on zoom change, large pan, or tile change
+        cache_valid = (
+            self._map_cache is not None
+            and not self._map_dirty
+            and self._map_cache_zoom == z
+            and self._map_cache_rect is not None
+            and self._map_cache_rect[0] == c_min
+            and self._map_cache_rect[1] == r_min
+            and self._map_cache_rect[2] == c_max
+            and self._map_cache_rect[3] == r_max
+        )
 
-                # decorations (scale sizes with zoom)
-                if t == TERRAIN_TREE:
-                    cx = sx + ts // 2
-                    cy = sy + ts // 2
-                    r1 = max(2, int(10 * z))
-                    r2 = max(2, int(8 * z))
-                    pygame.draw.circle(self.screen, (0, 60, 0), (cx, cy - int(4 * z)), r1)
-                    pygame.draw.circle(self.screen, (10, 80, 10), (cx, cy - int(4 * z)), r2)
-                elif t == TERRAIN_GOLD:
-                    cx = sx + ts // 2
-                    cy = sy + ts // 2
-                    pygame.draw.circle(self.screen, (255, 230, 80), (cx, cy), max(2, int(6 * z)))
-                elif t == TERRAIN_IRON:
-                    cx = sx + ts // 2
-                    cy = sy + ts // 2
-                    s = int(7 * z)
-                    s2 = int(6 * z)
-                    s3 = int(5 * z)
-                    pts = [(cx, cy - s), (cx - s2, cy + s3), (cx + s2, cy + s3)]
-                    pygame.draw.polygon(self.screen, (180, 180, 195), pts)
-                elif t == TERRAIN_STONE:
-                    cx = sx + ts // 2
-                    cy = sy + ts // 2
-                    s = int(6 * z)
-                    pts = [(cx, cy - s), (cx + s, cy), (cx, cy + s), (cx - s, cy)]
-                    pygame.draw.polygon(self.screen, (185, 175, 155), pts)
+        if not cache_valid:
+            w = (c_max - c_min) * ts + ts
+            h = (r_max - r_min) * ts + ts
+            cache = pygame.Surface((max(1, w), max(1, h)))
+            cache.fill((40, 118, 74))  # grass base
 
-        # grid lines (only at zoom >= 0.7 to avoid clutter)
-        # use dark grass tint instead of RGBA (screen is non-alpha surface)
-        if z >= 0.7:
-            grid_col = (30, 90, 56)  # darkened grass — subtle grid
-            for r in range(r_min, r_max + 1):
-                sy = self.camera.world_to_screen(0, r * TILE_SIZE)[1]
-                sx_start = self.camera.world_to_screen(c_min * TILE_SIZE, 0)[0]
-                sx_end = self.camera.world_to_screen(c_max * TILE_SIZE, 0)[0]
-                pygame.draw.line(self.screen, grid_col, (sx_start, sy), (sx_end, sy))
-            for c in range(c_min, c_max + 1):
-                sx = self.camera.world_to_screen(c * TILE_SIZE, 0)[0]
-                sy_start = self.camera.world_to_screen(0, r_min * TILE_SIZE)[1]
-                sy_end = self.camera.world_to_screen(0, r_max * TILE_SIZE)[1]
-                pygame.draw.line(self.screen, grid_col, (sx, sy_start), (sx, sy_end))
+            for r in range(r_min, r_max):
+                for c in range(c_min, c_max):
+                    t = self.game_map.tiles[r][c]
+                    lx = (c - c_min) * ts
+                    ly = (r - r_min) * ts
+                    if t != TERRAIN_GRASS:
+                        color = TERRAIN_COLORS.get(t, (40, 118, 74))
+                        pygame.draw.rect(cache, color, (lx, ly, ts, ts))
+
+                    # decorations
+                    if t == TERRAIN_TREE:
+                        cx = lx + ts // 2
+                        cy = ly + ts // 2
+                        r1 = max(2, int(10 * z))
+                        r2 = max(2, int(8 * z))
+                        pygame.draw.circle(cache, (0, 60, 0), (cx, cy - int(4 * z)), r1)
+                        pygame.draw.circle(cache, (10, 80, 10), (cx, cy - int(4 * z)), r2)
+                    elif t == TERRAIN_GOLD:
+                        cx = lx + ts // 2
+                        cy = ly + ts // 2
+                        pygame.draw.circle(cache, (255, 230, 80), (cx, cy), max(2, int(6 * z)))
+                    elif t == TERRAIN_IRON:
+                        cx = lx + ts // 2
+                        cy = ly + ts // 2
+                        s = int(7 * z)
+                        s2 = int(6 * z)
+                        s3 = int(5 * z)
+                        pts = [(cx, cy - s), (cx - s2, cy + s3), (cx + s2, cy + s3)]
+                        pygame.draw.polygon(cache, (180, 180, 195), pts)
+                    elif t == TERRAIN_STONE:
+                        cx = lx + ts // 2
+                        cy = ly + ts // 2
+                        s = int(6 * z)
+                        pts = [(cx, cy - s), (cx + s, cy), (cx, cy + s), (cx - s, cy)]
+                        pygame.draw.polygon(cache, (185, 175, 155), pts)
+
+            # grid lines (only at zoom >= 0.7)
+            if z >= 0.7:
+                grid_col = (30, 90, 56)
+                for r in range(r_max - r_min + 1):
+                    y = r * ts
+                    pygame.draw.line(cache, grid_col, (0, y), (w, y))
+                for c in range(c_max - c_min + 1):
+                    x = c * ts
+                    pygame.draw.line(cache, grid_col, (x, 0), (x, h))
+
+            self._map_cache = cache
+            self._map_cache_zoom = z
+            self._map_cache_rect = (c_min, r_min, c_max, r_max)
+            self._map_dirty = False
+
+        # blit cached surface
+        sx, sy = self.camera.world_to_screen(c_min * TILE_SIZE, r_min * TILE_SIZE)
+        self.screen.blit(self._map_cache, (sx, sy))
 
     def _render_buildings(self):
         for b in self.player_buildings:
             b.draw(self.screen, self.camera)
 
     def _render_units(self):
-        all_units = self.player_units + self.enemy_units
-        all_units.sort(key=lambda u: u.y)
-        for u in all_units:
+        # v10_4: maintain sorted list with insertion sort (O(n) on nearly-sorted data)
+        units = self._sorted_units
+        units.clear()
+        for u in self.player_units:
+            if u.alive:
+                units.append(u)
+        for u in self.enemy_units:
+            if u.alive:
+                units.append(u)
+        # insertion sort — fast when units barely change Y order frame-to-frame
+        for i in range(1, len(units)):
+            key_u = units[i]
+            key_y = key_u.y
+            j = i - 1
+            while j >= 0 and units[j].y > key_y:
+                units[j + 1] = units[j]
+                j -= 1
+            units[j + 1] = key_u
+        for u in units:
+            if u.state == "garrisoned":
+                continue  # v10_2: hidden inside building
             u.draw(self.screen, self.camera)
 
     def _render_ground_arrows(self):
@@ -945,11 +1063,10 @@ class Game:
         return surf
 
     def _render_minimap(self):
-        # rebuild base terrain every 2 seconds (resource tiles can deplete)
-        self.minimap_timer -= 1.0 / FPS
-        if self.minimap_surf is None or self.minimap_timer <= 0:
+        # v10_4: rebuild base terrain only when tiles change
+        if self.minimap_surf is None or self._minimap_dirty:
             self.minimap_surf = self._build_minimap_base()
-            self.minimap_timer = 2.0
+            self._minimap_dirty = False
 
         mm = self.minimap_surf.copy()
         scale = MINIMAP_SIZE / max(MAP_COLS, MAP_ROWS)
@@ -963,15 +1080,13 @@ class Game:
             color = (50, 50, 80) if b.ruined else (80, 140, 255)
             pygame.draw.rect(mm, color, (px, py, ps, ps))
 
-        # draw player units (v9: rank-based color on minimap)
+        # draw player units
         for u in self.player_units:
+            if u.state == "garrisoned":
+                continue
             px = int(u.x * tile_scale)
             py = int(u.y * tile_scale)
-            if u.rank > 0 and u.unit_type != "worker":
-                color = RANK_COLORS.get(u.rank, (100, 200, 255))
-            else:
-                color = (100, 200, 255)
-            pygame.draw.circle(mm, color, (px, py), 2)
+            pygame.draw.circle(mm, (100, 200, 255), (px, py), 2)
 
         # draw enemy units
         for u in self.enemy_units:

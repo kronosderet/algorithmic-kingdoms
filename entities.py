@@ -29,7 +29,7 @@ from constants import (UNIT_DEFS, ENEMY_DEFS, UNIT_COLORS, ENEMY_COLORS,
                        BUILDER_XP_PER_SECOND,
                        PATH_ARRIVAL_THRESHOLD, BUILD_PROXIMITY,
                        WORKER_FLEE_DISTANCE, IDLE_AGGRO_RANGE,
-                       RANK_XP_THRESHOLDS, RANK_BONUSES, RANK_COLORS,
+                       RANK_XP_THRESHOLDS, RANK_BONUSES,
                        XP_PER_HIT, XP_KILL_BONUS,
                        ENEMY_XP_PER_HIT, ENEMY_XP_KILL_BONUS,
                        ARROW_SPEED, ARROW_MAX_LIFETIME, ARROW_HIT_RADIUS,
@@ -50,7 +50,10 @@ from constants import (UNIT_DEFS, ENEMY_DEFS, UNIT_COLORS, ENEMY_COLORS,
                        RETARGET_INTERVAL, RETARGET_SWITCH_THRESHOLD,
                        THREAT_BONUS, TERRAIN_MOVE_COST,
                        TRAIT_POOL, TRAIT_CONFLICTS, TRAIT_ROLL_WEIGHTS,
-                       TRAIT_MODIFIERS, TRAIT_DISPLAY)
+                       TRAIT_MODIFIERS,
+                       GARRISON_MAX_WORKERS, GARRISON_ARMOR_PER_WORKER,
+                       GARRISON_DAMAGE_PER_WORKER, GARRISON_ATTACK_CD,
+                       GARRISON_ATTACK_RANGE)
 from utils import dist, pos_to_tile, tile_center, draw_text
 from pathfinding import a_star
 
@@ -98,6 +101,14 @@ def _process_combat_hit(attacker, target, game, source_label):
                             target.unit_type,
                             f"rank_{attacker.rank}" if attacker else "",
                             bounty, f"{source_label} {owner}")
+    # player unit lost (enemy kills player unit)
+    if not target.alive and target.owner == "player" and isinstance(target, Unit):
+        killer = attacker.unit_type if attacker else source_label
+        game.logger.log(game.game_time, "PLAYER_UNIT_LOST",
+                        game.enemy_ai.wave_number,
+                        target.unit_type, killer,
+                        f"rank_{target.rank}",
+                        target.xp, source_label)
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +212,11 @@ class Unit(Entity):
             self._roll_traits()
         # v10_1: attack-move destination (enhanced aggro on arrival)
         self._attack_move_target = None
+        # v10_2: hold ground stance — fight in range, never chase
+        self.hold_ground = False
+        self.hold_after_move = False
+        # v10_2: garrison
+        self.garrison_target = None
 
     # -- Helpers ---------------------------------------------------------------
 
@@ -210,6 +226,9 @@ class Unit(Entity):
         self.gather_tile = None
         self.build_target = None
         self.repair_target = None
+        self.hold_ground = False
+        self.hold_after_move = False
+        self.garrison_target = None
 
     # -- v10_1: Trait system ---------------------------------------------------
 
@@ -461,6 +480,8 @@ class Unit(Entity):
             self._do_attack(dt, game)
         elif self.state == "repairing":
             self._do_repair(dt, game)
+        elif self.state == "garrisoned":
+            return  # inside building, skip all behavior
         elif self.state == "fleeing":
             if self.owner == "player":
                 self._do_flee(dt, game)
@@ -492,6 +513,38 @@ class Unit(Entity):
         self._clear_tasks()
         self.target_entity = target
         self.state = "attacking"
+
+    def command_attack_move(self, wx, wy, game):
+        """Move to position with enhanced aggro on arrival."""
+        self.command_move(wx, wy, game)
+        self._attack_move_target = (wx, wy)
+
+    def command_hold_ground(self):
+        """Stop and hold position — fight in range, never chase."""
+        self._clear_tasks()
+        self.state = "idle"
+        self.hold_ground = True
+
+    def command_garrison(self, building, game):
+        """Move to a town hall and enter garrison."""
+        self._clear_tasks()
+        self.garrison_target = building
+        tc, tr = building.col, building.row
+        self._path_to(tc, tr, game, exclude_building=building)
+        self.state = "moving"
+
+    def command_ungarrison(self, game):
+        """Exit garrison and become idle."""
+        if self.garrison_target and self in self.garrison_target.garrison:
+            self.garrison_target.garrison.remove(self)
+        import math
+        if self.garrison_target:
+            idx = 0
+            angle = random.uniform(0, 2 * math.pi)
+            self.x = self.garrison_target.x + math.cos(angle) * 40
+            self.y = self.garrison_target.y + math.sin(angle) * 40
+        self.garrison_target = None
+        self.state = "idle"
 
     def command_build(self, building, game):
         if self.unit_type != "worker":
@@ -586,17 +639,28 @@ class Unit(Entity):
                     return
 
             # normal auto-aggro (for leaders, unassigned, and idle followers)
-            # v9.1: utility-scored targeting instead of pure distance
-            enemies = game.enemy_units if self.owner == "player" else game.player_units + game.player_buildings
-            aggro_range = self.attack_range + IDLE_AGGRO_RANGE
+            # v10_2: hold ground — only engage what's in weapon range
+            if self.hold_ground:
+                aggro_range = self.attack_range
+            else:
+                aggro_range = self.attack_range + IDLE_AGGRO_RANGE
             # v10_1: aggressive/cautious trait modifies aggro range
             aggro_range *= self.trait_modifiers.get("aggro_range_mult", 1.0)
             # v10_1: attack-move destination — double aggro range on arrival
             if self._attack_move_target is not None:
                 aggro_range *= 2.0
                 self._attack_move_target = None  # consume on first idle tick
-            candidates = [e for e in enemies
+            # v10_4: use spatial grid for fast neighbor lookup
+            enemy_grid = game.enemy_grid if self.owner == "player" else game.player_grid
+            nearby = enemy_grid.query_radius(self.x, self.y, aggro_range)
+            # also check buildings for enemy units targeting player structures
+            candidates = [e for e in nearby
                           if e.alive and dist(self.x, self.y, e.x, e.y) < aggro_range]
+            # enemy units also target buildings (not in spatial grid)
+            if self.owner == "enemy":
+                for b in game.player_buildings:
+                    if b.alive and dist(self.x, self.y, b.x, b.y) < aggro_range:
+                        candidates.append(b)
             if candidates:
                 best = max(candidates, key=lambda e: self._score_target(e))
                 self.target_entity = best
@@ -623,7 +687,25 @@ class Unit(Entity):
                 self.state = "building"
             elif self.repair_target and self.repair_target.alive and self.repair_target.hp < self.repair_target.max_hp:
                 self.state = "repairing"
+            elif self.garrison_target and self.garrison_target.alive and not self.garrison_target.ruined:
+                # v10_2: enter garrison on arrival
+                bld = self.garrison_target
+                if len(bld.garrison) < GARRISON_MAX_WORKERS:
+                    # auto-deposit carried resources
+                    if self.carry_amount > 0 and self.carry_type:
+                        game.resources.add(self.carry_type, self.carry_amount)
+                        self.carry_amount = 0
+                        self.carry_type = None
+                    bld.garrison.append(self)
+                    self.state = "garrisoned"
+                else:
+                    self.garrison_target = None
+                    self.state = "idle"
             else:
+                # v10_2: hold_after_move — enable hold ground on arrival
+                if self.hold_after_move:
+                    self.hold_ground = True
+                    self.hold_after_move = False
                 self.state = "idle"
             return
 
@@ -634,7 +716,7 @@ class Unit(Entity):
         if d < PATH_ARRIVAL_THRESHOLD:
             self.path_index += 1
             return
-        # v9.3: terrain slows movement (trees 2×, shallow water 2.5×)
+        # terrain slows movement (trees 2×, resources 1.8×)
         cur_tile = game.game_map.get_tile(*pos_to_tile(self.x, self.y))
         move_cost = TERRAIN_MOVE_COST.get(cur_tile, 1.0)
         # v10_1: nimble trait reduces difficult terrain penalty
@@ -694,7 +776,11 @@ class Unit(Entity):
         if self.gather_timer >= gather_t:
             self.gather_timer = 0.0
             gather_amt = IRON_GATHER_AMOUNT if rtype == "iron" else GATHER_AMOUNT
+            tile_before = game.game_map.get_tile(tc, tr)
             rtype_got, amount = game.game_map.harvest(tc, tr, gather_amt)
+            if game.game_map.get_tile(tc, tr) != tile_before:
+                game._map_dirty = True
+                game._minimap_dirty = True
             if rtype_got and amount > 0:
                 self.carry_type = rtype_got
                 self.carry_amount += amount
@@ -860,7 +946,8 @@ class Unit(Entity):
         """Check for nearby enemies and start fleeing if found."""
         nearest_enemy = None
         nearest_d = WORKER_FLEE_RADIUS
-        for e in game.enemy_units:
+        # v10_4: spatial grid lookup instead of scanning all enemies
+        for e in game.enemy_grid.query_radius(self.x, self.y, WORKER_FLEE_RADIUS):
             if not e.alive:
                 continue
             d = dist(self.x, self.y, e.x, e.y)
@@ -914,12 +1001,10 @@ class Unit(Entity):
             # _move_along_path changed state to idle on arrival; override back
             self.state = "fleeing"
 
-        # check if enemies still nearby
+        # check if enemies still nearby (v10_4: spatial grid)
         enemy_nearby = False
-        for e in game.enemy_units:
-            if not e.alive:
-                continue
-            if dist(self.x, self.y, e.x, e.y) < WORKER_FLEE_RADIUS:
+        for e in game.enemy_grid.query_radius(self.x, self.y, WORKER_FLEE_RADIUS):
+            if e.alive and dist(self.x, self.y, e.x, e.y) < WORKER_FLEE_RADIUS:
                 enemy_nearby = True
                 break
 
@@ -927,10 +1012,10 @@ class Unit(Entity):
             self._flee_timer = 0.0
             # if we've stopped moving, re-flee WITHOUT overwriting _saved_task
             if not self.path or self.path_index >= len(self.path):
-                # find nearest enemy for flee direction
+                # find nearest enemy for flee direction (v10_4: spatial grid)
                 nearest_enemy = None
                 nearest_d = WORKER_FLEE_RADIUS * 2
-                for e in game.enemy_units:
+                for e in game.enemy_grid.query_radius(self.x, self.y, WORKER_FLEE_RADIUS * 2):
                     if not e.alive:
                         continue
                     ed = dist(self.x, self.y, e.x, e.y)
@@ -1009,12 +1094,14 @@ class Unit(Entity):
     def _start_enemy_flee(self, game):
         """Low-HP enemy starts fleeing toward nearest map edge.
         Smarter: only flee when at a disadvantage (more player units nearby)."""
-        # count nearby forces to decide if fleeing makes sense
+        # v10_4: count nearby forces using spatial grid
         scan_radius = WORKER_FLEE_RADIUS
-        player_nearby = sum(1 for u in game.player_units
+        p_nearby = game.player_grid.query_radius(self.x, self.y, scan_radius)
+        player_nearby = sum(1 for u in p_nearby
                             if u.alive and u.unit_type != "worker"
                             and dist(self.x, self.y, u.x, u.y) < scan_radius)
-        enemy_nearby = sum(1 for u in game.enemy_units
+        e_nearby = game.enemy_grid.query_radius(self.x, self.y, scan_radius)
+        enemy_nearby = sum(1 for u in e_nearby
                            if u.alive and dist(self.x, self.y, u.x, u.y) < scan_radius)
         # only flee if outnumbered (player has more than 60% of local enemies)
         if player_nearby <= enemy_nearby * 0.6:
@@ -1038,18 +1125,21 @@ class Unit(Entity):
         if resistance >= 999:
             return False
 
-        # Count local forces
+        # v10_4: Count local forces using spatial grid
         scan = MORALE_SCAN_RADIUS
-        player_nearby = sum(1 for u in game.player_units
+        p_nearby = game.player_grid.query_radius(self.x, self.y, scan)
+        player_nearby = sum(1 for u in p_nearby
                             if u.alive and u.unit_type != "worker"
                             and dist(self.x, self.y, u.x, u.y) < scan)
-        enemy_nearby = max(1, sum(1 for u in game.enemy_units
+        e_nearby = game.enemy_grid.query_radius(self.x, self.y, scan)
+        enemy_nearby = max(1, sum(1 for u in e_nearby
                                   if u.alive
                                   and dist(self.x, self.y, u.x, u.y) < scan))
         ratio = player_nearby / enemy_nearby
 
         # Check for morale leader (Sergeant+ OR inspiring trait) nearby
-        for u in game.enemy_units:
+        leader_nearby = game.enemy_grid.query_radius(self.x, self.y, MORALE_LEADER_AURA)
+        for u in leader_nearby:
             if u is not self and u.alive and dist(self.x, self.y, u.x, u.y) < MORALE_LEADER_AURA:
                 if u.rank >= MORALE_LEADER_MIN_RANK or u.trait_modifiers.get("is_morale_leader"):
                     return False
@@ -1170,10 +1260,12 @@ class Unit(Entity):
 
     def _apply_separation(self, dt, game):
         """Gently push apart overlapping friendly units when stationary."""
-        units = game.player_units if self.owner == "player" else game.enemy_units
+        # v10_4: use spatial grid for O(k) neighbor lookup instead of O(n)
+        grid = game.player_grid if self.owner == "player" else game.enemy_grid
+        nearby = grid.query_nearby(self.x, self.y)
         push_x, push_y = 0.0, 0.0
-        for other in units:
-            if other is self or not other.alive:
+        for other in nearby:
+            if other is self:
                 continue
             dx = self.x - other.x
             dy = self.y - other.y
@@ -1183,7 +1275,6 @@ class Unit(Entity):
                 push_x += (dx / d) * strength
                 push_y += (dy / d) * strength
             elif d == 0:
-                # exactly overlapping -- nudge randomly
                 push_x += (hash(id(self)) % 3 - 1) * 0.5
                 push_y += (hash(id(self)) % 5 - 2) * 0.5
         if push_x != 0 or push_y != 0:
@@ -1319,6 +1410,11 @@ class Unit(Entity):
                     _process_combat_hit(self, t, game, "melee")
                 self.attack_timer = self.attack_cd
         else:
+            # v10_2: hold ground — don't chase, drop target and idle
+            if self.hold_ground:
+                self.target_entity = None
+                self.state = "idle"
+                return
             # move towards target (terrain-slowed)
             self._repath_cooldown = max(0, self._repath_cooldown - dt)
             dx, dy = t.x - self.x, t.y - self.y
@@ -1334,7 +1430,7 @@ class Unit(Entity):
                 step = (self.speed / move_cost) * dt
                 nx = self.x + (dx / nd) * step
                 ny = self.y + (dy / nd) * step
-                # v10 fix: clamp to passable tiles (prevent walking through deep water)
+                # clamp to passable tiles (prevent walking off map edge)
                 nc, nr = pos_to_tile(nx, ny)
                 if game.game_map.is_passable(nc, nr):
                     self.x, self.y = nx, ny
@@ -1439,58 +1535,12 @@ class Unit(Entity):
             else:
                 pygame.draw.polygon(surf, (0, 0, 0), pts, max(1, int(z)))
 
-        # inner self-similar hexes based on worker rank
-        primary_skill, w_rank = self.get_primary_skill()
-        if w_rank >= 1 and r >= 6:
-            inner_c = tuple(min(255, c + 40) for c in color)
-            inner_pts = self._polar_points(sx, sy, r * 0.55,
-                                           lambda t: self._hex_func(t, 4.0),
-                                           n_pts, rotation + 0.05)
-            if len(inner_pts) >= 3:
-                pygame.draw.polygon(surf, inner_c, inner_pts, max(1, int(z)))
-        if w_rank >= 2 and r >= 8:
-            inner_c2 = tuple(min(255, c + 70) for c in color)
-            inner_pts2 = self._polar_points(sx, sy, r * 0.3,
-                                            lambda t: self._hex_func(t, 4.0),
-                                            n_pts, rotation + 0.10)
-            if len(inner_pts2) >= 3:
-                pygame.draw.polygon(surf, inner_c2, inner_pts2, max(1, int(z)))
-
-        # v10g2: worker skill color — full hex border instead of tiny pip
-        if primary_skill and w_rank > 0:
-            skill_col = WORKER_SKILL_COLORS.get(primary_skill, (200, 200, 200))
-            # Rank 1+: outer hex outline in skill color
-            outer_skill_pts = self._polar_points(sx, sy, r * 1.02,
-                                                 lambda t: self._hex_func(t, 4.0),
-                                                 n_pts, rotation)
-            if len(outer_skill_pts) >= 3:
-                pygame.draw.polygon(surf, skill_col, outer_skill_pts,
-                                    max(2, int(3 * z)))
-            # Rank 2: inner hex filled solid in skill color
-            if w_rank >= 2 and r >= 8:
-                inner_skill_pts = self._polar_points(sx, sy, r * 0.3,
-                                                     lambda t: self._hex_func(t, 4.0),
-                                                     n_pts, rotation + 0.10)
-                if len(inner_skill_pts) >= 3:
-                    pygame.draw.polygon(surf, skill_col, inner_skill_pts)
+        # (rank/skill visuals removed — will be part of dynamic unit animation overhaul)
 
     def _draw_soldier_shape(self, surf, sx, sy, r, z, is_enemy):
-        """Draw soldier as blade-like polar rose with rank-scaling petals (v10g2)."""
-        base_color = (35, 12, 12) if is_enemy else (200, 60, 60)  # v10g2: enemy near-black
-        k_values = [1.5, 2.5, 3.5, 4.0, 5.0]  # 3,5,7,8,10 petals
-        k = k_values[min(self.rank, len(k_values) - 1)]
-        # rank tint (player only — enemies stay dark)
-        if not is_enemy:
-            if self.rank >= 3:
-                tint = RANK_COLORS.get(self.rank, (200, 200, 200))
-                color = tuple((a + b) // 2 for a, b in zip(base_color, tint))
-            elif self.rank >= 1:
-                tint = RANK_COLORS.get(self.rank, (200, 200, 200))
-                color = tuple((a * 3 + b) // 4 for a, b in zip(base_color, tint))
-            else:
-                color = base_color
-        else:
-            color = base_color
+        """Draw soldier as blade-like polar rose (v10g2)."""
+        color = (35, 12, 12) if is_enemy else (200, 60, 60)
+        k = 2.5  # 5 petals
         rotation = -math.pi / 2  # petal points up
         n_pts = 36 if r < 8 else 60
 
@@ -1502,22 +1552,6 @@ class Unit(Entity):
             # v10g2: black edge shading for player soldiers
             if not is_enemy:
                 pygame.draw.polygon(surf, (0, 0, 0), pts, max(1, int(2 * z)))
-        # inner rose for rank 2+
-        if self.rank >= 2 and r >= 6:
-            inner_k = k + 0.5
-            inner_c = tuple(min(255, c + 50) for c in color)
-            inner_pts = self._polar_points(sx, sy, r * 0.5,
-                                           lambda t: self._blade_func(t, inner_k),
-                                           n_pts, rotation)
-            if len(inner_pts) >= 3:
-                pygame.draw.polygon(surf, inner_c, inner_pts)
-                if not is_enemy:
-                    pygame.draw.polygon(surf, (0, 0, 0), inner_pts, max(1, int(z)))
-        # central dot for sergeant+
-        if self.rank >= 3:
-            pygame.draw.circle(surf, RANK_COLORS.get(self.rank, (255, 215, 0)),
-                               (sx, sy), max(2, r // 6))
-        # v10g2: rank pip removed (petal count communicates rank)
         # enemy jagged overlay
         if is_enemy and r >= 5:
             jagged = self._polar_points(
@@ -1581,20 +1615,6 @@ class Unit(Entity):
                 (int(tip_x - hs), int(sy - hs * 0.6)),
                 (int(tip_x - hs), int(sy + hs * 0.6)),
             ])
-        # Fibonacci dots on bow limbs (rank-based)
-        if self.rank >= 1 and r >= 6:
-            fib_angles = [0.5, 0.8, 1.1, 1.4, 1.8]
-            n_dots = min(self.rank + 1, len(fib_angles))
-            dot_col = RANK_COLORS.get(self.rank, (200, 200, 200))
-            for i in range(n_dots):
-                theta = math.pi * 0.1 + fib_angles[i]
-                rv = 0.3 * math.exp(b * theta) * r / 3.0
-                for m in [1, -1]:
-                    dx = sx + rv * math.cos(theta) * 0.5
-                    dy = sy + m * rv * math.sin(theta) * 0.7
-                    pygame.draw.circle(surf, dot_col, (int(dx), int(dy)),
-                                       max(2, r // 15))
-        # v10g2: rank pip removed (fibonacci dots communicate rank)
         # enemy jagged border
         if is_enemy and r >= 5:
             n = 30
@@ -1626,12 +1646,6 @@ class Unit(Entity):
             inner_pts.append((sx + rv * math.cos(theta), sy + rv * math.sin(theta)))
         if len(inner_pts) >= 3:
             pygame.draw.polygon(surf, (25, 12, 5), inner_pts, max(1, int(z)))
-        # rank pip (kept — siege has no other rank indicator)
-        if self.rank > 0:
-            pip_r = max(2, int(4 * z))
-            pip_col = RANK_COLORS.get(self.rank, (200, 200, 200))
-            pygame.draw.circle(surf, pip_col, (sx + r, sy - r), pip_r)
-
     def _draw_elite_shape(self, surf, sx, sy, r, z):
         """Draw enemy elite as a compound rose — v10g2: dark with purple accents."""
         color = (50, 10, 45)  # v10g2: near-black purple
@@ -1694,16 +1708,6 @@ class Unit(Entity):
                 oy = sy + int(orbit_r * math.sin(angle))
                 cr = max(2, int(3 * z))
                 pygame.draw.circle(surf, carry_col, (ox, oy), cr)
-
-        # v10_1: trait indicator dots — small colored pips below unit
-        if self.traits and r >= 4:
-            trait_x = sx - len(self.traits) * max(2, int(3 * z)) // 2
-            trait_y = sy + r + max(3, int(5 * z))
-            pip_r = max(1, int(2 * z))
-            for trait_name in sorted(self.traits):
-                td = TRAIT_DISPLAY.get(trait_name, {"color": (180, 180, 180)})
-                pygame.draw.circle(surf, td["color"], (trait_x, trait_y), pip_r)
-                trait_x += pip_r * 3
 
         self.draw_health_bar(surf, cam)
 
@@ -1840,14 +1844,23 @@ class Building(Entity):
         self._refinery_rotation = random.uniform(0, 6.28)  # start offset
         # v10_1: rally point (world coords or None)
         self.rally_point = None
+        # v10_2: garrison (town hall only)
+        self.garrison = []
+        self.garrison_attack_timer = 0.0
 
     def take_damage(self, dmg, attacker=None):
         """Override: completed player buildings become ruins instead of dying."""
+        # v10_2: garrison armor — reduce damage when workers are inside
+        if self.building_type == "town_hall" and self.garrison:
+            reduction = min(len(self.garrison) * GARRISON_ARMOR_PER_WORKER, 0.5)
+            dmg = max(1, int(dmg * (1.0 - reduction)))
         self.hp -= dmg
         if self.hp <= 0:
             self.hp = 0
             if self.owner == "player" and self.built and not self.ruined:
-                # become a ruin
+                # become a ruin — eject garrisoned workers
+                if self.garrison:
+                    self._eject_garrison()
                 self.ruined = True
                 self.built = False
                 self.build_progress = 0.0
@@ -1856,6 +1869,17 @@ class Building(Entity):
                 self.refine_active = False
             else:
                 self.alive = False
+
+    def _eject_garrison(self):
+        """Eject all garrisoned workers, placing them around the building."""
+        import math
+        for i, w in enumerate(self.garrison):
+            angle = (2 * math.pi * i) / max(1, len(self.garrison))
+            w.x = self.x + math.cos(angle) * 40
+            w.y = self.y + math.sin(angle) * 40
+            w.state = "idle"
+            w.garrison_target = None
+        self.garrison.clear()
 
     def can_upgrade_tower(self):
         """v10c: Check if this tower can be upgraded to explosive."""
@@ -1950,6 +1974,24 @@ class Building(Entity):
                                      explosive=is_explosive)
                     game.cannonballs.append(ball)
                     self.tower_timer = TOWER_CANNON_CD
+
+        # v10_2: garrison attack — garrisoned workers hurl stones at enemies
+        if self.building_type == "town_hall" and self.garrison:
+            self.garrison_attack_timer = max(0, self.garrison_attack_timer - dt)
+            if self.garrison_attack_timer <= 0:
+                best = None
+                best_d = GARRISON_ATTACK_RANGE
+                for e in game.enemy_units:
+                    if not e.alive:
+                        continue
+                    d = dist(self.x, self.y, e.x, e.y)
+                    if d < best_d:
+                        best_d = d
+                        best = e
+                if best:
+                    total_dmg = GARRISON_DAMAGE_PER_WORKER * len(self.garrison)
+                    best.take_damage(total_dmg, self)
+                    self.garrison_attack_timer = GARRISON_ATTACK_CD
 
     def start_train(self, unit_type, game):
         d = UNIT_DEFS[unit_type]

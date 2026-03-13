@@ -77,6 +77,8 @@ class EventLogger:
             self._counts["buildings_lost"] += 1
         elif event_type == "BUILDING_DESTROYED":
             self._counts["buildings_destroyed"] += 1
+        elif event_type == "PLAYER_UNIT_LOST":
+            self._counts["player_units_lost"] += 1
         elif event_type == "ENEMY_ESCAPED":
             self._counts["enemies_escaped"] += 1
         elif event_type == "RESOURCE_DEPOSIT":
@@ -114,6 +116,7 @@ class EventLogger:
 
         summary_note = (
             f"kills:{self._counts['kills']} "
+            f"losses:{self._counts['player_units_lost']} "
             f"bounty:{self._total_bounty} "
             f"rank_ups:{self._counts['rank_ups']} "
             f"bldg_lost:{self._counts['buildings_lost']} "

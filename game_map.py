@@ -1,8 +1,8 @@
 import random
 import math
-from constants import (MAP_COLS, MAP_ROWS, TERRAIN_GRASS, TERRAIN_WATER,
+from constants import (MAP_COLS, MAP_ROWS, TERRAIN_GRASS,
                        TERRAIN_TREE, TERRAIN_GOLD, TERRAIN_IRON,
-                       TERRAIN_SHALLOW_WATER, TERRAIN_STONE,
+                       TERRAIN_STONE,
                        TERRAIN_MOVE_COST, RESOURCE_CAPACITY)
 from utils import clamp
 
@@ -18,18 +18,6 @@ class GameMap:
     def generate(self):
         # clear area around center for starting base
         center_c, center_r = self.cols // 2, self.rows // 2
-
-        # water lakes
-        for _ in range(random.randint(8, 12)):
-            c = random.randint(5, self.cols - 6)
-            r = random.randint(5, self.rows - 6)
-            if abs(c - center_c) < 10 and abs(r - center_r) < 10:
-                continue
-            size = random.randint(15, 40)
-            self._place_cluster(c, r, size, TERRAIN_WATER)
-
-        # v9.3: add shallow water borders around deep water lakes
-        self._add_shallow_borders()
 
         # tree forests
         for _ in range(random.randint(15, 22)):
@@ -113,31 +101,10 @@ class GameMap:
             c = clamp(c, 1, self.cols - 2)
             r = clamp(r, 1, self.rows - 2)
 
-    def _add_shallow_borders(self):
-        """v9.3: add 1-tile shallow water border around deep water lakes."""
-        shallow_tiles = []
-        for r in range(self.rows):
-            for c in range(self.cols):
-                if self.tiles[r][c] != TERRAIN_GRASS:
-                    continue
-                # check if any neighbor is deep water
-                for dc in range(-1, 2):
-                    for dr in range(-1, 2):
-                        nc, nr = c + dc, r + dr
-                        if (0 <= nc < self.cols and 0 <= nr < self.rows
-                                and self.tiles[nr][nc] == TERRAIN_WATER):
-                            shallow_tiles.append((c, r))
-                            break
-                    else:
-                        continue
-                    break
-        for c, r in shallow_tiles:
-            self.tiles[r][c] = TERRAIN_SHALLOW_WATER
-
     def get_tile(self, c, r):
         if 0 <= c < self.cols and 0 <= r < self.rows:
             return self.tiles[r][c]
-        return TERRAIN_WATER
+        return -1  # out of bounds — not in TERRAIN_MOVE_COST, so impassable
 
     def is_walkable(self, c, r):
         """Grass only — used for building placement."""
@@ -146,7 +113,7 @@ class GameMap:
         return False
 
     def is_passable(self, c, r):
-        """v9.3: anything except deep water is passable (with varying cost)."""
+        """Check if tile is passable (in TERRAIN_MOVE_COST)."""
         if 0 <= c < self.cols and 0 <= r < self.rows:
             return self.tiles[r][c] in TERRAIN_MOVE_COST
         return False

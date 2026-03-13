@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(export PATH=\"/c/Users/krtek/AppData/Local/Programs/Python/Python310:/c/Users/krtek/AppData/Local/Programs/Python/Python310/Scripts:$PATH\")",
+      "Bash(python -c \"from game import Game; print\\(''OK''\\)\")",
+      "Bash(wc -l /c/Users/krtek/Claude.MD/rts/*.py)",
+      "Bash(ls *.spec)",
+      "Bash(python -m PyInstaller v10_3.spec --noconfirm)",
+      "Bash(find /c/Users/krtek/Claude.MD/rts/dist -name *.csv -o -name logs)",
+      "Bash(find /c/Users/krtek -maxdepth 5 -name game_*.csv)",
+      "Bash(python \"C:/Users/krtek/Claude.MD/rts/analyze_log.py\")",
+      "Bash(python \"C:/Users/krtek/Claude.MD/rts/analyze_log2.py\")",
+      "Bash(python -m PyInstaller v10_4.spec --noconfirm)",
+      "Bash(python -c \"from entities import _process_combat_hit; print\\(''OK''\\)\")",
+      "Bash(git add:*)"
+    ]
+  }
+}

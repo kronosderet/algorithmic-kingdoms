@@ -14,7 +14,8 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, TOP_BAR_H, BOTTOM_PANEL_H,
                        TOWER_UPGRADE_COST, TOWER_CANNON_DAMAGE,
                        TOWER_CANNON_CD, TOWER_EXPLOSIVE_DIRECT,
                        TOWER_UPGRADE_TIME,
-                       TRAIT_DISPLAY)
+                       TRAIT_DISPLAY,
+                       GARRISON_COST, GARRISON_MAX_WORKERS)
 from utils import draw_text, ruin_rebuild_cost
 from entities import Building, Unit
 
@@ -211,9 +212,7 @@ class GUI:
             return
 
         if not selected:
-            # minimal help — one line, not four
-            draw_text(surf, "Click to select  |  Right-click to command  |  A: Attack-move  |  1-4: Build  |  Q/W/E: Train",
-                      20, py + 55, self.font_sm, (90, 90, 110))
+            self._draw_global_buttons(surf, py, game)
             return
 
         entity = selected[0]
@@ -382,6 +381,14 @@ class GUI:
                              lambda: b.start_train("worker", game),
                              game.resources.can_afford(gold=ud["gold"]),
                              cost_text=self.unit_cost_str("worker"))
+            # v10_2: garrison display + ungarrison button
+            if b.garrison:
+                g_count = len(b.garrison)
+                draw_text(surf, f"Garrison: {g_count}/{GARRISON_MAX_WORKERS}",
+                          btn_x, btn_y + btn_h + 8, self.font_sm, (220, 180, 80))
+                self._add_button(surf, btn_x + btn_w + 8, btn_y, btn_w, btn_h,
+                                 "Ungarrison",
+                                 lambda: game.global_resume())
         elif b.building_type == "barracks":
             ud = UNIT_DEFS["soldier"]
             self._add_button(surf, btn_x, btn_y, btn_w, btn_h, "Train Soldier (W)",
@@ -432,6 +439,8 @@ class GUI:
         state_str = u.state
         if u.state == "fleeing" and u.owner == "player":
             state_str = "fleeing!"
+        if u.hold_ground:
+            state_str += " [HOLD]"
         draw_text(surf, f"ATK: {u.attack_power}  SPD: {u.speed}  |  {state_str}",
                   80, py + 54, self.font_sm, (180, 180, 200))
 
@@ -499,6 +508,10 @@ class GUI:
         if u.unit_type == "worker":
             self._draw_build_buttons(surf, py, game)
 
+        # command buttons for combat units
+        if u.unit_type in ("soldier", "archer"):
+            self._draw_command_buttons(surf, py, game)
+
     # ------------------------------------------------------------------
     # MULTI UNIT PANEL
     # ------------------------------------------------------------------
@@ -544,6 +557,11 @@ class GUI:
         if all_workers:
             self._draw_build_buttons(surf, py, game)
 
+        # command buttons for all-combat selection
+        all_combat = all(u.unit_type in ("soldier", "archer") for u in selected)
+        if all_combat:
+            self._draw_command_buttons(surf, py, game)
+
     # ------------------------------------------------------------------
     # BUILD BUTTONS
     # ------------------------------------------------------------------
@@ -569,6 +587,61 @@ class GUI:
                          game.resources.can_afford(gold=bd["tower"]["gold"], iron=bd["tower"].get("iron", 0),
                                                    stone=bd["tower"].get("stone", 0)),
                          cost_text=self.building_cost_str("tower"))
+
+    # ------------------------------------------------------------------
+    # COMMAND BUTTONS (soldiers / archers)
+    # ------------------------------------------------------------------
+    def _draw_global_buttons(self, surf, py, game):
+        btn_w, btn_h = 140, 38
+        btn_y = py + 10
+        gap = 8
+        # center 4 buttons
+        total_w = 4 * btn_w + 3 * gap
+        btn_x = (SCREEN_WIDTH - total_w) // 2
+
+        self._add_button(surf, btn_x, btn_y, btn_w, btn_h,
+                         "Defend Base", lambda: game.global_defend())
+
+        self._add_button(surf, btn_x + btn_w + gap, btn_y, btn_w, btn_h,
+                         "Hunt Enemies", lambda: game.global_attack())
+
+        # Town Bell — costs resources
+        gc = GARRISON_COST
+        can_bell = game.resources.can_afford(wood=gc["wood"], iron=gc["iron"], stone=gc["stone"])
+        cost_str = f"{gc['wood']}W {gc['iron']}I {gc['stone']}S"
+        self._add_button(surf, btn_x + 2 * (btn_w + gap), btn_y, btn_w, btn_h,
+                         "Town Bell", lambda: game.global_bell(),
+                         enabled=can_bell, cost_text=cost_str)
+
+        self._add_button(surf, btn_x + 3 * (btn_w + gap), btn_y, btn_w, btn_h,
+                         "Resume Work", lambda: game.global_resume())
+
+        # help text below
+        draw_text(surf, "Click to select  |  Right-click to command  |  1-4: Build  |  Q/W/E: Train",
+                  20, py + 60, self.font_xs, (70, 70, 90))
+
+    # ------------------------------------------------------------------
+    def _draw_command_buttons(self, surf, py, game):
+        btn_x = 400
+        btn_y_start = py + 5
+        btn_w, btn_h = 140, 38
+
+        # check if any selected unit is already holding
+        combat_sel = [e for e in game.selected
+                      if hasattr(e, 'unit_type') and e.unit_type in ("soldier", "archer")]
+        any_holding = any(u.hold_ground for u in combat_sel)
+
+        self._add_button(surf, btn_x, btn_y_start, btn_w, btn_h, "Attack Move",
+                         lambda: setattr(game, 'attack_move_mode', True))
+
+        hold_label = "HOLDING" if any_holding else "Hold Ground"
+        self._add_button(surf, btn_x + btn_w + 6, btn_y_start, btn_w, btn_h, hold_label,
+                         lambda: self._do_hold_ground(game))
+
+    def _do_hold_ground(self, game):
+        for e in game.selected:
+            if hasattr(e, 'unit_type') and e.unit_type in ("soldier", "archer"):
+                e.command_hold_ground()
 
     # ------------------------------------------------------------------
     # BUTTONS
