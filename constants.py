@@ -99,6 +99,18 @@ BUILDING_DEFS = {
     "barracks": {"gold": 120, "wood": 80, "iron": 0, "steel": 0, "stone": 0, "hp": 400, "build_time": 18, "size": 2},
     "refinery": {"gold": 80, "wood": 60, "iron": 30, "steel": 0, "stone": 0, "hp": 300, "build_time": 22, "size": 2},
     "tower": {"gold": 30, "wood": 0, "iron": 15, "steel": 0, "stone": 35, "hp": 220, "build_time": 18, "size": 1},  # v10g: iron 20→15, stone 40→35
+    # v10.2: Helper buildings (1×1, Foreman unlocks)
+    "goldmine_hut": {"gold": 40, "wood": 30, "iron": 0, "steel": 0, "stone": 0, "hp": 150, "build_time": 12, "size": 1},
+    "lumber_camp":  {"gold": 30, "wood": 40, "iron": 0, "steel": 0, "stone": 0, "hp": 150, "build_time": 12, "size": 1},
+    "quarry_hut":   {"gold": 40, "wood": 30, "iron": 0, "steel": 0, "stone": 10, "hp": 150, "build_time": 12, "size": 1},
+    "iron_depot":   {"gold": 40, "wood": 30, "iron": 0, "steel": 0, "stone": 0, "hp": 150, "build_time": 12, "size": 1},
+    "scaffold":     {"gold": 50, "wood": 40, "iron": 0, "steel": 0, "stone": 0, "hp": 100, "build_time": 10, "size": 1},
+    # v10.2: Production buildings (2×2, Master upgrades from helper)
+    "sawmill":      {"gold": 60, "wood": 0, "iron": 0, "steel": 0, "stone": 40, "hp": 300, "build_time": 20, "size": 2},
+    "goldmine":     {"gold": 80, "wood": 0, "iron": 0, "steel": 0, "stone": 40, "hp": 300, "build_time": 20, "size": 2},
+    "stoneworks":   {"gold": 60, "wood": 0, "iron": 0, "steel": 0, "stone": 30, "hp": 300, "build_time": 20, "size": 2},
+    "iron_works":   {"gold": 60, "wood": 0, "iron": 0, "steel": 0, "stone": 40, "hp": 300, "build_time": 20, "size": 2},
+    "forge":        {"gold": 60, "wood": 0, "iron": 20, "steel": 0, "stone": 30, "hp": 350, "build_time": 22, "size": 2},
 }
 
 BUILDING_COLORS = {
@@ -106,9 +118,27 @@ BUILDING_COLORS = {
     "barracks": (140, 45, 45),
     "refinery": (100, 100, 130),
     "tower": (160, 160, 140),
+    # v10.2: helper buildings
+    "goldmine_hut": (180, 150, 40),
+    "lumber_camp": (60, 130, 50),
+    "quarry_hut": (140, 130, 110),
+    "iron_depot": (120, 120, 140),
+    "scaffold": (50, 160, 200),
+    # v10.2: production buildings
+    "sawmill": (80, 160, 70),
+    "goldmine": (200, 170, 50),
+    "stoneworks": (160, 150, 130),
+    "iron_works": (140, 140, 165),
+    "forge": (180, 100, 50),
 }
 
-BUILDING_LABELS = {"town_hall": "TH", "barracks": "BK", "refinery": "RF", "tower": "TW"}
+BUILDING_LABELS = {
+    "town_hall": "TH", "barracks": "BK", "refinery": "RF", "tower": "TW",
+    "goldmine_hut": "GH", "lumber_camp": "LC", "quarry_hut": "QH",
+    "iron_depot": "ID", "scaffold": "SC",
+    "sawmill": "SW", "goldmine": "GM", "stoneworks": "ST",
+    "iron_works": "IW", "forge": "FG",
+}
 
 # Unit definitions: (gold, wood, steel, hp, speed, attack, attack_range, attack_cd, train_time)
 UNIT_DEFS = {
@@ -261,6 +291,12 @@ ENEMY_VETERAN_BONUS = 0.25    # +25% stats for returning veterans
 # v9.1: Target Priority System
 BUILDING_PRIORITY = {
     "town_hall": 10.0, "tower": 7.0, "barracks": 6.0, "refinery": 5.0,
+    # v10.2: helper buildings (low priority)
+    "goldmine_hut": 2.0, "lumber_camp": 2.0, "quarry_hut": 2.0,
+    "iron_depot": 2.0, "scaffold": 1.5,
+    # v10.2: production buildings (high value targets)
+    "sawmill": 4.0, "goldmine": 4.0, "stoneworks": 4.0,
+    "iron_works": 4.0, "forge": 5.0,
 }
 UNIT_PRIORITY = {
     "soldier": 4.0, "archer": 4.5, "worker": 1.0,
@@ -309,6 +345,52 @@ DRAG_THRESHOLD = 5                    # min drag pixels before box-select starts
 SPAWN_MARGIN = 2                      # min tiles from map edge for enemy spawn
 SPAWN_RETRIES = 30                    # max attempts to find walkable spawn pos
 IDLE_AGGRO_RANGE = 64                 # bonus px range for idle auto-aggro
+
+# ---------------------------------------------------------------------------
+# v10.2: Economy Phase 2 — Helper & Production Buildings
+# ---------------------------------------------------------------------------
+# Drop-off building → resource type they accept
+DROPOFF_BUILDING_TYPES = {
+    "goldmine_hut": "gold", "lumber_camp": "wood",
+    "quarry_hut": "stone", "iron_depot": "iron",
+}
+
+# Foreman skill → helper building unlock
+FOREMAN_BUILDINGS = {
+    "gold_miner": "goldmine_hut", "lumberjack": "lumber_camp",
+    "stone_mason": "quarry_hut", "iron_miner": "iron_depot",
+    "builder": "scaffold",
+    # smelter has no building — upgrades existing refinery
+}
+
+# Helper → production building upgrade path
+UPGRADE_PATH = {
+    "lumber_camp": "sawmill", "goldmine_hut": "goldmine",
+    "quarry_hut": "stoneworks", "iron_depot": "iron_works",
+    "refinery": "forge",
+}
+
+# Production building resource generation (per tick)
+PRODUCTION_RATES = {
+    "sawmill":    {"resource": "wood",  "base_rate": 1.5, "worker_rate": 5.0, "max_workers": 3},
+    "goldmine":   {"resource": "gold",  "base_rate": 1.0, "worker_rate": 4.0, "max_workers": 3},
+    "stoneworks": {"resource": "stone", "base_rate": 1.0, "worker_rate": 4.0, "max_workers": 3},
+    "iron_works": {"resource": "iron",  "base_rate": 0.8, "worker_rate": 3.5, "max_workers": 3},
+}
+PRODUCTION_TICK_INTERVAL = 5.0  # seconds between ticks
+
+# Forge (replaces/upgrades refinery: Stone+Iron → Steel, faster)
+FORGE_STONE_COST = 2
+FORGE_IRON_COST = 1
+FORGE_STEEL_YIELD = 1
+FORGE_TIME = 4.0  # faster than refinery's 6s
+
+# Scaffold aura (Builder Foreman)
+SCAFFOLD_AURA_RANGE = 128  # pixels (4 tiles)
+SCAFFOLD_SPEED_BONUS = 0.25  # +25% build/repair speed
+
+# Smelter Foreman refinery boost
+SMELTER_REFINERY_BONUS = 0.30  # +30% refine speed
 
 # ---------------------------------------------------------------------------
 # v10_2: Town Hall Garrison

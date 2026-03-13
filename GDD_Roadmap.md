@@ -45,13 +45,32 @@ Everything below is implemented and playable in v10_4:
 
 ### Balance Observations (from v10_4 playtesting)
 
-Identified but NOT yet tuned — balance pass deferred to after Phase 2:
+Identified but NOT yet tuned — balance pass deferred to after Phase 2.
 
-- Waves can stack if wave 1 isn't cleared before wave 2 spawns
-- Economy death spirals when workers die early (no recovery mechanic)
-- Training gaps between waves (barracks idle time)
-- Towers still underperform vs fast-moving enemies (cannonball miss rate)
-- Player unit deaths were previously unlogged (now fixed)
+**First clean playtest (Medium, 35min, Victory — all 20 waves):**
+
+| Metric | Value | Concern |
+|---|---|---|
+| Player unit deaths | 5 (all in waves 16-18) | Zero deaths waves 1-15 = no mid-game tension |
+| Training gap | 449s (waves 9-13) with zero consequence | Veterans too self-sufficient |
+| Kill split | Archer 41%, Soldier 39%, Tower 21% | Tower contribution drops late-game |
+| Enemies escaped | 22 (mostly siege) | Siege walks past defense unchallenged |
+| Garrison usage | **Zero** | System not intuitive or not needed |
+| Workers trained | 6 (never expanded) | 6 workers sustain entire game |
+| Late-game economy | Collapsed wave 17+, still won | Resources irrelevant end-game |
+| Worker flee events | 530 flee + 529 resume (47% of log) | Flee/resume ping-pong spam |
+
+**Rebalance targets (post Phase 2):**
+
+| Issue | Severity | Proposed Fix |
+|---|---|---|
+| Veterancy snowball | HIGH | Diminishing returns on rank bonuses OR faster enemy HP scaling |
+| Siege escaping | HIGH | Tower AI prioritizes siege; siege gets aggro "taunt" radius |
+| Late economy irrelevant | MEDIUM | Unit upkeep cost or maintenance mechanic |
+| Worker flee spam | MEDIUM | 5s cooldown between flee→resume cycles |
+| Training queue uncapped | LOW | Cap queue at 5 per building for timing pressure |
+| Garrison unused | LOW | Auto-suggest when TH under attack, or lower cost |
+| Wave pacing flat | LOW | Accelerate intervals in late waves or add variance |
 
 ---
 

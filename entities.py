@@ -53,7 +53,13 @@ from constants import (UNIT_DEFS, ENEMY_DEFS, UNIT_COLORS, ENEMY_COLORS,
                        TRAIT_MODIFIERS,
                        GARRISON_MAX_WORKERS, GARRISON_ARMOR_PER_WORKER,
                        GARRISON_DAMAGE_PER_WORKER, GARRISON_ATTACK_CD,
-                       GARRISON_ATTACK_RANGE)
+                       GARRISON_ATTACK_RANGE,
+                       UPGRADE_PATH, PRODUCTION_RATES, PRODUCTION_TICK_INTERVAL,
+                       DROPOFF_BUILDING_TYPES,
+                       SCAFFOLD_AURA_RANGE, SCAFFOLD_SPEED_BONUS,
+                       FORGE_STONE_COST, FORGE_IRON_COST,
+                       FORGE_STEEL_YIELD, FORGE_TIME,
+                       SMELTER_REFINERY_BONUS)
 from utils import dist, pos_to_tile, tile_center, draw_text
 from pathfinding import a_star
 
@@ -229,6 +235,7 @@ class Unit(Entity):
         self.hold_ground = False
         self.hold_after_move = False
         self.garrison_target = None
+        self.station_target = None
 
     # -- v10_1: Trait system ---------------------------------------------------
 
@@ -445,7 +452,7 @@ class Unit(Entity):
 
         # worker flee check -- before state dispatch
         if (self.unit_type == "worker" and self.owner == "player"
-                and self.state != "fleeing"):
+                and self.state not in ("fleeing", "garrisoned", "stationed")):
             self._check_flee(dt, game)
             if self.state == "fleeing":
                 return  # just started fleeing, skip normal update this frame
@@ -482,6 +489,8 @@ class Unit(Entity):
             self._do_repair(dt, game)
         elif self.state == "garrisoned":
             return  # inside building, skip all behavior
+        elif self.state == "stationed":
+            return  # inside production building, skip all behavior
         elif self.state == "fleeing":
             if self.owner == "player":
                 self._do_flee(dt, game)
@@ -544,6 +553,27 @@ class Unit(Entity):
             self.x = self.garrison_target.x + math.cos(angle) * 40
             self.y = self.garrison_target.y + math.sin(angle) * 40
         self.garrison_target = None
+        self.state = "idle"
+
+    def command_station(self, building, game):
+        """Move to a production building and station inside."""
+        if self.unit_type != "worker":
+            return
+        self._clear_tasks()
+        self.station_target = building
+        tc, tr = building.col, building.row
+        self._path_to(tc, tr, game, exclude_building=building)
+        self.state = "moving"
+
+    def command_unstation(self, game):
+        """Exit a production building and become idle."""
+        if self.station_target and self in self.station_target.stationed_workers:
+            self.station_target.stationed_workers.remove(self)
+        if self.station_target:
+            angle = random.uniform(0, 2 * math.pi)
+            self.x = self.station_target.x + math.cos(angle) * 40
+            self.y = self.station_target.y + math.sin(angle) * 40
+        self.station_target = None
         self.state = "idle"
 
     def command_build(self, building, game):
@@ -701,6 +731,24 @@ class Unit(Entity):
                 else:
                     self.garrison_target = None
                     self.state = "idle"
+            elif self.station_target and self.station_target.alive and not self.station_target.ruined and self.station_target.built:
+                # v10.2: enter production building on arrival
+                bld = self.station_target
+                pconfig = PRODUCTION_RATES.get(bld.building_type, {})
+                max_w = pconfig.get("max_workers", 3)
+                if bld.building_type == "forge":
+                    max_w = 3
+                if len(bld.stationed_workers) < max_w:
+                    # auto-deposit carried resources
+                    if self.carry_amount > 0 and self.carry_type:
+                        game.resources.add(self.carry_type, self.carry_amount)
+                        self.carry_amount = 0
+                        self.carry_type = None
+                    bld.stationed_workers.append(self)
+                    self.state = "stationed"
+                else:
+                    self.station_target = None
+                    self.state = "idle"
             else:
                 # v10_2: hold_after_move — enable hold ground on arrival
                 if self.hold_after_move:
@@ -784,11 +832,11 @@ class Unit(Entity):
             if rtype_got and amount > 0:
                 self.carry_type = rtype_got
                 self.carry_amount += amount
-                # return to nearest town hall
-                th = game.get_nearest_town_hall(self.x, self.y)
-                if th:
-                    bc, br = th.get_tile()
-                    self._path_to(bc, br, game, exclude_building=th)
+                # return to nearest drop-off (TH, helper building, or production building)
+                dropoff = game.get_nearest_dropoff(self.x, self.y, rtype_got)
+                if dropoff:
+                    bc, br = dropoff.get_tile()
+                    self._path_to(bc, br, game, exclude_building=dropoff)
                     self.state = "returning"
                 else:
                     self.state = "idle"
@@ -800,21 +848,24 @@ class Unit(Entity):
                 self.gather_tile = None
 
     def _deposit_resources(self, game):
-        # v10 fix: proximity check -- must be near a town hall to deposit
-        th = game.get_nearest_town_hall(self.x, self.y)
-        if not th:
-            # v10f: no town hall exists — go idle and keep carrying resources
+        # v10.2: proximity check — find nearest drop-off for carried resource
+        dropoff = game.get_nearest_dropoff(self.x, self.y, self.carry_type) if self.carry_type else None
+        if not dropoff:
+            # fallback to any town hall
+            dropoff = game.get_nearest_town_hall(self.x, self.y)
+        if not dropoff:
+            # v10f: no drop-off exists — go idle and keep carrying resources
             self.state = "idle"
             return
-        td = dist(self.x, self.y, th.x, th.y)
+        td = dist(self.x, self.y, dropoff.x, dropoff.y)
         if td > BUILD_PROXIMITY:
-            # not close enough -- re-path to town hall
-            bc, br = th.get_tile()
-            self._path_to(bc, br, game, exclude_building=th)
+            # not close enough -- re-path to drop-off
+            bc, br = dropoff.get_tile()
+            self._path_to(bc, br, game, exclude_building=dropoff)
             if self.path:
                 self.state = "returning"
             else:
-                self.state = "idle"  # can't reach town hall
+                self.state = "idle"  # can't reach drop-off
             return
         deposited_type = self.carry_type
         deposited_amount = self.carry_amount
@@ -880,6 +931,48 @@ class Unit(Entity):
                 self.state = "idle"
                 self.build_target = None
             return
+        # v10.2: building upgrade — worker builds upgrade on a completed helper building
+        if b.built and b.upgrading_to:
+            d = dist(self.x, self.y, b.x, b.y)
+            if d > BUILD_PROXIMITY:
+                bc, br = b.get_tile()
+                self._path_to(bc, br, game, exclude_building=b)
+                self.state = "moving"
+                return
+            # scaffold aura for upgrade work too
+            build_dt = dt
+            for sb in game.player_buildings:
+                if (sb.building_type == "scaffold" and sb.built and not sb.ruined
+                        and dist(self.x, self.y, sb.x, sb.y) <= SCAFFOLD_AURA_RANGE):
+                    build_dt = dt * (1.0 + SCAFFOLD_SPEED_BONUS)
+                    break
+            b.upgrade_progress += build_dt
+            self.grant_skill_xp("builder", BUILDER_XP_PER_SECOND * dt, game)
+            if b.upgrade_progress >= b.upgrade_time:
+                # mutate building in-place to new type
+                new_type = b.upgrading_to
+                new_def = BUILDING_DEFS[new_type]
+                b.building_type = new_type
+                b.size = new_def["size"]
+                b.max_hp = new_def["hp"]
+                b.hp = b.max_hp
+                # recalculate center for new size
+                b.x = b.col * TILE_SIZE + (b.size * TILE_SIZE) // 2
+                b.y = b.row * TILE_SIZE + (b.size * TILE_SIZE) // 2
+                b.upgrading_to = None
+                b.upgrade_progress = 0.0
+                b.upgrade_time = 0.0
+                b.production_timer = 0.0
+                game.logger.log(
+                    game.game_time, "BUILDING_UPGRADED",
+                    game.enemy_ai.wave_number,
+                    new_type, "", "", 0,
+                    f"upgraded from helper")
+                game.add_notification(
+                    f"{BUILDING_LABELS.get(new_type, new_type)} built!", 3.0, (100, 255, 100))
+                self.state = "idle"
+                self.build_target = None
+            return
         if b.built:
             self.state = "idle"
             self.build_target = None
@@ -891,7 +984,14 @@ class Unit(Entity):
             self._path_to(bc, br, game, exclude_building=b)
             self.state = "moving"
             return
-        b.build_progress += dt
+        # v10.2: scaffold aura — +25% build speed
+        build_dt = dt
+        for sb in game.player_buildings:
+            if (sb.building_type == "scaffold" and sb.built and not sb.ruined
+                    and dist(self.x, self.y, sb.x, sb.y) <= SCAFFOLD_AURA_RANGE):
+                build_dt = dt * (1.0 + SCAFFOLD_SPEED_BONUS)
+                break
+        b.build_progress += build_dt
         # v10: builder XP while constructing
         self.grant_skill_xp("builder", BUILDER_XP_PER_SECOND * dt, game)
         if b.build_progress >= b.build_time:
@@ -918,11 +1018,18 @@ class Unit(Entity):
             self._path_to(bc, br, game, exclude_building=b)
             self.state = "moving"
             return
+        # v10.2: scaffold aura — +25% repair speed
+        repair_dt = dt
+        for sb in game.player_buildings:
+            if (sb.building_type == "scaffold" and sb.built and not sb.ruined
+                    and dist(self.x, self.y, sb.x, sb.y) <= SCAFFOLD_AURA_RANGE):
+                repair_dt = dt * (1.0 + SCAFFOLD_SPEED_BONUS)
+                break
         # calculate resource cost per HP
         bdef = BUILDING_DEFS.get(b.building_type, {})
         total_cost_gold = bdef.get("gold", 0) * REPAIR_COST_FRACTION
         total_cost_wood = bdef.get("wood", 0) * REPAIR_COST_FRACTION
-        hp_to_repair = min(REPAIR_RATE * dt, b.max_hp - b.hp)
+        hp_to_repair = min(REPAIR_RATE * repair_dt, b.max_hp - b.hp)
         fraction = hp_to_repair / b.max_hp
         gold_needed = total_cost_gold * fraction
         wood_needed = total_cost_wood * fraction
@@ -1070,10 +1177,12 @@ class Unit(Entity):
             self._path_to(tc, tr, game)
             self.state = "moving"
         elif prev_state == "returning" and self.carry_amount > 0:
-            th = game.get_nearest_town_hall(self.x, self.y)
-            if th:
-                bc, br = th.get_tile()
-                self._path_to(bc, br, game, exclude_building=th)
+            dropoff = game.get_nearest_dropoff(self.x, self.y, self.carry_type) if self.carry_type else None
+            if not dropoff:
+                dropoff = game.get_nearest_town_hall(self.x, self.y)
+            if dropoff:
+                bc, br = dropoff.get_tile()
+                self._path_to(bc, br, game, exclude_building=dropoff)
                 self.state = "returning"
             else:
                 self.state = "idle"
@@ -1847,6 +1956,15 @@ class Building(Entity):
         # v10_2: garrison (town hall only)
         self.garrison = []
         self.garrison_attack_timer = 0.0
+        # v10.2: upgrade state (helper → production)
+        self.upgrading_to = None
+        self.upgrade_progress = 0.0
+        self.upgrade_time = 0.0
+        # v10.2: production building
+        self.production_timer = 0.0
+        self.stationed_workers = []
+        # v10.2: smelter boost flag (refinery only)
+        self.smelter_boosted = False
 
     def take_damage(self, dmg, attacker=None):
         """Override: completed player buildings become ruins instead of dying."""
@@ -1858,15 +1976,18 @@ class Building(Entity):
         if self.hp <= 0:
             self.hp = 0
             if self.owner == "player" and self.built and not self.ruined:
-                # become a ruin — eject garrisoned workers
+                # become a ruin — eject garrisoned/stationed workers
                 if self.garrison:
                     self._eject_garrison()
+                if self.stationed_workers:
+                    self._eject_stationed()
                 self.ruined = True
                 self.built = False
                 self.build_progress = 0.0
                 self.hp = max(1, int(self.max_hp * 0.1))  # ruins have 10% HP
                 self.train_queue.clear()
                 self.refine_active = False
+                self.upgrading_to = None
             else:
                 self.alive = False
 
@@ -1880,6 +2001,44 @@ class Building(Entity):
             w.state = "idle"
             w.garrison_target = None
         self.garrison.clear()
+
+    def _eject_stationed(self):
+        """Eject all stationed workers from a production building."""
+        for i, w in enumerate(self.stationed_workers):
+            angle = (2 * math.pi * i) / max(1, len(self.stationed_workers))
+            w.x = self.x + math.cos(angle) * 40
+            w.y = self.y + math.sin(angle) * 40
+            w.state = "idle"
+            w.station_target = None
+        self.stationed_workers.clear()
+
+    def can_upgrade(self):
+        """v10.2: Check if this helper building can be upgraded to production."""
+        return (self.built and not self.ruined and self.upgrading_to is None
+                and self.building_type in UPGRADE_PATH)
+
+    def _can_upgrade_at(self, game):
+        """v10.2: Check if surrounding tiles allow 1×1 → 2×2 expansion."""
+        if self.building_type not in UPGRADE_PATH:
+            return False
+        new_def = BUILDING_DEFS[UPGRADE_PATH[self.building_type]]
+        new_size = new_def["size"]
+        if new_size <= self.size:
+            return True  # no expansion needed (e.g. refinery→forge is 2×2→2×2)
+        for dr in range(new_size):
+            for dc in range(new_size):
+                if dc == 0 and dr == 0:
+                    continue  # original tile
+                tc, tr = self.col + dc, self.row + dr
+                if not game.game_map.is_buildable(tc, tr):
+                    return False
+                for b in game.player_buildings:
+                    if b is self or not b.alive:
+                        continue
+                    for bc, br in b.get_tiles():
+                        if tc == bc and tr == br:
+                            return False
+        return True
 
     def can_upgrade_tower(self):
         """v10c: Check if this tower can be upgraded to explosive."""
@@ -1993,6 +2152,55 @@ class Building(Entity):
                     best.take_damage(total_dmg, self)
                     self.garrison_attack_timer = GARRISON_ATTACK_CD
 
+        # v10.2: production buildings — generate resources on timer
+        if self.built and not self.ruined and self.building_type in PRODUCTION_RATES:
+            self.production_timer += dt
+            if self.production_timer >= PRODUCTION_TICK_INTERVAL:
+                self.production_timer -= PRODUCTION_TICK_INTERVAL
+                n_workers = len(self.stationed_workers)
+                pconfig = PRODUCTION_RATES[self.building_type]
+                rate = pconfig["base_rate"] + pconfig["worker_rate"] * n_workers
+                game.resources.add(pconfig["resource"], rate)
+                game.logger.log(
+                    game.game_time, "RESOURCE_PRODUCED",
+                    game.enemy_ai.wave_number,
+                    self.building_type, pconfig["resource"],
+                    "", rate,
+                    f"workers={n_workers}")
+
+        # v10.2: Forge — Stone + Iron → Steel (auto-refine like refinery)
+        if self.built and not self.ruined and self.building_type == "forge":
+            if not self.refine_active:
+                # try to start a forge cycle
+                if (game.resources.stone >= FORGE_STONE_COST
+                        and game.resources.iron >= FORGE_IRON_COST):
+                    game.resources.stone -= FORGE_STONE_COST
+                    game.resources.iron -= FORGE_IRON_COST
+                    self.refine_active = True
+                    self.refine_progress = 0.0
+            if self.refine_active:
+                # stationed workers boost forge speed
+                n_workers = len(self.stationed_workers)
+                speed_mult = 1.0 + 0.3 * n_workers
+                self.refine_progress += dt * speed_mult
+                forge_time = FORGE_TIME
+                if self.refine_progress >= forge_time:
+                    self.refine_active = False
+                    self.refine_progress = 0.0
+                    game.resources.steel += FORGE_STEEL_YIELD
+                    game.logger.log(
+                        game.game_time, "RESOURCE_PRODUCED",
+                        game.enemy_ai.wave_number,
+                        "forge", "steel",
+                        "", FORGE_STEEL_YIELD,
+                        f"stone={FORGE_STONE_COST} iron={FORGE_IRON_COST}")
+
+        # v10.2: Smelter-boosted refinery — faster refining
+        if (self.built and not self.ruined and self.building_type == "refinery"
+                and self.smelter_boosted and self.refine_active):
+            # add bonus progress (30% of dt on top of normal)
+            self.refine_progress += dt * SMELTER_REFINERY_BONUS
+
     def start_train(self, unit_type, game):
         d = UNIT_DEFS[unit_type]
         if not game.resources.can_afford(gold=d["gold"], wood=d["wood"], steel=d["steel"]):
@@ -2076,6 +2284,112 @@ class Building(Entity):
                                    (int(points[i][0]), int(points[i][1])),
                                    max(2, size // 25))
 
+    def _draw_economy_building(self, surf, cx, cy, size, build_pct, is_ruin):
+        """v10.2: Algorithmic shapes for helper and production buildings."""
+        bt = self.building_type
+        color = BUILDING_COLORS.get(bt, (100, 100, 100))
+        if is_ruin:
+            color = tuple(c // 3 for c in color)
+        elif not self.built:
+            color = tuple(c // 2 for c in color)
+        r = max(4, int(size * 0.4))
+
+        if bt == "goldmine_hut":
+            # small golden diamond
+            pts = [(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)]
+            pygame.draw.polygon(surf, color, pts)
+            pygame.draw.polygon(surf, tuple(min(255, c + 50) for c in color), pts, max(1, size // 16))
+        elif bt == "lumber_camp":
+            # triangle log pile
+            half = r
+            pygame.draw.polygon(surf, color,
+                [(cx, cy - half), (cx - half, cy + half), (cx + half, cy + half)])
+            # log lines
+            lc = tuple(min(255, c + 30) for c in color)
+            for i in range(3):
+                y_off = cy - half // 2 + i * (half // 2)
+                pygame.draw.line(surf, lc, (cx - half // 2, y_off), (cx + half // 2, y_off), max(1, size // 16))
+        elif bt == "quarry_hut":
+            # hexagon (stone shape)
+            pts = []
+            for i in range(6):
+                a = math.pi / 6 + i * math.pi / 3
+                pts.append((cx + int(r * math.cos(a)), cy + int(r * math.sin(a))))
+            pygame.draw.polygon(surf, color, pts)
+            pygame.draw.polygon(surf, tuple(min(255, c + 40) for c in color), pts, max(1, size // 16))
+        elif bt == "iron_depot":
+            # square with cross (iron ingots)
+            pygame.draw.rect(surf, color, (cx - r, cy - r, r * 2, r * 2))
+            lc = tuple(min(255, c + 50) for c in color)
+            pygame.draw.line(surf, lc, (cx - r, cy), (cx + r, cy), max(1, size // 12))
+            pygame.draw.line(surf, lc, (cx, cy - r), (cx, cy + r), max(1, size // 12))
+        elif bt == "scaffold":
+            # scaffold frame — crosshatch lines
+            lw = max(1, size // 12)
+            pygame.draw.rect(surf, color, (cx - r, cy - r, r * 2, r * 2), lw)
+            pygame.draw.line(surf, color, (cx - r, cy - r), (cx + r, cy + r), lw)
+            pygame.draw.line(surf, color, (cx + r, cy - r), (cx - r, cy + r), lw)
+            # aura ring (subtle)
+            if self.built and not is_ruin:
+                pygame.draw.circle(surf, (200, 200, 100, 60), (cx, cy), int(size * 0.6), 1)
+        elif bt == "sawmill":
+            # larger triangle with gear circle
+            half = r
+            pygame.draw.polygon(surf, color,
+                [(cx, cy - half), (cx - half, cy + half), (cx + half, cy + half)])
+            gc = tuple(min(255, c + 40) for c in color)
+            pygame.draw.circle(surf, gc, (cx, cy + half // 4), half // 3, max(1, size // 20))
+        elif bt == "goldmine":
+            # larger diamond with inner diamond
+            pts = [(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)]
+            pygame.draw.polygon(surf, color, pts)
+            ir = r // 2
+            inner = [(cx, cy - ir), (cx + ir, cy), (cx, cy + ir), (cx - ir, cy)]
+            pygame.draw.polygon(surf, tuple(min(255, c + 60) for c in color), inner)
+        elif bt == "stoneworks":
+            # larger hexagon with inner hexagon
+            pts = []
+            for i in range(6):
+                a = math.pi / 6 + i * math.pi / 3
+                pts.append((cx + int(r * math.cos(a)), cy + int(r * math.sin(a))))
+            pygame.draw.polygon(surf, color, pts)
+            ir = r * 2 // 3
+            inner = []
+            for i in range(6):
+                a = math.pi / 6 + i * math.pi / 3
+                inner.append((cx + int(ir * math.cos(a)), cy + int(ir * math.sin(a))))
+            pygame.draw.polygon(surf, tuple(min(255, c + 40) for c in color), inner)
+        elif bt == "iron_works":
+            # larger iron cross with filled center
+            pygame.draw.rect(surf, color, (cx - r, cy - r, r * 2, r * 2))
+            lc = tuple(min(255, c + 50) for c in color)
+            third = r // 3
+            pygame.draw.rect(surf, lc, (cx - third, cy - r, third * 2, r * 2))
+            pygame.draw.rect(surf, lc, (cx - r, cy - third, r * 2, third * 2))
+        elif bt == "forge":
+            # anvil shape — trapezoid with flame-colored top
+            half = r
+            # base trapezoid
+            pts = [(cx - half, cy + half), (cx + half, cy + half),
+                   (cx + half // 2, cy - half // 2), (cx - half // 2, cy - half // 2)]
+            pygame.draw.polygon(surf, color, pts)
+            # flame accent on top
+            if not is_ruin and self.built:
+                flame_c = (255, 120, 30)
+                fh = half // 3
+                pygame.draw.polygon(surf, flame_c,
+                    [(cx - half // 3, cy - half // 2),
+                     (cx, cy - half // 2 - fh),
+                     (cx + half // 3, cy - half // 2)])
+
+        # upgrade progress bar (if upgrading)
+        if self.upgrading_to and self.upgrade_time > 0:
+            ratio = self.upgrade_progress / self.upgrade_time
+            bw = size - 4
+            bh = max(2, size // 8)
+            pygame.draw.rect(surf, (40, 40, 40), (cx - bw // 2, cy + r + 4, bw, bh))
+            pygame.draw.rect(surf, (100, 255, 100), (cx - bw // 2, cy + r + 4, int(bw * ratio), bh))
+
     def _draw_tower_shape(self, surf, cx, cy, size, build_pct, is_ruin, level):
         """Koch snowflake battlement — more detail at Lv.2."""
         depth = max(0, min(3, int(build_pct * 3 + 0.5)))
@@ -2137,6 +2451,11 @@ class Building(Entity):
             self._draw_refinery_shape(surf, cx, cy, px_size, build_pct, is_ruin)
         elif self.building_type == "tower":
             self._draw_tower_shape(surf, cx, cy, px_size, build_pct, is_ruin, self.tower_level)
+        elif self.building_type in ("goldmine_hut", "lumber_camp", "quarry_hut",
+                                     "iron_depot", "scaffold",
+                                     "sawmill", "goldmine", "stoneworks",
+                                     "iron_works", "forge"):
+            self._draw_economy_building(surf, cx, cy, px_size, build_pct, is_ruin)
         else:
             # fallback: flat rect
             color = BUILDING_COLORS.get(self.building_type, (100, 100, 100))

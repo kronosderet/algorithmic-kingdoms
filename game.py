@@ -4,7 +4,7 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE,
                        MAP_COLS, MAP_ROWS, TOP_BAR_H, BOTTOM_PANEL_H,
                        GAME_AREA_Y, GAME_AREA_H, ZOOM_STEP,
                        MINIMAP_SIZE, MINIMAP_MARGIN, MINIMAP_X, MINIMAP_Y,
-                       TERRAIN_TREE, TERRAIN_GOLD, TERRAIN_IRON, TERRAIN_STONE,
+                       TERRAIN_GRASS, TERRAIN_TREE, TERRAIN_GOLD, TERRAIN_IRON, TERRAIN_STONE,
                        TERRAIN_COLORS, BUILDING_DEFS, BUILDING_LABELS,
                        COL_BG, COL_SELECT, COL_TEXT,
                        DIFFICULTY_PROFILES,
@@ -14,7 +14,9 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE,
                        TOWER_UPGRADE_COST, TOWER_CANNON_DAMAGE,
                        TOWER_CANNON_CD, TOWER_EXPLOSIVE_DIRECT,
                        MAX_CONTROL_GROUPS, RALLY_POINT_COLOR,
-                       GARRISON_COST)
+                       GARRISON_COST,
+                       DROPOFF_BUILDING_TYPES, PRODUCTION_RATES,
+                       UPGRADE_PATH)
 from utils import dist, pos_to_tile, draw_text, ruin_rebuild_cost
 from game_map import GameMap
 from camera import Camera
@@ -367,7 +369,7 @@ class Game:
         best = None
         best_d = SELECT_RADIUS
         for u in self.player_units:
-            if not u.alive or u.state == "garrisoned":
+            if not u.alive or u.state in ("garrisoned", "stationed"):
                 continue
             d = dist(wx, wy, u.x, u.y)
             if d < best_d:
@@ -406,7 +408,7 @@ class Game:
         y2 = max(start[1], end[1])
 
         for u in self.player_units:
-            if not u.alive or u.state == "garrisoned":
+            if not u.alive or u.state in ("garrisoned", "stationed"):
                 continue
             sx, sy = self.camera.world_to_screen(u.x, u.y)
             if x1 <= sx <= x2 and y1 <= sy <= y2:
@@ -500,6 +502,16 @@ class Game:
                         w.command_tower_upgrade(b, self)
                     self.add_notification("Upgrading tower to Explosive Cannon (15 steel)", 2.0, (255, 140, 40))
                     handled = True
+            elif (b.built and not b.ruined
+                  and (b.building_type in PRODUCTION_RATES or b.building_type == "forge")):
+                # v10.2: station workers in production buildings
+                if workers:
+                    for w in workers:
+                        w.command_station(b, self)
+                    self.add_notification(
+                        f"Workers stationing in {BUILDING_LABELS.get(b.building_type, b.building_type)}",
+                        1.5, (220, 180, 80))
+                    handled = True
             # else: fully built and healthy -- fall through to move
             if handled:
                 others = [u for u in units_sel if u.unit_type != "worker"]
@@ -588,6 +600,74 @@ class Game:
                     best = b
         return best
 
+    def get_nearest_dropoff(self, x, y, resource_type):
+        """Return nearest valid drop-off for a resource type.
+
+        Valid targets: any Town Hall, or a matching helper building
+        (via DROPOFF_BUILDING_TYPES), or a matching production building
+        (via PRODUCTION_RATES).
+        """
+        best = None
+        best_d = 1e9
+        for b in self.player_buildings:
+            if not b.alive or not b.built or b.ruined:
+                continue
+            valid = False
+            if b.building_type == "town_hall":
+                valid = True
+            elif b.building_type in DROPOFF_BUILDING_TYPES:
+                if DROPOFF_BUILDING_TYPES[b.building_type] == resource_type:
+                    valid = True
+            elif b.building_type in PRODUCTION_RATES:
+                if PRODUCTION_RATES[b.building_type]["resource"] == resource_type:
+                    valid = True
+            if valid:
+                d = dist(x, y, b.x, b.y)
+                if d < best_d:
+                    best_d = d
+                    best = b
+        return best
+
+    def start_upgrade(self, building):
+        """v10.2: Start upgrading a helper building to a production building."""
+        if not building.can_upgrade() or not building._can_upgrade_at(self):
+            return False
+        new_type = UPGRADE_PATH[building.building_type]
+        new_def = BUILDING_DEFS[new_type]
+        # check cost
+        if not self.resources.can_afford(
+                gold=new_def["gold"], wood=new_def.get("wood", 0),
+                iron=new_def.get("iron", 0), steel=new_def.get("steel", 0),
+                stone=new_def.get("stone", 0)):
+            return False
+        self.resources.spend(
+            gold=new_def["gold"], wood=new_def.get("wood", 0),
+            iron=new_def.get("iron", 0), steel=new_def.get("steel", 0),
+            stone=new_def.get("stone", 0))
+        building.upgrading_to = new_type
+        building.upgrade_progress = 0.0
+        building.upgrade_time = new_def["build_time"]
+        # auto-assign nearest idle worker
+        best_w = None
+        best_d = 1e9
+        for u in self.player_units:
+            if (u.alive and u.unit_type == "worker" and u.state == "idle"):
+                d = dist(u.x, u.y, building.x, building.y)
+                if d < best_d:
+                    best_d = d
+                    best_w = u
+        if best_w:
+            best_w.command_build(building, self)
+        self.add_notification(
+            f"Upgrading to {BUILDING_LABELS.get(new_type, new_type)}",
+            2.0, (100, 255, 100))
+        return True
+
+    def unstation_workers(self, building):
+        """v10.2: Unstation all workers from a production building."""
+        for w in list(building.stationed_workers):
+            w.command_unstation(self)
+
     # ------------------------------------------------------------------
     # v10_2: Global commands (no-selection buttons)
     # ------------------------------------------------------------------
@@ -640,7 +720,7 @@ class Game:
             return
         self.resources.spend(wood=gc["wood"], iron=gc["iron"], stone=gc["stone"])
         for u in self.player_units:
-            if u.unit_type == "worker" and u.state != "garrisoned":
+            if u.unit_type == "worker" and u.state not in ("garrisoned", "stationed"):
                 th = self.get_nearest_town_hall(u.x, u.y)
                 if th:
                     u.command_garrison(th, self)
@@ -951,7 +1031,7 @@ class Game:
                 j -= 1
             units[j + 1] = key_u
         for u in units:
-            if u.state == "garrisoned":
+            if u.state in ("garrisoned", "stationed"):
                 continue  # v10_2: hidden inside building
             u.draw(self.screen, self.camera)
 
@@ -1082,7 +1162,7 @@ class Game:
 
         # draw player units
         for u in self.player_units:
-            if u.state == "garrisoned":
+            if u.state in ("garrisoned", "stationed"):
                 continue
             px = int(u.x * tile_scale)
             py = int(u.y * tile_scale)

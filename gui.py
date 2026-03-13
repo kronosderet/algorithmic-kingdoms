@@ -15,7 +15,11 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, TOP_BAR_H, BOTTOM_PANEL_H,
                        TOWER_CANNON_CD, TOWER_EXPLOSIVE_DIRECT,
                        TOWER_UPGRADE_TIME,
                        TRAIT_DISPLAY,
-                       GARRISON_COST, GARRISON_MAX_WORKERS)
+                       GARRISON_COST, GARRISON_MAX_WORKERS,
+                       FOREMAN_BUILDINGS, DROPOFF_BUILDING_TYPES,
+                       UPGRADE_PATH, PRODUCTION_RATES,
+                       PRODUCTION_TICK_INTERVAL, BUILD_PROXIMITY,
+                       FORGE_TIME, SMELTER_REFINERY_BONUS)
 from utils import draw_text, ruin_rebuild_cost
 from entities import Building, Unit
 
@@ -370,6 +374,39 @@ class GUI:
                 draw_text(surf, f"DMG {dmg} ({tag})  CD {TOWER_CANNON_CD:.1f}s",
                           80, status_y, self.font_sm, (180, 180, 160))
 
+        # v10.2: drop-off building status
+        elif b.building_type in DROPOFF_BUILDING_TYPES:
+            res = DROPOFF_BUILDING_TYPES[b.building_type].title()
+            draw_text(surf, f"{res} Drop-off Point", 80, status_y, self.font_sm, (160, 180, 140))
+            if b.upgrading_to:
+                pct = int(100 * b.upgrade_progress / b.upgrade_time) if b.upgrade_time > 0 else 0
+                draw_text(surf, f"Upgrading... {pct}%", 80, status_y + 16, self.font_sm, (255, 140, 40))
+
+        # v10.2: production building status
+        elif b.building_type in PRODUCTION_RATES:
+            pconfig = PRODUCTION_RATES[b.building_type]
+            n_workers = len(b.stationed_workers)
+            rate = pconfig["base_rate"] + pconfig["worker_rate"] * n_workers
+            res_name = pconfig["resource"].title()
+            draw_text(surf, f"Producing {res_name}: {rate:.1f}/{PRODUCTION_TICK_INTERVAL:.0f}s  Workers: {n_workers}/{pconfig['max_workers']}",
+                      80, status_y, self.font_sm, (180, 200, 160))
+
+        # v10.2: forge status (like refinery)
+        elif b.building_type == "forge":
+            if b.refine_active:
+                pct = int(100 * b.refine_progress / FORGE_TIME)
+                bar_x, bar_w, bar_h = 80, 140, 10
+                pygame.draw.rect(surf, (30, 30, 50), (bar_x, status_y, bar_w, bar_h))
+                pygame.draw.rect(surf, (180, 100, 50), (bar_x, status_y, int(bar_w * pct / 100), bar_h))
+                pygame.draw.rect(surf, COL_GUI_BORDER, (bar_x, status_y, bar_w, bar_h), 1)
+                draw_text(surf, f"Forging {pct}%", bar_x + bar_w + 8, status_y - 1,
+                          self.font_xs, (180, 100, 50))
+            else:
+                draw_text(surf, "Idle — needs 2 Stone + 1 Iron", 80, status_y, self.font_sm, (100, 100, 120))
+            n_workers = len(b.stationed_workers)
+            if n_workers > 0:
+                draw_text(surf, f"Workers: {n_workers}", 80, status_y + 16, self.font_sm, (160, 140, 100))
+
         # action buttons (moved further right for cleaner spacing)
         btn_x = 360
         btn_y = py + 8
@@ -406,6 +443,49 @@ class GUI:
                              lambda: None,
                              game.resources.can_afford(steel=cost["steel"]),
                              cost_text=self.cost_str(steel=cost["steel"]))
+
+        # v10.2: helper building upgrade button
+        elif b.building_type in UPGRADE_PATH and b.built and not b.ruined and not b.upgrading_to:
+            upgrade_type = UPGRADE_PATH[b.building_type]
+            upgrade_def = BUILDING_DEFS[upgrade_type]
+            upgrade_name = upgrade_type.replace("_", " ").title()
+            can_afford = game.resources.can_afford(
+                gold=upgrade_def["gold"], stone=upgrade_def.get("stone", 0),
+                iron=upgrade_def.get("iron", 0))
+            can_expand = b._can_upgrade_at(game)
+            self._add_button(surf, btn_x, btn_y, btn_w + 20, btn_h,
+                             f"→ {upgrade_name}",
+                             lambda: game.start_upgrade(b),
+                             can_afford and can_expand,
+                             cost_text=self.building_cost_str(upgrade_type))
+            if not can_expand and can_afford:
+                draw_text(surf, "No space!", btn_x, btn_y + btn_h + 4,
+                          self.font_xs, (220, 80, 80))
+
+        # v10.2: production building — station/unstation buttons
+        elif b.building_type in PRODUCTION_RATES or b.building_type == "forge":
+            if b.stationed_workers:
+                n = len(b.stationed_workers)
+                pconfig = PRODUCTION_RATES.get(b.building_type, {})
+                max_w = pconfig.get("max_workers", 3)
+                draw_text(surf, f"Stationed: {n}/{max_w}",
+                          btn_x, btn_y + 4, self.font_sm, (220, 180, 80))
+                self._add_button(surf, btn_x + btn_w + 8, btn_y, btn_w, btn_h,
+                                 "Unstation",
+                                 lambda: game.unstation_workers(b))
+
+        # v10.2: smelter boost on refinery
+        elif b.building_type == "refinery" and b.built and not b.ruined:
+            # check if any player worker has Smelter Foreman rank
+            has_smelter = any(
+                u.get_skill_rank("smelter") >= 1
+                for u in game.player_units
+                if u.alive and u.unit_type == "worker")
+            if has_smelter:
+                label = "Boosted +30%" if b.smelter_boosted else "Boost (+30%)"
+                self._add_button(surf, btn_x, btn_y + btn_h + 4, btn_w, btn_h // 2 + 8,
+                                 label,
+                                 lambda: setattr(b, 'smelter_boosted', not b.smelter_boosted))
 
     # ------------------------------------------------------------------
     # SINGLE UNIT PANEL (player)
@@ -587,6 +667,32 @@ class GUI:
                          game.resources.can_afford(gold=bd["tower"]["gold"], iron=bd["tower"].get("iron", 0),
                                                    stone=bd["tower"].get("stone", 0)),
                          cost_text=self.building_cost_str("tower"))
+
+        # v10.2: Foreman helper building buttons (conditional on worker rank)
+        foreman_skills = set()
+        workers = [u for u in game.selected if isinstance(u, Unit) and u.unit_type == "worker"]
+        for w in workers:
+            for skill_name in FOREMAN_BUILDINGS:
+                if w.get_skill_rank(skill_name) >= 1:  # Foreman+
+                    foreman_skills.add(skill_name)
+        if foreman_skills:
+            row3_y = btn_y_start + 2 * (btn_h + 4)
+            fx = btn_x
+            for skill_name in sorted(foreman_skills):
+                btype = FOREMAN_BUILDINGS[skill_name]
+                bd_new = BUILDING_DEFS[btype]
+                can_afford = game.resources.can_afford(
+                    gold=bd_new["gold"], wood=bd_new["wood"],
+                    stone=bd_new.get("stone", 0))
+                label = btype.replace("_", " ").title()
+                self._add_button(surf, fx, row3_y, btn_w, btn_h, label,
+                                 lambda bt=btype: game.start_placement(bt),
+                                 can_afford,
+                                 cost_text=self.building_cost_str(btype))
+                fx += btn_w + 6
+                if fx + btn_w > SCREEN_WIDTH - 20:
+                    fx = btn_x
+                    row3_y += btn_h + 4
 
     # ------------------------------------------------------------------
     # COMMAND BUTTONS (soldiers / archers)

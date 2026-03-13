@@ -2035,3 +2035,619 @@ These are the visual inspirations, all computable:
 
 *This document is a living reference. Each phase will add implementation
 details, parameter tuning notes, and screenshots as the art is realized.*
+
+---
+
+## Phase 4: UI/GUI Overhaul — The Fractal Interface (v11)
+
+> *"The menu screen is gorgeous. The in-game HUD looks like it was bolted on
+> from a different game. Fix that. The interface should feel like it grew
+> from the same mathematical soil as the Mandelbrot background."*
+
+### 4.0 The Problem
+
+Currently, the in-game GUI uses:
+- Flat colored rectangles for panels (`(30,30,45)` fill, `(80,80,100)` border)
+- `pygame.font.SysFont(None, size)` for all text — generic system sans-serif
+- Hardcoded pixel coordinates for layout
+- Static colors, no animation, no organic feel
+- Buttons are plain rects with plain text
+
+The main menu uses:
+- A living Mandelbrot fractal background with auto-zoom drift
+- Polar rose decorations that breathe and rotate on hover
+- Gold-layered text with 3-pass glow rendering
+- Wavy sine-line dividers
+- Superellipse hex rings
+- The game's unified earth-tone palette
+
+**The gap is jarring.** Walking from the menu into the game feels like stepping
+from a cathedral into a spreadsheet.
+
+---
+
+### 4.1 Design Principles
+
+#### 4.1.1 Fractal Coherence
+Every UI element draws from the same math library as the game world.
+If a building uses Koch snowflakes, its info panel should too.
+If units are polar roses, their selection ring should be a rose, not a circle.
+
+#### 4.1.2 Organic Geometry
+No flat rectangles. Panels use fractal borders, parametric outlines,
+or fading edge gradients. Corners are never sharp 90° — they're rounded,
+branching, or dissolving into self-similar patterns.
+
+#### 4.1.3 Animated but Calm
+Everything breathes, nothing screams. Gentle parameter oscillation:
+- Panel borders shimmer via slow Koch depth modulation
+- Button highlights bloom like polar roses unfolding
+- Progress bars fill with spirograph-traced curves instead of flat rects
+- Text glows pulse at ~0.3 Hz — alive, not epileptic
+
+#### 4.1.4 Earned Complexity
+Simple states → simple visuals. Complex states → fractal richness.
+An empty resource counter is plain. A resource counter near its cap
+starts showing fractal filigree. A building panel for a ruin is sparse;
+a fully upgraded production building's panel is dense with detail.
+
+---
+
+### 4.2 Fractal Typography — Self-Similar Glyphs
+
+> *"Can you create your own font style?"*
+
+Yes. **Fractal Rune Script** — a procedural monospace font where every glyph
+is built from recursive L-system strokes. Not bitmap. Not TrueType.
+Every character is drawn live from mathematical rules.
+
+#### 4.2.1 Design Concept: L-System Runes
+
+Each glyph is a tiny L-system rendered into a character cell.
+Characters are recognizable (Latin alphabet) but have a hand-carved,
+rune-like aesthetic with subtle self-similarity at the stroke level.
+
+**Cell dimensions**: `char_w × char_h` where `char_w = font_size * 0.6`,
+`char_h = font_size`. Monospace: every glyph occupies the same cell.
+
+**Stroke construction**: Each glyph is defined as a list of line segments
+in normalized coordinates `(0..1, 0..1)` within the cell. Strokes are
+rendered with 2-pass technique:
+
+```
+Pass 1 (glow):  line_width + 2, color at 40% alpha
+Pass 2 (core):  line_width, full color
+```
+
+This gives every character a subtle halo — the "glow text" effect from
+the menu title, but applied to every piece of text in the game.
+
+#### 4.2.2 Glyph Definitions (Stroke-Based)
+
+Each glyph is defined as normalized polyline segments within a unit cell.
+Coordinate system: (0,0) = top-left, (1,1) = bottom-right.
+
+```python
+FRACTAL_GLYPHS = {
+    # --- Uppercase (rune-inspired but readable) ---
+    "A": [[(0.1,1), (0.5,0), (0.9,1)], [(0.25,0.6), (0.75,0.6)]],
+    "B": [[(0.15,0), (0.15,1)], [(0.15,0), (0.7,0), (0.8,0.12), (0.8,0.38),
+           (0.7,0.5), (0.15,0.5)], [(0.15,0.5), (0.75,0.5), (0.85,0.62),
+           (0.85,0.88), (0.75,1), (0.15,1)]],
+    "C": [[(0.85,0.15), (0.6,0), (0.3,0), (0.15,0.15), (0.15,0.85),
+           (0.3,1), (0.6,1), (0.85,0.85)]],
+    # ... (all 26 uppercase + 26 lowercase + 10 digits + punctuation)
+    # Full glyph table: ~80 entries, each 2-5 polylines
+}
+```
+
+**Self-similar detail**: At font sizes ≥ 24px, stroke endpoints sprout tiny
+perpendicular ticks (1-2px serifs) — fractal branching at the micro level.
+At font sizes ≥ 36px, these ticks themselves branch once more.
+
+```python
+def _draw_serif(surf, x, y, angle, length, depth, color):
+    """Recursive serif: L-system micro-branching on stroke endpoints."""
+    if depth <= 0 or length < 1:
+        return
+    ex = x + math.cos(angle) * length
+    ey = y + math.sin(angle) * length
+    pygame.draw.line(surf, color, (int(x), int(y)), (int(ex), int(ey)), 1)
+    _draw_serif(surf, ex, ey, angle + 0.6, length * 0.5, depth - 1, color)
+    _draw_serif(surf, ex, ey, angle - 0.6, length * 0.5, depth - 1, color)
+```
+
+#### 4.2.3 Font Rendering Pipeline
+
+```python
+class FractalFont:
+    def __init__(self, size, color=(230, 205, 90)):
+        self.size = size
+        self.char_w = int(size * 0.6)
+        self.char_h = size
+        self.color = color
+        self.glow_color = tuple(max(0, c - 80) for c in color)
+        self.serif_depth = 0 if size < 24 else (1 if size < 36 else 2)
+        self._cache = {}  # glyph surface cache per character
+
+    def render_text(self, surf, text, x, y, center=False):
+        """Render string at (x, y). Returns total width."""
+        total_w = len(text) * self.char_w
+        if center:
+            x -= total_w // 2
+        for ch in text:
+            self._render_glyph(surf, ch, x, y)
+            x += self.char_w
+        return total_w
+
+    def _render_glyph(self, surf, ch, x, y):
+        """Draw a single glyph from its polyline definition."""
+        if ch == " ":
+            return
+        # check cache first
+        key = (ch, self.size, self.color)
+        if key not in self._cache:
+            self._cache[key] = self._build_glyph_surface(ch)
+        surf.blit(self._cache[key], (x, y))
+
+    def _build_glyph_surface(self, ch):
+        """Pre-render glyph to surface with glow pass."""
+        s = pygame.Surface((self.char_w + 4, self.char_h + 4), pygame.SRCALPHA)
+        strokes = FRACTAL_GLYPHS.get(ch.upper(), FRACTAL_GLYPHS.get(ch, None))
+        if not strokes:
+            return s
+        ox, oy = 2, 2  # offset for glow margin
+        # pass 1: glow
+        for polyline in strokes:
+            pts = [(int(p[0] * self.char_w + ox),
+                    int(p[1] * self.char_h + oy)) for p in polyline]
+            if len(pts) >= 2:
+                pygame.draw.lines(s, (*self.glow_color, 100),
+                                  False, pts, max(2, self.size // 10 + 1))
+        # pass 2: core
+        for polyline in strokes:
+            pts = [(int(p[0] * self.char_w + ox),
+                    int(p[1] * self.char_h + oy)) for p in polyline]
+            if len(pts) >= 2:
+                pygame.draw.lines(s, (*self.color, 255),
+                                  False, pts, max(1, self.size // 14))
+        # pass 3: serifs at endpoints
+        if self.serif_depth > 0:
+            for polyline in strokes:
+                for p in [polyline[0], polyline[-1]]:
+                    px = int(p[0] * self.char_w + ox)
+                    py = int(p[1] * self.char_h + oy)
+                    _draw_serif(s, px, py, -math.pi/4,
+                               self.size * 0.08, self.serif_depth, self.color)
+        return s
+```
+
+#### 4.2.4 Font Size Tiers
+
+| Context | Size | Serif Depth | Glow | Notes |
+|---|---|---|---|---|
+| Panel titles | 28px | 1 | Yes | Building names, unit types |
+| Body text | 20px | 0 | Yes | Stats, descriptions |
+| Small labels | 16px | 0 | Subtle | Button labels, costs |
+| Tiny | 13px | 0 | No | Tooltip detail, fine print |
+| Hero title | 40px | 2 | Strong | Victory/defeat screen |
+| Building label (world) | 16-20×z | 0 | No | On-map building labels |
+
+#### 4.2.5 Color Variants
+
+Text color is contextual, drawn from the game palette:
+
+| Context | Color | Notes |
+|---|---|---|
+| Default | `(230, 205, 90)` | Gold — matches menu title |
+| Resource text | Resource-specific | COL_GOLD, COL_WOOD, etc. |
+| Warning | `(220, 80, 40)` | Red-orange |
+| Disabled | `(80, 75, 60)` | Muted gold |
+| Building label | `(255, 255, 255)` | White (high contrast on dark) |
+| Enemy info | `(200, 80, 80)` | Hostile red |
+| Notification | Per-event color | Event-specific |
+
+#### 4.2.6 Fallback Strategy
+
+For very small sizes (<13px) or extremely long strings (>50 chars),
+fall back to `pygame.font.SysFont(None, size)` with the same color.
+The fractal font is decorative first — readability is non-negotiable.
+
+---
+
+### 4.3 Panel Frames — Koch Border System
+
+Replace all flat `pygame.draw.rect` panels with Koch-curve bordered frames.
+
+#### 4.3.1 Koch Border Algorithm
+
+The panel border is a Koch curve at depth 1-2 (not 3+ — too noisy for UI).
+Each side of the rectangle becomes a Koch segment:
+
+```python
+def koch_border(surf, rect, depth, color, line_width=1):
+    """Draw a Koch-curve bordered rectangle."""
+    x, y, w, h = rect
+    corners = [(x, y), (x+w, y), (x+w, y+h), (x, y+h)]
+    for i in range(4):
+        p1 = corners[i]
+        p2 = corners[(i + 1) % 4]
+        points = _koch_side(p1, p2, depth)
+        if len(points) >= 2:
+            pygame.draw.lines(surf, color, False, points, line_width)
+```
+
+**Animated depth**: Panel borders oscillate between depth 1 and depth 2
+at ~0.15 Hz. The frame "breathes" — Koch segments unfold and refold:
+
+```
+depth_float = 1.0 + 0.5 * sin(game_time * 0.3)
+# render at floor depth, with partial interpolation toward ceil depth
+```
+
+#### 4.3.2 Panel Background
+
+Instead of flat fill, use a radial gradient from center:
+- Center: `(35, 32, 50)` — slightly warmer than current
+- Edge: `(20, 18, 30)` — fades to near-black
+- Optional: very subtle Mandelbrot micro-render at 20×15 resolution
+  as a background texture (5% alpha). The panel literally has a fractal
+  texture — tiny, barely visible, but your subconscious knows it's there.
+
+#### 4.3.3 Panel Types
+
+| Panel | Border Color | Border Depth | Background Accent |
+|---|---|---|---|
+| Top bar | `(80, 75, 55)` gold-gray | 1 | Horizontal Mandelbrot strip |
+| Bottom info panel | `(80, 80, 100)` current | 1-2 breathing | Radial gradient |
+| Building panel | Building's own color | 1 | Faint building shape echo |
+| Unit panel | Unit type color | 1 | Faint polar rose echo |
+| Tooltip | `(100, 90, 60)` gold | 1 (static) | Solid dark |
+| Notification | Event color | 0 (none) | Translucent |
+
+---
+
+### 4.4 Buttons — Polar Rose Bloom
+
+Replace flat button rects with interactive polar-rose bordered buttons.
+
+#### 4.4.1 Button States
+
+**Idle**: Koch depth-1 border, dark fill, gold text
+```
+Border: koch_border(rect, depth=1, color=(60, 55, 45))
+Fill:   radial_gradient(center=(40,38,55), edge=(25,22,35))
+Text:   FractalFont, gold (200, 185, 80)
+```
+
+**Hover**: Border blooms — Koch depth increases, polar rose dots appear
+at corners, text brightens
+```
+Border: koch_border(rect, depth=2, color=(120, 100, 50))
+Fill:   radial_gradient(center=(50,45,65), edge=(30,28,42))
+Corners: tiny 3-petal polar roses at each corner, rotating slowly
+Text:   FractalFont, bright gold (240, 220, 110)
+```
+
+**Pressed**: Inverted glow, border contracts
+```
+Border: koch_border(rect, depth=1, color=(80, 70, 40))
+Fill:   darker radial_gradient(center=(30,28,45), edge=(18,16,25))
+Text:   FractalFont, offset +1px down, dimmed
+```
+
+**Disabled**: Minimal border, muted everything
+```
+Border: simple rect, (40, 38, 45)
+Fill:   flat (28, 26, 35)
+Text:   FractalFont, disabled gray (70, 65, 50)
+```
+
+#### 4.4.2 Cost Display
+
+Resource costs shown below button in resource-colored fractal font.
+If not affordable: costs are dimmed + tiny "×" drawn through them.
+If affordable: costs have subtle pulse glow.
+
+---
+
+### 4.5 Resource Display — Fibonacci Counter
+
+Replace the top-bar resource display with animated fractal counters.
+
+#### 4.5.1 Resource Icons (Enhanced)
+
+Current icons (diamond, triangle, pentagon, hexagon, rotated-diamond)
+are already good. Enhance them:
+
+- **Idle pulse**: icons gently scale `1.0 + 0.03 * sin(time * 1.5)` — breathing
+- **Income flash**: when resource increases, icon briefly scales to 1.15×
+  with a bright flash of the resource color
+- **Depletion warning**: when resource is ≤ 10% of peak, icon rotates
+  with a slow wobble and dims — the "wilting" effect
+
+#### 4.5.2 Number Display
+
+Resource amounts in FractalFont with resource-specific color.
+The number itself has subtle animation:
+
+- **Tick-up**: New digits "grow in" from 0-height to full height
+  over 0.15s (like the L-system tree growing its next branch)
+- **Tick-down**: Old digits "dissolve" — briefly show as Koch-fragmented
+  outlines before vanishing
+
+#### 4.5.3 Supply Bar (Optional Stretch)
+
+Below each resource number, a thin (3px) fractal progress bar showing
+ratio of current/peak. The bar fill is a micro-spirograph traced line
+instead of a flat fill — the bar literally draws itself as an
+epitrochoid curve:
+
+```
+fill_t = resource_amount / peak_amount
+spirograph_t = fill_t * 4 * math.pi  # how far the curve extends
+# render spirograph from left edge to fill_t * bar_width
+```
+
+---
+
+### 4.6 HP & Progress Bars — Spirograph Fills
+
+Replace flat progress bars with algorithmically traced fills.
+
+#### 4.6.1 HP Bar
+
+**Border**: Koch depth-1 segment (top and bottom edges only)
+**Fill algorithm**: Instead of a flat rectangle, the fill is a
+dense sine-wave pattern:
+
+```python
+def fractal_bar(surf, x, y, w, h, ratio, color, bg_color):
+    """HP/progress bar with sine-wave fill pattern."""
+    # background
+    pygame.draw.rect(surf, bg_color, (x, y, w, h))
+    # fill with wave pattern
+    fill_w = int(w * ratio)
+    for px in range(fill_w):
+        wave = math.sin(px * 0.3 + game_time * 2.0) * (h * 0.15)
+        top = max(0, int(h / 2 - h / 2 + wave))
+        bot = min(h, int(h / 2 + h / 2 + wave))
+        for py in range(top, bot):
+            # color modulation along wave
+            t = py / h
+            c = _lerp_color(color, (color[0]//2, color[1]//2, color[2]//2), t)
+            surf.set_at((x + px, y + py), c)
+```
+
+For performance, pre-render the wave pattern to a cached surface and
+just blit the appropriate width slice each frame (only rebuild on
+game_time modulo cycle).
+
+#### 4.6.2 Build Progress Bar
+
+Same wave-fill but in build-blue `(0, 180, 255)`. The wave frequency
+increases as construction completes — the bar "accelerates" visually
+to convey momentum.
+
+#### 4.6.3 Train Progress Bar
+
+Gold wave-fill. When training completes, a brief Lissajous bloom
+(same as explosion VFX but tiny, gold, 0.3s) at the bar location.
+
+---
+
+### 4.7 Selection System — Rose Rings
+
+Replace the green rectangle selection ring with polar-curve selection.
+
+#### 4.7.1 Unit Selection
+
+Selected units get a polar rose ring instead of a circle:
+- **Worker**: Superellipse hex ring (matches body shape), pulsing
+- **Soldier**: 5-petal rose ring at r+3, slowly rotating
+- **Archer**: Golden spiral arc ring, breathing
+
+```python
+def _draw_selection_rose(surf, sx, sy, r, k, rotation, color):
+    """Draw polar rose selection ring."""
+    pts = []
+    for i in range(60):
+        theta = rotation + 2 * math.pi * i / 60
+        rv = (r + 4) * abs(math.cos(k * theta)) ** 0.5
+        rv = max(rv, r * 0.7)  # minimum radius so it stays visible
+        pts.append((sx + rv * math.cos(theta), sy + rv * math.sin(theta)))
+    pygame.draw.lines(surf, color, True, pts, 1)
+```
+
+#### 4.7.2 Building Selection
+
+Selected buildings get a Koch-curve rectangle outline instead of
+a plain inflated rect. The Koch depth oscillates gently (breathing).
+
+#### 4.7.3 Multi-Select Box
+
+The drag-select rectangle becomes a Koch-bordered box with
+semi-transparent fill. The border animates outward (Koch depth
+increases) as the box grows larger — bigger selection = more ornate
+border.
+
+---
+
+### 4.8 Minimap Frame
+
+#### 4.8.1 Border
+
+Replace the plain minimap border with a Koch-curve frame, depth 2.
+Color: `(80, 75, 55)` gold-gray to match the panel system.
+
+#### 4.8.2 Camera Viewport Indicator
+
+The white rectangle showing the current camera view becomes a
+golden Koch-curve rectangle (depth 1). Matches the selection
+system language.
+
+#### 4.8.3 Combat Heat Overlay
+
+Currently uses red circles. Replace with tiny Lissajous bloom
+figures (same as explosion VFX, scaled to minimap). Recent kills
+leave trefoil marks that fade over time — the minimap becomes
+a fractal battle-scar map.
+
+---
+
+### 4.9 Notifications — Dissolving Runes
+
+#### 4.9.1 Current System
+
+Notifications are plain text with a background rect, fading via alpha.
+
+#### 4.9.2 Enhanced System
+
+Notifications appear in FractalFont with a Koch-bordered pill shape.
+The fade-out is a **fractal dissolution**:
+
+```
+As alpha decreases:
+1. Text characters start "losing" their serif branches (depth decreases)
+2. Koch border depth drops from 1 → 0
+3. Characters themselves begin fragmenting — random strokes disappear
+4. Final frame: just a few dots where the text was, then gone
+```
+
+The notification doesn't just fade — it *decomposes* back into
+mathematical noise.
+
+---
+
+### 4.10 Wave Timer — Breathing Arc
+
+#### 4.10.1 Current System
+
+Plain colored rect bar in the top-right corner.
+
+#### 4.10.2 Enhanced System
+
+Replace with a **circular arc timer** using a polar rose pattern:
+
+```python
+def _draw_wave_timer(surf, cx, cy, radius, ratio, color):
+    """Circular wave timer with rose-curve inner pattern."""
+    # background circle
+    pygame.draw.circle(surf, (30, 30, 40), (cx, cy), radius, 2)
+    # fill arc
+    arc_end = 2 * math.pi * ratio
+    pts = [(cx, cy)]
+    for i in range(int(60 * ratio) + 1):
+        theta = -math.pi / 2 + arc_end * i / max(1, int(60 * ratio))
+        pts.append((cx + radius * math.cos(theta),
+                     cy + radius * math.sin(theta)))
+    if len(pts) >= 3:
+        pygame.draw.polygon(surf, color, pts)
+    # inner rose decoration (5-petal, scales with ratio)
+    for i in range(48):
+        theta = 2 * math.pi * i / 48
+        rv = (radius - 4) * abs(math.cos(2.5 * theta))
+        if theta - math.pi / 2 > arc_end:
+            continue  # only draw within filled arc
+        pygame.draw.circle(surf, (255, 255, 255, 40),
+                           (int(cx + rv * math.cos(theta - math.pi/2)),
+                            int(cy + rv * math.sin(theta - math.pi/2))), 1)
+```
+
+Color transitions remain the same (green → yellow → red), but the
+timer is now a pie slice with a polar rose pattern inside.
+
+---
+
+### 4.11 Implementation Plan
+
+#### Phase 4A: Fractal Font (Foundation)
+
+| Task | File | Effort |
+|---|---|---|
+| Define FRACTAL_GLYPHS dict (A-Z, a-z, 0-9, punctuation) | `fractal_font.py` (new) | 2 sessions |
+| Implement FractalFont class with glyph cache | `fractal_font.py` | 1 session |
+| Implement serif branching system | `fractal_font.py` | 0.5 session |
+| Replace all `draw_text()` calls with FractalFont | `gui.py`, `entities.py` | 1 session |
+| Benchmark: ensure font rendering < 2ms/frame total | `fractal_font.py` | 0.5 session |
+
+#### Phase 4B: Panel & Button Overhaul
+
+| Task | File | Effort |
+|---|---|---|
+| Implement `koch_border()` utility | `gui.py` or `fractal_ui.py` (new) | 0.5 session |
+| Replace panel backgrounds with radial gradients | `gui.py` | 1 session |
+| Replace button rendering with Koch-bordered system | `gui.py` | 1 session |
+| Add button hover bloom (polar rose corners) | `gui.py` | 0.5 session |
+| Animate panel borders (breathing depth) | `gui.py` | 0.5 session |
+
+#### Phase 4C: Bars, Selection, Polish
+
+| Task | File | Effort |
+|---|---|---|
+| Implement `fractal_bar()` for HP/progress/train bars | `gui.py`, `entities.py` | 1 session |
+| Replace selection rings with rose/hex/spiral rings | `entities.py` | 1 session |
+| Replace minimap border and viewport indicator | `game.py` | 0.5 session |
+| Notification dissolution system | `gui.py` | 0.5 session |
+| Wave timer circular arc | `gui.py` | 0.5 session |
+
+#### Phase 4D: Integration & Performance
+
+| Task | File | Effort |
+|---|---|---|
+| Profile full render pass — target < 16ms at 60 FPS | all | 0.5 session |
+| Glyph surface caching (amortize font cost to ~0) | `fractal_font.py` | 0.5 session |
+| Koch border segment caching | `gui.py` | 0.5 session |
+| Visual QA pass: ensure all text is readable | all | 1 session |
+
+**Total estimate: 12-14 sessions**
+
+---
+
+### 4.12 Critical Files
+
+| File | Changes |
+|---|---|
+| `fractal_font.py` (NEW) | FractalFont class, glyph definitions, serif system, caching |
+| `fractal_ui.py` (NEW) | koch_border(), radial_gradient(), fractal_bar(), rose_selection() |
+| `gui.py` | Replace all panel/button/bar rendering with fractal equivalents |
+| `entities.py` | Replace selection ring drawing, building label rendering |
+| `game.py` | Minimap frame, select box, wave timer |
+| `utils.py` | Move `draw_text()` to use FractalFont, add `draw_text_fractal()` |
+
+---
+
+### 4.13 Performance Budget
+
+**Target**: All UI rendering combined ≤ 4ms per frame (25% of 16ms budget)
+
+| Component | Budget | Strategy |
+|---|---|---|
+| Fractal font | ≤ 1.5ms | Cache glyph surfaces per (char, size, color) |
+| Koch borders | ≤ 0.5ms | Cache border polylines per (rect, depth) |
+| Fractal bars | ≤ 0.5ms | Pre-render wave pattern, blit slice |
+| Rose selections | ≤ 0.5ms | 60-point polygon per selected unit |
+| Gradients | ≤ 0.5ms | Pre-render gradient surfaces at init |
+| Headroom | 0.5ms | For animation updates |
+
+Key insight: **cache everything.** The fractal font caches each glyph
+surface. Koch borders cache the polyline points. Gradient backgrounds
+are pre-rendered once. The only per-frame work is blitting cached surfaces
+and updating animation parameters (float math, ~0).
+
+---
+
+### 4.14 Visual Reference Summary
+
+| Current Element | v11 Replacement | Math Basis |
+|---|---|---|
+| SysFont text | FractalFont runes | L-system strokes + recursive serifs |
+| Flat rect panels | Koch-bordered gradient panels | Koch curve (depth 1-2) |
+| Flat rect buttons | Koch-bordered bloom buttons | Koch + polar rose corners |
+| Flat HP bars | Sine-wave filled bars | Parametric wave modulation |
+| Circle selection | Rose/hex/spiral selection rings | Polar curves matching unit type |
+| Rect minimap border | Koch-framed minimap | Koch curve depth 2 |
+| Flat notifications | Dissolving rune text | Fractal decomposition |
+| Rect wave timer | Circular rose-arc timer | Polar rose + pie arc |
+| Plain resource icons | Breathing pulse icons | Scale oscillation |
+| Static UI | Breathing, animated UI | Continuous parameter modulation |
