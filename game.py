@@ -96,7 +96,7 @@ class Game:
 
         # input state
         self.selecting = False
-        self.select_start = None
+        self.select_start: tuple[int, int] | None = None
         self.placing_building = None  # building type str or None
 
         # font cache
@@ -525,6 +525,7 @@ class Game:
         self.selecting = False
 
         sx, sy = pos
+        assert self.select_start is not None
         start_sx, start_sy = self.select_start
 
         if abs(sx - start_sx) < DRAG_THRESHOLD and abs(sy - start_sy) < DRAG_THRESHOLD:
@@ -1425,8 +1426,9 @@ class Game:
                 msg = DISCOVERY_NOTIFICATIONS.get(fmt_idx, "Formation Discovered!")
                 self.add_notification(msg, 4.0, (255, 230, 80))
                 self.logger.log(self.game_time, "FORMATION_DISCOVERED",
-                                FORMATION_NAMES[fmt_idx],
-                                f"{soldiers}S:{archers}A", f"squad:{squad.squad_id}")
+                                detail_1=FORMATION_NAMES[fmt_idx],
+                                detail_2=f"{soldiers}S:{archers}A",
+                                detail_3=f"squad:{squad.squad_id}")
                 # Auto-switch discovering squad to this formation
                 squad.formation = fmt_idx
 

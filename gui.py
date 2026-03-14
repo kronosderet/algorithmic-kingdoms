@@ -34,10 +34,11 @@ from entities import Building, Unit
 
 class GUI:
     def __init__(self):
-        self.font = None
-        self.font_sm = None
-        self.font_xs = None
-        self.font_lg = None
+        # Fonts initialized lazily by init_fonts() before first draw
+        self.font: pygame.font.Font = None  # type: ignore[assignment]
+        self.font_sm: pygame.font.Font = None  # type: ignore[assignment]
+        self.font_xs: pygame.font.Font = None  # type: ignore[assignment]
+        self.font_lg: pygame.font.Font = None  # type: ignore[assignment]
         self.buttons = []  # list of (rect, label, callback, enabled)
         # Tooltip state
         self._tooltip_zones = []  # list of (rect, tooltip_key) — rebuilt each frame
@@ -862,7 +863,7 @@ class GUI:
             skill_x = ix + (100 if u.carry_amount > 0 else 0)
             for skill_name, xp, rank in active_skills[:3]:
                 sc = WORKER_SKILL_COLORS.get(skill_name, (160, 160, 180))
-                skill_short = WORKER_SKILL_NAMES.get(skill_name, skill_name)[:4]
+                skill_short = str(WORKER_SKILL_NAMES.get(skill_name, skill_name))[:4]
                 rank_label = WORKER_RANKS[rank][0]
                 badge_text = f"{skill_short}:{rank_label}"
                 bw = self.font_xs.size(badge_text)[0] + 6
@@ -1051,7 +1052,7 @@ class GUI:
                 bx += seg_w
 
             # state legend (most common state)
-            top_state = max(states, key=states.get) if states else "idle"
+            top_state = max(states, key=lambda k: states[k]) if states else "idle"
             scol = state_colors.get(top_state, (100, 100, 100))
             draw_text(surf, f"{states.get(top_state, 0)} {top_state}", bar_x + bar_w + 6,
                       card_y + 6, self.font_xs, scol)
@@ -1085,7 +1086,7 @@ class GUI:
                     h = compute_harmony(fmt_idx, s_count, a_count)
                     h_pct = int(h * 100)
                     label = HARMONY_LABELS.get(fmt_idx, "")
-                    fname = FORMATION_NAMES.get(fmt_idx, "?")[:4]
+                    fname = (FORMATION_NAMES[fmt_idx] if fmt_idx < len(FORMATION_NAMES) else "?")[:4]
                     res_col = RESONANCE_COLORS.get(fmt_idx, (100, 100, 100))
                     # Quality descriptor
                     if h >= 0.95:

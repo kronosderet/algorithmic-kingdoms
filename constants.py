@@ -384,7 +384,7 @@ DISPLAY_NAMES = {
     "entrenched": "Entrenched Titan",
 }
 
-def display_name(key):
+def display_name(key: str) -> str:
     """Get thematic display name for a building or unit type."""
     return DISPLAY_NAMES.get(key, key.replace("_", " ").title())
 

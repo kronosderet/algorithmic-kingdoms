@@ -28,7 +28,7 @@ def a_star(sc, sr, ec, er, game_map, blocked_set=None, max_nodes=12000):
     open_set = []
     heapq.heappush(open_set, (0, sc, sr))
     came_from = {}
-    g_score = {(sc, sr): 0}
+    g_score: dict[tuple[int, int], float] = {(sc, sr): 0.0}
     closed = set()
 
     while open_set:

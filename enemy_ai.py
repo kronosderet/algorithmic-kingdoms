@@ -69,8 +69,8 @@ class EnemyAI:
         self.is_false_calm = False
 
         # Current incident
-        self.current_flavour = None
-        self.current_incident_data = None
+        self.current_flavour: str | None = None
+        self.current_incident_data: dict | None = None
         self.incident_start_time = 0.0
         self.incident_enemies_spawned = 0
         self.incident_enemies_killed = 0
@@ -141,6 +141,7 @@ class EnemyAI:
             # Pick next incident
             self._select_incident(game)
             self._enter_state(STATE_FOREBODING)
+            assert self.current_incident_data is not None
             self.narrative_text = self.current_incident_data["narrative_foreboding"]
             if self.is_false_calm:
                 game.add_notification(NARRATIVE_CALM_FALSE, 3.0, (180, 180, 100))
@@ -155,6 +156,7 @@ class EnemyAI:
         duration = INCIDENT_FOREBODING_MAX - (INCIDENT_FOREBODING_MAX - INCIDENT_FOREBODING_MIN) * t
         if self.state_timer >= duration:
             self._enter_state(STATE_IMMINENT)
+            assert self.current_incident_data is not None
             self.narrative_text = self.current_incident_data["narrative_imminent"]
             game.add_notification(self.current_incident_data["narrative_imminent"],
                                   2.5, (255, 100, 50))
@@ -294,6 +296,7 @@ class EnemyAI:
         self._process_stragglers(game)
 
         self.incident_number += 1
+        assert self.current_incident_data is not None
         data = self.current_incident_data
         tier = data["tier"]
 

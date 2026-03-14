@@ -43,8 +43,8 @@ def _build_palette():
             c = _lerp_color(_COL_STONE, _GLOW_WHITE, (t - 0.75) / 0.15)
         else:
             c = _lerp_color(_GLOW_WHITE, _FRACTAL_DEEP, (t - 0.90) / 0.10)
-        pal[i] = c
-    pal[_MAX_ITER] = COL_BG  # interior = void
+        pal[i] = c  # type: ignore[index]
+    pal[_MAX_ITER] = COL_BG  # type: ignore[index]  # interior = void
     return pal
 
 
@@ -78,7 +78,7 @@ def _render_fractal_rows(surf, palette, cx, cy, zoom,
                 zi = 2.0 * zr * zi + ci
                 zr = zr2 - zi2 + cr
             else:
-                pixels[px, py] = surf.map_rgb(palette[_MAX_ITER])
+                pixels[px, py] = surf.map_rgb(palette[_MAX_ITER])  # type: ignore[index]
                 continue
 
             # smooth coloring
@@ -92,7 +92,7 @@ def _render_fractal_rows(surf, palette, cx, cy, zoom,
                 idx = max(0, min(_MAX_ITER - 1, idx))
             else:
                 idx = 0
-            pixels[px, py] = surf.map_rgb(palette[idx])
+            pixels[px, py] = surf.map_rgb(palette[idx])  # type: ignore[index]
 
     del pixels
     return row_end if row_end < h else -1
@@ -408,7 +408,7 @@ class MainMenu:
         self.screen.blit(hint_surf,
                          hint_surf.get_rect(center=(cx, SCREEN_HEIGHT - 50)))
 
-        ver_surf = self.font_ver.render("v10_epsilon1", True, (50, 50, 65))
+        ver_surf = self.font_ver.render("v10_epsilon2", True, (50, 50, 65))
         self.screen.blit(ver_surf,
                          ver_surf.get_rect(bottomleft=(12, SCREEN_HEIGHT - 8)))
 

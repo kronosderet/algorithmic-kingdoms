@@ -196,6 +196,13 @@ class Unit(Entity):
         self._resonance_visual = -1  # -1=none, 0=rose, 1=spiral, 2=sierpinski, 3=koch
         self._koch_slow_factor = 1.0  # 1.0 = no slow; Koch resonance sets < 1.0 on enemies
         self.dissonant_formation = -1  # -1=none, 0-3=anti-formation type
+        # v10_9: Incident Director dynamic attributes (set by enemy_ai)
+        self.incident_behaviour: str | None = None
+        self.contact_timer = 0.0
+        self.flee_contact_time = 0.0
+        self.probe_timer = 0.0
+        self.probe_duration = 0.0
+        self._dissonance_target_formation = -1
 
     # -- Helpers ---------------------------------------------------------------
 
@@ -1502,7 +1509,7 @@ class Unit(Entity):
         self.repair_target = task.get("repair_target")
         self.target_pos = task.get("target_pos")
         self.carry_type = task.get("carry_type")
-        self.carry_amount = task.get("carry_amount")
+        self.carry_amount = task.get("carry_amount", 0)
         self._last_gather_type = task.get("_last_gather_type")
         prev_state = task.get("state", "idle")
         # re-path to the task target
@@ -1510,8 +1517,8 @@ class Unit(Entity):
             tc, tr = self.gather_tile
             self._path_to(tc, tr, game)
             self.state = "moving"
-        elif prev_state == "returning" and self.carry_amount > 0:
-            dropoff = game.get_nearest_dropoff(self.x, self.y, self.carry_type) if self.carry_type else None
+        elif prev_state == "returning" and self.carry_amount > 0 and self.carry_type:
+            dropoff = game.get_nearest_dropoff(self.x, self.y, self.carry_type)
             if not dropoff:
                 dropoff = game.get_nearest_town_hall(self.x, self.y)
             if dropoff:
@@ -2357,7 +2364,7 @@ class Unit(Entity):
         # v10f: orbiting resource indicators when carrying
         if self.carry_amount > 0 and r >= 4:
             carry_colors = {"gold": COL_GOLD, "wood": COL_WOOD, "iron": COL_IRON_C, "stone": COL_STONE}
-            carry_col = carry_colors.get(self.carry_type, COL_IRON_C)
+            carry_col = carry_colors.get(self.carry_type or "iron", COL_IRON_C)
             # Fibonacci-spaced orbiting dots (golden angle = 137.5°)
             n_orbs = min(3, max(1, self.carry_amount // 5))
             orbit_r = r + max(3, int(5 * z))

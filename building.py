@@ -92,7 +92,7 @@ class Building(Entity):
         # v10_1: VDD Phase 3 animation state
         self._refinery_rotation = random.uniform(0, 6.28)  # start offset
         # v10_1: rally point (world coords or None)
-        self.rally_point = None
+        self.rally_point: tuple[float, float] | None = None
         # v10_2: garrison (town hall only)
         self.garrison = []
         self.garrison_attack_timer = 0.0
