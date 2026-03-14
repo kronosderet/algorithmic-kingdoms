@@ -41,6 +41,7 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE,
                        MSG_COL_ECONOMY, MSG_COL_COMMAND,
                        DISCOVERY_SLOWMO_DURATION, DISCOVERY_SLOWMO_FACTOR,
                        DISCOVERY_BANNER_DURATION,
+                       TUTORIAL_HINTS, TUTORIAL_HINT_DURATION, TUTORIAL_HINT_COOLDOWN,
                        display_name)
 from utils import dist, pos_to_tile, draw_text, ruin_rebuild_cost
 from game_map import GameMap
@@ -131,6 +132,11 @@ class Game:
         # formation discovery event (major announcement)
         self._discovery_banner: list | None = None  # [title, subtitle, timer, formation_idx]
         self._discovery_slowmo = 0.0  # remaining slowmo time
+
+        # tutorial hint system
+        self._tutorial_shown: set[str] = set()  # hint IDs already displayed
+        self._tutorial_active: list | None = None  # [text, timer, color] or None
+        self._tutorial_cooldown = 2.0  # initial delay before first hint
 
         # wave clear tracking
         self._had_enemies = False
@@ -1388,6 +1394,15 @@ class Game:
         # v10_8d: update progressive unlocks (every ~0.5s)
         if int(self.game_time * 2) != int((self.game_time - dt) * 2):
             self._update_unlocks()
+            self._update_tutorial()
+
+        # update tutorial hint timer
+        if self._tutorial_active:
+            self._tutorial_active[1] -= dt
+            if self._tutorial_active[1] <= 0:
+                self._tutorial_active = None
+        if self._tutorial_cooldown > 0:
+            self._tutorial_cooldown -= dt
 
         # update notifications (filter uses timer - dt so no negative timers survive)
         self._notifications = [[t, timer - dt, c]
@@ -1455,6 +1470,32 @@ class Game:
             u["first_wave_cleared"] = True
         # v10_alpha: formation discovery
         self._check_formation_discovery()
+
+    def _update_tutorial(self):
+        """Show progressive tutorial hints based on game state."""
+        if self._tutorial_active or self._tutorial_cooldown > 0:
+            return  # wait for current hint to finish or cooldown
+        # build condition map
+        conditions = {
+            "start": self.game_time > 2.0,
+            "selected_th": any(isinstance(e, Building) and e.building_type == "town_hall"
+                               for e in self.selected),
+            "has_workers": len(self.player_units) >= 4,  # started with 3, trained 1+
+            "has_gold": self.resources.gold >= 50 or self.resources.wood >= 80,
+            "has_barracks": self.unlocks["has_barracks"],
+            "has_military": any(u.unit_type in ("soldier", "archer") and u.alive
+                                for u in self.player_units),
+            "first_attack": self.enemy_ai.incident_number >= 1,
+        }
+        for hint_id, cond_key, text, color in TUTORIAL_HINTS:
+            if hint_id in self._tutorial_shown:
+                continue
+            if conditions.get(cond_key, False):
+                self._tutorial_shown.add(hint_id)
+                self._tutorial_active = [text, TUTORIAL_HINT_DURATION, color]
+                self._tutorial_cooldown = TUTORIAL_HINT_COOLDOWN
+                self.add_message(text, color)
+                return  # one hint at a time
 
     def _check_formation_discovery(self):
         """v10_alpha: Check if any squad's composition discovers a new formation."""
@@ -1544,6 +1585,10 @@ class Game:
         # notifications
         self._render_notifications()
 
+        # tutorial hint bar
+        if self._tutorial_active:
+            self._render_tutorial_hint()
+
         # full message log overlay (when expanded)
         if self.show_message_log:
             self.gui.draw_message_log_full(self.screen, self)
@@ -1577,6 +1622,37 @@ class Game:
             draw_text(self.screen, text, SCREEN_WIDTH // 2, y, self.font_notif,
                       fade_color, center=True)
             y += 28
+
+    def _render_tutorial_hint(self):
+        """Draw a tutorial hint bar just below the top bar."""
+        if not self._tutorial_active:
+            return
+        text, timer, color = self._tutorial_active
+        # fade in/out
+        if timer > TUTORIAL_HINT_DURATION - 0.4:
+            alpha = (TUTORIAL_HINT_DURATION - timer) / 0.4
+        elif timer < 1.0:
+            alpha = timer / 1.0
+        else:
+            alpha = 1.0
+        alpha = max(0.0, min(1.0, alpha))
+
+        # hint bar across top of game area
+        bar_h = 26
+        bar_y = GAME_AREA_Y + 2
+        bg = pygame.Surface((SCREEN_WIDTH, bar_h), pygame.SRCALPHA)
+        bg.fill((15, 20, 35, int(180 * alpha)))
+        self.screen.blit(bg, (0, bar_y))
+
+        # accent line at bottom
+        line_col = tuple(int(c * alpha) for c in color)
+        pygame.draw.line(self.screen, line_col, (0, bar_y + bar_h - 1),
+                         (SCREEN_WIDTH, bar_y + bar_h - 1))
+
+        # hint text centered
+        text_col = tuple(max(0, int(c * alpha)) for c in color)
+        draw_text(self.screen, text, SCREEN_WIDTH // 2, bar_y + bar_h // 2,
+                  self.font_sm, text_col, center=True)
 
     def _render_discovery_banner(self):
         """Draw a prominent center-screen formation discovery announcement."""

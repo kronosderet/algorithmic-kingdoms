@@ -843,6 +843,30 @@ DISCOVERY_NOTIFICATIONS = {
 }
 
 # Discovery event timing
+# ---------------------------------------------------------------------------
+# Tutorial hints — progressive first-run guidance
+# ---------------------------------------------------------------------------
+# Each hint: (id, condition_key, text, color)
+# Shown once, dismissed by click or timeout, tracked by id
+TUTORIAL_HINTS = [
+    ("select_th",     "start",        "Click the Tree of Life (center building) to see options",
+     (180, 220, 255)),
+    ("train_worker",  "selected_th",  "Press Q or click 'Train Gatherer' to create workers",
+     (180, 220, 255)),
+    ("gather_res",    "has_workers",   "Right-click trees or gold to gather resources",
+     (255, 220, 80)),
+    ("build_barracks", "has_gold",     "Select workers, then press 2 to build a War Nexus",
+     (140, 200, 255)),
+    ("train_military", "has_barracks", "Click the War Nexus, press T for Wardens, E for Rangers",
+     (140, 200, 255)),
+    ("defend",        "has_military",  "Right-click enemies to attack! Build towers (4) for defense",
+     (255, 140, 80)),
+    ("move_units",    "first_attack",  "Right-click ground to move units. Shift+click to queue",
+     (180, 180, 200)),
+]
+TUTORIAL_HINT_DURATION = 8.0    # seconds each hint stays visible
+TUTORIAL_HINT_COOLDOWN = 3.0    # seconds between hints
+
 DISCOVERY_SLOWMO_DURATION = 1.5    # seconds of slow-motion
 DISCOVERY_SLOWMO_FACTOR = 0.15     # game speed during slowmo (15%)
 DISCOVERY_BANNER_DURATION = 3.0    # seconds the banner stays visible
