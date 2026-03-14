@@ -355,7 +355,7 @@ class MainMenu:
                          (109, 82, 16, 60), width=1, rotation=rose_rot, n=100)
 
         # --- title with multi-layer glow ---
-        title_text = "Algorithmic Kingdoms"
+        title_text = "Resonance"
 
         # deep shadow
         s3 = self.font_title.render(title_text, True, (40, 30, 10))

@@ -1,19 +1,16 @@
-# Project Fractals — Algorithmic Kingdoms
+# Resonance
 
 ## Overview
 Zero-asset Pygame RTS with algorithmic art (polar roses, L-systems, golden spirals, Mandelbrot menus).
-Current version: v10_2. Working on v10 Economy Overhaul.
+Current version: v10_epsilon1. Working on v10 Economy Overhaul.
 
 ## Tech Stack
-- Python 3.10, Pygame 2.6.1, NumPy
+- Python 3.13, Pygame 2.6.1, NumPy
 - PyInstaller for builds
 - No external assets — all visuals generated algorithmically
 
 ## Common Commands
 ```bash
-# Must set PATH first in every bash session:
-export PATH="/c/Users/krtek/AppData/Local/Programs/Python/Python310:/c/Users/krtek/AppData/Local/Programs/Python/Python310/Scripts:$PATH"
-
 # Run the game
 python main.py
 
@@ -21,37 +18,41 @@ python main.py
 python -c "from game import Game; print('OK')"
 
 # Build executable
-python -m PyInstaller v10_2.spec --noconfirm
+python -m PyInstaller v10_epsilon1.spec --noconfirm
 ```
 
 ## Project Structure
 - `main.py` — Entry point
 - `constants.py` — All game constants, unit stats, building defs
-- `entities.py` — Units (Worker, Soldier, Archer) and Buildings (largest file ~106k)
+- `unit.py` — Unit logic, physics, movement, state machine
+- `building.py` — Building logic and rendering
+- `building_shapes.py` — Algorithmic building shape helpers
+- `entity_base.py` — Base entity class
+- `projectiles.py` — Arrow/projectile system
 - `game.py` — Main game loop, input handling, game logic
 - `gui.py` — In-game HUD, selection panels, resource display
-- `menu.py` — Main menu with algorithmic art background
+- `menu.py` — Main menu with Mandelbrot fractal background
 - `camera.py` — Camera pan/zoom
 - `pathfinding.py` — A* pathfinding
 - `enemy_ai.py` — Wave spawning, enemy targeting, counter-pick AI
-- `squads.py` — Squad formation system
+- `squads.py` — Squad formation system (Rose, Spiral, Sierpinski, Koch)
 - `event_logger.py` — Game event logging
 - `resources.py` — Resource manager
 - `game_map.py` — Procedural map generation
 - `utils.py` — Shared utilities
-- `visuals/` — Visual generation scripts
-- `GDD_Current_v9.md` — Full spec of implemented systems
+- `visuals/` — Visual PoC scripts
+- `GDD_Current_v10.md` — Full spec of implemented systems
 - `GDD_Roadmap.md` — Version pipeline and future design (v10-v12)
 
 ## Code Conventions
 - All game constants in `constants.py` (UPPER_SNAKE_CASE)
-- Entity classes in `entities.py` (Unit subclasses: Worker, Soldier, Archer; Building)
+- Unit classes in `unit.py` (Worker, Soldier, Archer)
+- Building class in `building.py`
 - Pygame coordinate system (top-left origin)
 - Colors as RGB tuples
 - No external asset files — everything is drawn with pygame.draw or algorithmic generation
 
 ## Important Notes
-- Python is NOT on bash PATH by default — always export PATH first
 - The game uses a tile-based map with pixel-level unit positioning
 - Enemy waves scale with difficulty and wave number
 - Git remote: github.com/kronosderet/algorithmic-kingdoms

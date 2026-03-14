@@ -13,7 +13,7 @@ from game import Game
 def main():
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption("Simple RTS")
+    pygame.display.set_caption("Resonance")
 
     while True:
         menu = MainMenu(screen)

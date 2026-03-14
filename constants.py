@@ -364,7 +364,7 @@ BUILDING_LABELS = {
     "iron_works": "IS", "forge": "FF",
 }
 
-# v10_7: Thematic display names — Algorithmic Kingdoms identity
+# v10_7: Thematic display names — Resonance identity
 DISPLAY_NAMES = {
     # Buildings
     "town_hall": "Tree of Life", "barracks": "War Nexus", "refinery": "Crucible",
