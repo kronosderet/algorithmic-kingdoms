@@ -19,7 +19,7 @@ from constants import (DIFFICULTY_PROFILES, ENEMY_DEFS, ENEMY_VETERAN_BONUS,
                        SCOUT_FLEE_CONTACT_TIME, PROBE_RETREAT_TIME,
                        NARRATIVE_CALM, NARRATIVE_CALM_FALSE,
                        NARRATIVE_ACTIVE, NARRATIVE_AFTERMATH)
-from utils import dist, clamp, tile_center
+from utils import dist, clamp, tile_center, pos_to_tile
 from entities import Unit, Building
 
 
@@ -619,7 +619,13 @@ class EnemyAI:
                                    prefer_economy=prefer_econ)
         if target:
             enemy.target_entity = target
-            enemy.state = "attacking"
+            # Path to target so enemies don't walk in straight lines
+            tc, tr = pos_to_tile(target.x, target.y)
+            enemy._path_to(tc, tr, game)
+            if enemy.path:
+                enemy.state = "moving"
+            else:
+                enemy.state = "attacking"
         game.enemy_units.append(enemy)
         return enemy
 

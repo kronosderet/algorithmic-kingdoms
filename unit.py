@@ -1018,6 +1018,8 @@ class Unit(Entity):
                 else:
                     self.station_target = None
                     self.state = "idle"
+            elif self.target_entity and self.target_entity.alive:
+                self.state = "attacking"
             else:
                 self.state = "idle"
             return

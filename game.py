@@ -21,6 +21,8 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE,
                        STANCE_HUNT, STANCE_NAMES, STANCE_COLORS,
                        FORMATION_POLAR_ROSE, FORMATION_GOLDEN_SPIRAL,
                        FORMATION_SIERPINSKI, FORMATION_KOCH, FORMATION_NAMES,
+                       FORMATION_ROTATION_SPEED,
+                       SPIRAL_C_MIN, SPIRAL_C_MAX, SPIRAL_C_STEP,
                        RESONANCE_KOCH_RADIUS_MULT, FORMATION_KOCH_RADIUS,
                        RESONANCE_DISSONANCE_RADIUS, RESONANCE_COLORS,
                        FORMATION_DISCOVERY, HARMONY_IDEAL_RATIOS,
@@ -231,9 +233,6 @@ class Game:
                 # v10_epsilon: Ctrl+scroll adjusts Spiral formation tightness
                 mods = pygame.key.get_mods()
                 if mods & pygame.KMOD_CTRL:
-                    from constants import (FORMATION_GOLDEN_SPIRAL, SPIRAL_C_MIN,
-                                           SPIRAL_C_MAX, SPIRAL_C_STEP,
-                                           RESONANCE_COLORS)
                     handled = False
                     for u in self.selected:
                         if not hasattr(u, 'unit_type'):
@@ -426,7 +425,6 @@ class Game:
 
         # v10_epsilon: R key — toggle Rose rotation (sweep combat)
         if key == pygame.K_r and combat_sel:
-            from constants import FORMATION_ROTATION_SPEED, FORMATION_POLAR_ROSE
             seen = set()
             for u in combat_sel:
                 sq = self.player_squad_mgr.get_squad(u)
@@ -439,8 +437,6 @@ class Game:
 
         # v10_epsilon: V key — formation ability (Sierpinski pulse / Koch contract)
         if key == pygame.K_v and combat_sel:
-            from constants import (FORMATION_SIERPINSKI, FORMATION_KOCH,
-                                   RESONANCE_COLORS)
             seen = set()
             for u in combat_sel:
                 sq = self.player_squad_mgr.get_squad(u)

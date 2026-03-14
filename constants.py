@@ -562,7 +562,7 @@ PHYSICS_WORKER_SNAP_DIST = 48.0  # px — workers snap to exact position at task
 ENERGY_PROFILES = {
     "soldier":        {"max": 100, "regen": 8,  "move_cost": 3.0, "sprint_cost": 12.0, "attack_cost": 6.0},
     "archer":         {"max": 80,  "regen": 10, "move_cost": 2.0, "sprint_cost": 10.0, "attack_cost": 4.0},
-    "worker":         {"max": 120, "regen": 12, "move_cost": 2.0, "sprint_cost": 8.0,  "gather_cost": 3.0, "attack_cost": 0},
+    "worker":         {"max": 120, "regen": 18, "move_cost": 1.0, "sprint_cost": 4.0,  "gather_cost": 2.0, "attack_cost": 0},
     "enemy_soldier":  {"max": 100, "regen": 7,  "move_cost": 3.0, "sprint_cost": 12.0, "attack_cost": 6.0},
     "enemy_archer":   {"max": 80,  "regen": 7,  "move_cost": 2.0, "sprint_cost": 10.0, "attack_cost": 4.0},
     "enemy_siege":    {"max": 150, "regen": 4,  "move_cost": 2.0, "sprint_cost": 6.0,  "attack_cost": 10.0},
