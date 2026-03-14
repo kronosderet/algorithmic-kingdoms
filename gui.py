@@ -27,7 +27,8 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, TOP_BAR_H, BOTTOM_PANEL_H,
                        RESONANCE_COLORS,
                        DISCOVERY_HINTS,
                        TOOLTIP_DATA, TOOLTIP_HOVER_DELAY, TOOLTIP_MAX_WIDTH,
-                       TOOLTIP_BG, TOOLTIP_BORDER, TOOLTIP_PADDING)
+                       TOOLTIP_BG, TOOLTIP_BORDER, TOOLTIP_PADDING,
+                       MSG_LOG_FADE, GAME_AREA_Y, GAME_AREA_H)
 from utils import draw_text, ruin_rebuild_cost
 from entities import Building, Unit
 
@@ -319,6 +320,9 @@ class GUI:
             context_py = py + squad_bar_h
         else:
             context_py = py
+
+        # message log mini-panel (always visible, right side)
+        self._draw_message_log_mini(surf, py, game)
 
         # v10_2: inspected enemy takes priority when nothing player-selected
         if not selected and inspected_enemy:
@@ -1377,7 +1381,128 @@ class GUI:
         if tooltip_key in TOOLTIP_DATA:
             self._register_tooltip(rect, tooltip_key)
 
+    # ------------------------------------------------------------------
+    # MESSAGE LOG — mini panel in bottom-right, click to expand
+    # ------------------------------------------------------------------
+    def _draw_message_log_mini(self, surf, py, game):
+        """Draw 3 most recent messages in the bottom-right of the panel."""
+        log = game._message_log
+        line_h = 15
+        n_show = 3
+        pad = 4
+        log_w = 280
+        log_h = n_show * line_h + pad * 2 + 14  # +14 for header
+        log_x = SCREEN_WIDTH - log_w - 8
+        log_y = py + 4
+
+        # store rect for click detection
+        self._msg_log_rect = pygame.Rect(log_x, log_y, log_w, log_h)
+
+        # subtle background
+        bg = pygame.Surface((log_w, log_h), pygame.SRCALPHA)
+        bg.fill((18, 18, 28, 160))
+        surf.blit(bg, (log_x, log_y))
+        pygame.draw.rect(surf, (50, 50, 65), (log_x, log_y, log_w, log_h), 1)
+
+        # header
+        header_col = (100, 100, 130) if not game.show_message_log else (160, 160, 200)
+        draw_text(surf, "Messages", log_x + pad, log_y + pad, self.font_xs, header_col)
+        if len(log) > n_show:
+            draw_text(surf, f"({len(log)})", log_x + 62, log_y + pad,
+                      self.font_xs, (70, 70, 90))
+
+        # recent messages
+        recent = log[-n_show:] if log else []
+        y = log_y + pad + 14
+        for text, msg_time, color in recent:
+            age = game.game_time - msg_time
+            if age > MSG_LOG_FADE:
+                fade = max(0.3, 1.0 - (age - MSG_LOG_FADE) / MSG_LOG_FADE)
+                faded = tuple(max(0, int(c * fade)) for c in color)
+            else:
+                faded = color
+            # truncate text to fit
+            max_tw = log_w - pad * 2 - 4
+            txt_surf = self.font_xs.render(str(text), True, faded)
+            if txt_surf.get_width() > max_tw:
+                t = str(text)
+                while txt_surf.get_width() > max_tw - 8 and len(t) > 5:
+                    t = t[:-1]
+                txt_surf = self.font_xs.render(t + "..", True, faded)
+            surf.blit(txt_surf, (log_x + pad + 2, y))
+            y += line_h
+
+        if not recent:
+            draw_text(surf, "-- No messages --", log_x + pad + 2, y,
+                      self.font_xs, (60, 60, 80))
+
+    def draw_message_log_full(self, surf, game):
+        """Draw the full message log as a center overlay when expanded."""
+        log = game._message_log
+        line_h = 18
+        pad = 10
+        max_lines = 20
+        log_w = 500
+        n_lines = min(max_lines, len(log))
+        log_h = n_lines * line_h + pad * 2 + 30  # +30 for header
+        if n_lines == 0:
+            log_h = 60
+
+        log_x = (SCREEN_WIDTH - log_w) // 2
+        log_y = GAME_AREA_Y + (GAME_AREA_H - log_h) // 2
+
+        # dark overlay behind
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 100))
+        surf.blit(overlay, (0, 0))
+
+        # panel background
+        bg = pygame.Surface((log_w, log_h), pygame.SRCALPHA)
+        bg.fill((20, 20, 32, 230))
+        surf.blit(bg, (log_x, log_y))
+        pygame.draw.rect(surf, (80, 80, 110), (log_x, log_y, log_w, log_h), 2)
+
+        # header
+        draw_text(surf, "Message Log", log_x + pad, log_y + pad,
+                  self.font_sm, (200, 200, 220))
+        draw_text(surf, f"{len(log)} messages -- click or [L] to close",
+                  log_x + log_w - pad - 220, log_y + pad + 2, self.font_xs, (100, 100, 130))
+
+        if not log:
+            draw_text(surf, "No messages yet.", log_x + pad, log_y + 40,
+                      self.font_sm, (80, 80, 100))
+            return
+
+        # show recent messages (newest at bottom)
+        recent = log[-max_lines:]
+        y = log_y + pad + 24
+        for text, msg_time, color in recent:
+            age = game.game_time - msg_time
+            if age > MSG_LOG_FADE * 2:
+                fade = max(0.25, 1.0 - (age - MSG_LOG_FADE * 2) / (MSG_LOG_FADE * 2))
+                faded = tuple(max(0, int(c * fade)) for c in color)
+            else:
+                faded = color
+            # timestamp
+            mins = int(msg_time) // 60
+            secs = int(msg_time) % 60
+            ts = f"{mins:02d}:{secs:02d}"
+            draw_text(surf, ts, log_x + pad, y, self.font_xs, (70, 70, 90))
+            # message
+            max_tw = log_w - 60
+            txt_surf = self.font_xs.render(str(text), True, faded)
+            if txt_surf.get_width() > max_tw:
+                t = str(text)
+                while txt_surf.get_width() > max_tw - 8 and len(t) > 5:
+                    t = t[:-1]
+                txt_surf = self.font_xs.render(t + "..", True, faded)
+            surf.blit(txt_surf, (log_x + pad + 44, y))
+            y += line_h
+
     def handle_click(self, pos):
+        # check message log mini-panel click
+        if hasattr(self, '_msg_log_rect') and self._msg_log_rect.collidepoint(pos):
+            return "toggle_log"
         for rect, label, callback, enabled in self.buttons:
             if rect.collidepoint(pos) and enabled:
                 callback()

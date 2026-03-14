@@ -6,7 +6,7 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE,
                        MINIMAP_SIZE, MINIMAP_MARGIN, MINIMAP_X, MINIMAP_Y,
                        TERRAIN_GRASS, TERRAIN_TREE, TERRAIN_GOLD, TERRAIN_IRON, TERRAIN_STONE,
                        TERRAIN_COLORS, BUILDING_DEFS, BUILDING_LABELS,
-                       COL_BG, COL_SELECT, COL_TEXT, COL_GUI_BG, COL_GUI_BORDER,
+                       COL_BG, COL_SELECT, COL_TEXT,
                        DIFFICULTY_PROFILES,
                        HEAL_RATE_NEAR_TH, HEAL_RADIUS_TH,
                        GROUND_ARROW_MAX,
@@ -36,7 +36,7 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE,
                        CMD_RING_COLOR_MOVE, CMD_RING_COLOR_ATTACK,
                        CMD_RING_COLOR_GATHER, CMD_RING_COLOR_BUILD,
                        CMD_RING_COLOR_RALLY,
-                       MSG_LOG_MAX, MSG_LOG_VISIBLE, MSG_LOG_FADE,
+                       MSG_LOG_MAX, MSG_LOG_FADE,
                        MSG_COL_INFO, MSG_COL_DISCOVERY, MSG_COL_ATTACK,
                        MSG_COL_ECONOMY, MSG_COL_COMMAND,
                        DISCOVERY_SLOWMO_DURATION, DISCOVERY_SLOWMO_FACTOR,
@@ -534,9 +534,18 @@ class Game:
         if self._minimap_click(sx, sy):
             return
 
+        # close full log overlay if open
+        if self.show_message_log:
+            self.show_message_log = False
+            return
+
         # check GUI first
         if sy >= SCREEN_HEIGHT - BOTTOM_PANEL_H:
-            if self.gui.handle_click(pos):
+            result = self.gui.handle_click(pos)
+            if result == "toggle_log":
+                self.show_message_log = not self.show_message_log
+                return
+            if result:
                 return
 
         if sy < GAME_AREA_Y or sy >= GAME_AREA_Y + GAME_AREA_H:
@@ -1535,14 +1544,9 @@ class Game:
         # notifications
         self._render_notifications()
 
-        # message log panel
+        # full message log overlay (when expanded)
         if self.show_message_log:
-            self._render_message_log()
-        elif self._message_log:
-            # subtle hint that log exists with unread count
-            n = len(self._message_log)
-            draw_text(self.screen, f"[L] Log ({n})", 10,
-                      SCREEN_HEIGHT - BOTTOM_PANEL_H - 18, self.font_xs, (70, 70, 90))
+            self.gui.draw_message_log_full(self.screen, self)
 
         # discovery banner (major event announcement)
         if self._discovery_banner:
@@ -1650,66 +1654,6 @@ class Game:
                 pygame.draw.line(ring_surf, (*color, cross_a),
                                  (cx, cy - cr), (cx, cy + cr), max(1, int(z)))
             self.screen.blit(ring_surf, (sx - radius - 2, sy - radius - 2))
-
-    def _render_message_log(self):
-        """Draw the collapsible message log panel on the left side."""
-        line_h = 18
-        pad = 6
-        log_w = 340
-        n_lines = min(MSG_LOG_VISIBLE, len(self._message_log))
-        if n_lines == 0:
-            # draw empty hint
-            log_h = line_h + pad * 2
-            log_x = 8
-            log_y = SCREEN_HEIGHT - BOTTOM_PANEL_H - log_h - 4
-            bg = pygame.Surface((log_w, log_h), pygame.SRCALPHA)
-            bg.fill((20, 20, 30, 180))
-            self.screen.blit(bg, (log_x, log_y))
-            pygame.draw.rect(self.screen, COL_GUI_BORDER, (log_x, log_y, log_w, log_h), 1)
-            draw_text(self.screen, "-- No messages --", log_x + pad, log_y + pad,
-                      self.font_xs, (100, 100, 120))
-            return
-
-        log_h = n_lines * line_h + pad * 2
-        log_x = 8
-        log_y = SCREEN_HEIGHT - BOTTOM_PANEL_H - log_h - 4
-
-        # semi-transparent background
-        bg = pygame.Surface((log_w, log_h), pygame.SRCALPHA)
-        bg.fill((20, 20, 30, 180))
-        self.screen.blit(bg, (log_x, log_y))
-        pygame.draw.rect(self.screen, COL_GUI_BORDER, (log_x, log_y, log_w, log_h), 1)
-
-        # header
-        draw_text(self.screen, "[L] Log", log_x + log_w - 52, log_y - 14,
-                  self.font_xs, (100, 100, 140))
-
-        # draw recent messages (newest at bottom)
-        recent = self._message_log[-n_lines:]
-        y = log_y + pad
-        for text, msg_time, color in recent:
-            age = self.game_time - msg_time
-            # fade old messages
-            if age > MSG_LOG_FADE:
-                fade = max(0.3, 1.0 - (age - MSG_LOG_FADE) / MSG_LOG_FADE)
-                faded = tuple(max(0, int(c * fade)) for c in color)
-            else:
-                faded = color
-            # timestamp prefix
-            mins = int(msg_time) // 60
-            secs = int(msg_time) % 60
-            prefix = f"{mins:02d}:{secs:02d}"
-            draw_text(self.screen, prefix, log_x + pad, y, self.font_xs, (80, 80, 100))
-            # message text — truncate if too long
-            max_text_w = log_w - 60
-            txt_surf = self.font_xs.render(text, True, faded)
-            if txt_surf.get_width() > max_text_w:
-                # truncate with ellipsis
-                while txt_surf.get_width() > max_text_w - 10 and len(text) > 5:
-                    text = text[:-1]
-                txt_surf = self.font_xs.render(text + "..", True, faded)
-            self.screen.blit(txt_surf, (log_x + pad + 44, y))
-            y += line_h
 
     def _render_map(self):
         vr = self.camera.visible_rect()
