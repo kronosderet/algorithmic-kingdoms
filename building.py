@@ -21,7 +21,8 @@ from constants import (UNIT_DEFS, BUILDING_DEFS, BUILDING_COLORS,
                        FORGE_STEEL_YIELD, FORGE_TIME,
                        SMELTER_REFINERY_BONUS, FORGE_WORKER_SPEED_BONUS,
                        SENTINEL_CRY_COOLDOWN, SENTINEL_CRY_RADIUS,
-                       SENTINEL_CRY_BUFF_DURATION, SENTINEL_CRY_PULSE_DURATION)
+                       SENTINEL_CRY_BUFF_DURATION, SENTINEL_CRY_PULSE_DURATION,
+                       MSG_COL_ECONOMY, display_name)
 from entity_base import Entity
 from building_shapes import (_l_system_expand, _l_system_render, _sierpinski,
                              _koch_snowflake,
@@ -385,6 +386,7 @@ class Building(Entity):
             game.game_time, "TRAINING_STARTED",
             game.enemy_ai.wave_number,
             unit_type, self.building_type)
+        game.add_message(f"Training {display_name(unit_type)}", MSG_COL_ECONOMY)
         if len(self.train_queue) == 1:
             self.train_time = d["train"]
             self.train_progress = 0.0

@@ -6,7 +6,7 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE,
                        MINIMAP_SIZE, MINIMAP_MARGIN, MINIMAP_X, MINIMAP_Y,
                        TERRAIN_GRASS, TERRAIN_TREE, TERRAIN_GOLD, TERRAIN_IRON, TERRAIN_STONE,
                        TERRAIN_COLORS, BUILDING_DEFS, BUILDING_LABELS,
-                       COL_BG, COL_SELECT, COL_TEXT,
+                       COL_BG, COL_SELECT, COL_TEXT, COL_GUI_BG, COL_GUI_BORDER,
                        DIFFICULTY_PROFILES,
                        HEAL_RATE_NEAR_TH, HEAL_RADIUS_TH,
                        GROUND_ARROW_MAX,
@@ -32,6 +32,13 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE,
                        ENTITY_TOOLTIP_RADIUS,
                        ARRIVAL_CHECK_RADIUS, ARRIVAL_CHECK_TIMEOUT,
                        PENDING_GROUP_MIN, FORMATION_MIN_VIABLE,
+                       CMD_RING_DURATION, CMD_RING_MAX_RADIUS,
+                       CMD_RING_COLOR_MOVE, CMD_RING_COLOR_ATTACK,
+                       CMD_RING_COLOR_GATHER, CMD_RING_COLOR_BUILD,
+                       CMD_RING_COLOR_RALLY,
+                       MSG_LOG_MAX, MSG_LOG_VISIBLE, MSG_LOG_FADE,
+                       MSG_COL_INFO, MSG_COL_DISCOVERY, MSG_COL_ATTACK,
+                       MSG_COL_ECONOMY, MSG_COL_COMMAND,
                        display_name)
 from utils import dist, pos_to_tile, draw_text, ruin_rebuild_cost
 from game_map import GameMap
@@ -112,6 +119,13 @@ class Game:
         # notifications
         self._notifications = []  # list of [text, timer, color]
 
+        # command confirmation effects (world-space expanding rings)
+        self._cmd_effects = []  # list of [wx, wy, timer, color_rgba]
+
+        # message log (persistent, color-coded)
+        self._message_log: list[list] = []  # [[text, game_time, color], ...]
+        self.show_message_log = False  # toggle with L key
+
         # wave clear tracking
         self._had_enemies = False
 
@@ -179,8 +193,19 @@ class Game:
             self.player_units.append(w)
 
     def add_notification(self, text, duration=3.0, color=(255, 255, 100)):
-        """Add a floating notification message."""
+        """Add a floating notification message + persistent log entry."""
         self._notifications.append([text, duration, color])
+        self.add_message(text, color)
+
+    def add_cmd_effect(self, wx: float, wy: float, color: tuple = CMD_RING_COLOR_MOVE):
+        """Add an expanding ring at world position to confirm a command."""
+        self._cmd_effects.append([wx, wy, CMD_RING_DURATION, color])
+
+    def add_message(self, text: str, color: tuple = MSG_COL_INFO):
+        """Add a persistent message to the in-game log."""
+        self._message_log.append([text, self.game_time, color])
+        if len(self._message_log) > MSG_LOG_MAX:
+            self._message_log.pop(0)
 
     def run(self):
         while self.running:
@@ -450,6 +475,10 @@ class Game:
                             self.add_notification("Koch contract!",
                                                   1.0, RESONANCE_COLORS[FORMATION_KOCH])
 
+        # L key: toggle message log panel
+        if key == pygame.K_l:
+            self.show_message_log = not self.show_message_log
+
         # build hotkeys (need worker selected)
         if workers_selected:
             if key == pygame.K_1:
@@ -680,6 +709,7 @@ class Game:
                 for b in buildings_sel:
                     b.rally_point = (wx, wy)
                 self.add_notification("Rally point set", 1.5, RALLY_POINT_COLOR)
+                self.add_cmd_effect(wx, wy, CMD_RING_COLOR_RALLY)
             return
 
         # check enemy at position
@@ -689,6 +719,7 @@ class Game:
             if dist(wx, wy, e.x, e.y) < SELECT_RADIUS:
                 for u in units_sel:
                     u.command_attack(e, self)
+                self.add_cmd_effect(e.x, e.y, CMD_RING_COLOR_ATTACK)
                 return
 
         # check resource tile
@@ -702,6 +733,7 @@ class Game:
             others = [u for u in units_sel if u.unit_type != "worker"]
             for u in others:
                 u.command_move(wx, wy, self)
+            self.add_cmd_effect(wx, wy, CMD_RING_COLOR_GATHER)
             return
 
         # check player building -- ruin rebuild, resume build, or repair
@@ -758,6 +790,7 @@ class Game:
                     handled = True
             # else: fully built and healthy -- fall through to move
             if handled:
+                self.add_cmd_effect(wx, wy, CMD_RING_COLOR_BUILD)
                 others = [u for u in units_sel if u.unit_type != "worker"]
                 for u in others:
                     u.command_move(wx, wy, self)
@@ -765,6 +798,7 @@ class Game:
 
         # v10_beta: formation-aware move — squads arrive in formation
         self._formation_move_selected(units_sel, wx, wy, queued=queued)
+        self.add_cmd_effect(wx, wy, CMD_RING_COLOR_MOVE)
 
     def _formation_move_selected(self, units, wx, wy, queued=False):
         """v10_beta: Move selected units. Squads move in formation;
@@ -917,6 +951,8 @@ class Game:
         b = Building(col, row, btype, "player")
         self.player_buildings.append(b)
         self.placing_building = None
+        self.add_cmd_effect(b.x + TILE_SIZE, b.y + TILE_SIZE, CMD_RING_COLOR_BUILD)
+        self.add_message(f"{display_name(btype)} placed", MSG_COL_COMMAND)
         self.logger.log(
             self.game_time, "BUILDING_PLACED",
             self.enemy_ai.wave_number,
@@ -1328,6 +1364,10 @@ class Game:
         self._notifications = [[t, timer - dt, c]
                                 for t, timer, c in self._notifications if timer - dt > 0]
 
+        # update command confirmation effects
+        self._cmd_effects = [[wx, wy, t - dt, col]
+                              for wx, wy, t, col in self._cmd_effects if t - dt > 0]
+
         # check game over
         if not self.player_buildings:
             self.game_over = True
@@ -1451,6 +1491,7 @@ class Game:
         self._render_rally_points()     # v10_1: rally point flags
         self._render_select_rect()
         self._render_enemy_inspect()    # v10_2: red ring on inspected enemy
+        self._render_cmd_effects()      # command confirmation rings
 
         self.screen.set_clip(None)
 
@@ -1473,6 +1514,15 @@ class Game:
 
         # notifications
         self._render_notifications()
+
+        # message log panel
+        if self.show_message_log:
+            self._render_message_log()
+        elif self._message_log:
+            # subtle hint that log exists with unread count
+            n = len(self._message_log)
+            draw_text(self.screen, f"[L] Log ({n})", 10,
+                      SCREEN_HEIGHT - BOTTOM_PANEL_H - 18, self.font_xs, (70, 70, 90))
 
         # v10_alpha: Draw tooltip overlay (last, on top of everything)
         self.gui.draw_tooltip(self.screen)
@@ -1499,6 +1549,91 @@ class Game:
             draw_text(self.screen, text, SCREEN_WIDTH // 2, y, self.font_notif,
                       fade_color, center=True)
             y += 28
+
+    def _render_cmd_effects(self):
+        """Draw expanding ring confirmations at command target positions."""
+        z = self.camera.zoom
+        for wx, wy, timer, rgba in self._cmd_effects:
+            sx, sy = self.camera.world_to_screen(wx, wy)
+            progress = 1.0 - timer / CMD_RING_DURATION  # 0 -> 1
+            radius = max(2, int((4 + CMD_RING_MAX_RADIUS * progress) * z))
+            alpha = max(0, min(255, int(rgba[3] * timer / CMD_RING_DURATION)))
+            color = (rgba[0], rgba[1], rgba[2])
+            # outer ring
+            thickness = max(1, int(2 * z * (1.0 - progress * 0.5)))
+            ring_surf = pygame.Surface((radius * 2 + 4, radius * 2 + 4), pygame.SRCALPHA)
+            pygame.draw.circle(ring_surf, (*color, alpha),
+                               (radius + 2, radius + 2), radius, thickness)
+            # small cross at center (only early in animation)
+            if progress < 0.4:
+                cross_a = max(0, int(alpha * (1.0 - progress / 0.4)))
+                cr = max(2, int(4 * z))
+                cx, cy = radius + 2, radius + 2
+                pygame.draw.line(ring_surf, (*color, cross_a),
+                                 (cx - cr, cy), (cx + cr, cy), max(1, int(z)))
+                pygame.draw.line(ring_surf, (*color, cross_a),
+                                 (cx, cy - cr), (cx, cy + cr), max(1, int(z)))
+            self.screen.blit(ring_surf, (sx - radius - 2, sy - radius - 2))
+
+    def _render_message_log(self):
+        """Draw the collapsible message log panel on the left side."""
+        line_h = 18
+        pad = 6
+        log_w = 340
+        n_lines = min(MSG_LOG_VISIBLE, len(self._message_log))
+        if n_lines == 0:
+            # draw empty hint
+            log_h = line_h + pad * 2
+            log_x = 8
+            log_y = SCREEN_HEIGHT - BOTTOM_PANEL_H - log_h - 4
+            bg = pygame.Surface((log_w, log_h), pygame.SRCALPHA)
+            bg.fill((20, 20, 30, 180))
+            self.screen.blit(bg, (log_x, log_y))
+            pygame.draw.rect(self.screen, COL_GUI_BORDER, (log_x, log_y, log_w, log_h), 1)
+            draw_text(self.screen, "-- No messages --", log_x + pad, log_y + pad,
+                      self.font_xs, (100, 100, 120))
+            return
+
+        log_h = n_lines * line_h + pad * 2
+        log_x = 8
+        log_y = SCREEN_HEIGHT - BOTTOM_PANEL_H - log_h - 4
+
+        # semi-transparent background
+        bg = pygame.Surface((log_w, log_h), pygame.SRCALPHA)
+        bg.fill((20, 20, 30, 180))
+        self.screen.blit(bg, (log_x, log_y))
+        pygame.draw.rect(self.screen, COL_GUI_BORDER, (log_x, log_y, log_w, log_h), 1)
+
+        # header
+        draw_text(self.screen, "[L] Log", log_x + log_w - 52, log_y - 14,
+                  self.font_xs, (100, 100, 140))
+
+        # draw recent messages (newest at bottom)
+        recent = self._message_log[-n_lines:]
+        y = log_y + pad
+        for text, msg_time, color in recent:
+            age = self.game_time - msg_time
+            # fade old messages
+            if age > MSG_LOG_FADE:
+                fade = max(0.3, 1.0 - (age - MSG_LOG_FADE) / MSG_LOG_FADE)
+                faded = tuple(max(0, int(c * fade)) for c in color)
+            else:
+                faded = color
+            # timestamp prefix
+            mins = int(msg_time) // 60
+            secs = int(msg_time) % 60
+            prefix = f"{mins:02d}:{secs:02d}"
+            draw_text(self.screen, prefix, log_x + pad, y, self.font_xs, (80, 80, 100))
+            # message text — truncate if too long
+            max_text_w = log_w - 60
+            txt_surf = self.font_xs.render(text, True, faded)
+            if txt_surf.get_width() > max_text_w:
+                # truncate with ellipsis
+                while txt_surf.get_width() > max_text_w - 10 and len(text) > 5:
+                    text = text[:-1]
+                txt_surf = self.font_xs.render(text + "..", True, faded)
+            self.screen.blit(txt_surf, (log_x + pad + 44, y))
+            y += line_h
 
     def _render_map(self):
         vr = self.camera.visible_rect()

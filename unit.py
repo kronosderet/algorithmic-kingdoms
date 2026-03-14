@@ -59,7 +59,8 @@ from constants import (UNIT_DEFS, ENEMY_DEFS, UNIT_COLORS, ENEMY_COLORS,
                        ENERGY_EXHAUSTED_SPEED, ENERGY_EXHAUSTED_THRESHOLD,
                        ENERGY_TIRED_COOLDOWN_MULT, ENERGY_IDLE_REGEN_MULT,
                        ENERGY_FLEE_DRAIN_MULT, ENERGY_CARRY_REGEN_MULT,
-                       ENERGY_CARRY_SPEED_MULT, HARMONY_ENERGY_MULT)
+                       ENERGY_CARRY_SPEED_MULT, HARMONY_ENERGY_MULT,
+                       MSG_COL_ECONOMY, display_name)
 from utils import dist, pos_to_tile, tile_center, draw_text
 from pathfinding import a_star
 from entity_base import Entity, _process_combat_hit
@@ -1340,6 +1341,7 @@ class Unit(Entity):
                 game.enemy_ai.wave_number,
                 b.building_type, "", "", 0,
                 f"{b.build_time:.0f}s build")
+            game.add_message(f"{display_name(b.building_type)} complete", MSG_COL_ECONOMY)
             self.state = "idle"
             self.build_target = None
 

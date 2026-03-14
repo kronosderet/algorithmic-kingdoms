@@ -3,7 +3,8 @@ import random
 import pygame
 from constants import (COL_HEALTH_BG, COL_HEALTH, COL_ENEMY_HEALTH,
                        XP_PER_HIT, XP_KILL_BONUS,
-                       ENEMY_XP_PER_HIT, ENEMY_XP_KILL_BONUS)
+                       ENEMY_XP_PER_HIT, ENEMY_XP_KILL_BONUS,
+                       MSG_COL_ATTACK, display_name)
 from utils import pos_to_tile
 
 
@@ -54,6 +55,8 @@ def _process_combat_hit(attacker, target, game, source_label):
                             target.unit_type,
                             f"rank_{attacker.rank}" if attacker else "",
                             bounty, f"{source_label} {owner}")
+            game.add_message(f"Enemy {display_name(target.unit_type)} slain (+{bounty}g)",
+                             MSG_COL_ATTACK)
     # player unit lost (enemy kills player unit)
     if not target.alive and target.owner == "player" and is_unit:
         killer = attacker.unit_type if attacker else source_label
@@ -62,6 +65,12 @@ def _process_combat_hit(attacker, target, game, source_label):
                         target.unit_type, killer,
                         f"rank_{target.rank}",
                         target.xp, source_label)
+        game.add_message(f"{display_name(target.unit_type)} lost to {display_name(killer)}",
+                         MSG_COL_ATTACK)
+    # building destroyed message
+    if is_building and not target.alive:
+        game.add_message(f"{display_name(target.building_type)} destroyed!",
+                         MSG_COL_ATTACK)
 
 
 # ---------------------------------------------------------------------------

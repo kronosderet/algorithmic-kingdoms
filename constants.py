@@ -1027,6 +1027,29 @@ COL_PLACE_VALID = (0, 200, 0, 80)
 COL_PLACE_INVALID = (200, 0, 0, 80)
 
 # ---------------------------------------------------------------------------
+# Command confirmation effects
+# ---------------------------------------------------------------------------
+CMD_RING_DURATION = 0.5        # seconds for move ring to expand and fade
+CMD_RING_MAX_RADIUS = 18       # max expansion radius
+CMD_RING_COLOR_MOVE = (100, 255, 100, 200)      # green ring for move
+CMD_RING_COLOR_ATTACK = (255, 80, 80, 200)       # red ring for attack
+CMD_RING_COLOR_GATHER = (255, 215, 0, 200)       # gold ring for gather
+CMD_RING_COLOR_BUILD = (100, 180, 255, 200)       # blue ring for build
+CMD_RING_COLOR_RALLY = (255, 160, 0, 200)         # orange for rally point
+
+# ---------------------------------------------------------------------------
+# Message log
+# ---------------------------------------------------------------------------
+MSG_LOG_MAX = 80               # max messages kept in buffer
+MSG_LOG_VISIBLE = 8            # lines visible when expanded
+MSG_LOG_FADE = 6.0             # seconds before old messages start fading
+MSG_COL_INFO = (200, 200, 200)    # white — general info
+MSG_COL_DISCOVERY = (255, 220, 80) # gold — formation/unlock discoveries
+MSG_COL_ATTACK = (255, 80, 80)     # red — enemy attacks, unit deaths
+MSG_COL_ECONOMY = (80, 200, 80)    # green — economy events
+MSG_COL_COMMAND = (140, 180, 255)   # blue — player commands
+
+# ---------------------------------------------------------------------------
 # v10_alpha: Tooltip / Info Card System
 # ---------------------------------------------------------------------------
 TOOLTIP_HOVER_DELAY = 0.4  # seconds before tooltip appears
