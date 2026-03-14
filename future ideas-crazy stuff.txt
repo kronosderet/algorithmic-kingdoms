@@ -2,4 +2,78 @@ the magic system ... no mana or icons, its singing. Im plannning to use procedur
 
 the game and gui itself should open into aburd deapths from a simple shape and game to play, open with strange main building the tree of life and just collect resource, but as the game progreses, the controls and mechanics unlock at natural breakpoints like ading a multiplicator factor to fractals, the next step and you just dont know where it ends, like that damned Noita game, just absurd deep gaming if you survive long enough
 
-this game should be combat math. Simple as that, it should teach the player how to use math and how powerfull force multiplyer it truly is. How deep it truly goes. And the paradox of it being nonexistent enywhere in nature, existing only in minds, but ruling the universe nontheless. It is inescapable as gravity and maybe even more mysterious. Its harmony and chaos. Harmony in chaos, chaos in harmony. Eternal paradox that enables existence. That should be the absolute theme of the game. 
+this game should be combat math. Simple as that, it should teach the player how to use math and how powerfull force multiplyer it truly is. How deep it truly goes. And the paradox of it being nonexistent enywhere in nature, existing only in minds, but ruling the universe nontheless. It is inescapable as gravity and maybe even more mysterious. Its harmony and chaos. Harmony in chaos, chaos in harmony. Eternal paradox that enables existence. That should be the absolute theme of the game.
+
+---
+PLAYTEST NOTES — Wife's 3 easy-mode sessions (2026-03-14)
+Source: game logs + verbal feedback. All 3 ended in defeat.
+---
+
+1. MAP SCALE BY DIFFICULTY
+   Smaller map and shorter campaign for easy, larger map and longer story for hard.
+   The dimensions are binary (128×128) so the scale is easy — 64×64 easy, 128×128 medium, 256×256 hard.
+   Fewer incidents required on easy already exists, but physical map size should shrink too.
+
+2. !! EXPLAIN BASIC CONTROLS ON START !!
+   No tutorial, no hints. Game 3 she ran 4 workers on wood for 5 minutes and built nothing.
+   At minimum: first-run overlay or progressive hints ("Click Town Hall to train units",
+   "Build a War Nexus before the first attack", "Right-click to move selected units").
+   Could tie into the "mechanics unlock at natural breakpoints" vision from above.
+
+3. VISUAL CONFIRMATION OF COMMANDS (sound later)
+   When you issue a command (move, gather, build, train), there's no feedback that it registered.
+   Need: click marker on ground for move, gather icon flash, build placement sound, train queue pulse.
+   Visual first, sound layer added later with the procedural audio system.
+
+4. FORMATION DISCOVERY MUST BE AN EVENT
+   She completely lost her first discovered resonance — the notification disappeared and she didn't
+   understand what happened. Discovery needs to be a major event:
+   - Camera pause/slow-mo moment
+   - Persistent UI element showing what was discovered
+   - Maybe a short "formation preview" animation
+   - Discovery log entry in the message history
+
+5. LOG OF SYSTEM MESSAGES (color coded)
+   No message history. Notifications flash and vanish. Need a scrollable message log panel
+   (collapsible) with color-coded entries: white=info, gold=discovery, red=attack, green=economy.
+   The event_logger already tracks everything — just needs a GUI surface.
+
+6. FIX EDGE SCROLLING — AREA TOO THIN, BOTTOM PANEL TRIGGERS IT
+   Edge scroll margin is 15px (EDGE_SCROLL_MARGIN). Moving the mouse to the bottom panel
+   or minimap area triggers unwanted camera panning. Jarring and frustrating.
+   Fix: increase margin to ~25px AND exclude the bottom panel rect and minimap rect from
+   edge scroll detection. Also exclude top bar.
+
+7. MAIN TAKEAWAY: FOCUS ON UX AND USER JOURNEY
+   The game has deep systems but the surface is hostile to new players. The whole experience
+   from "start game" to "survive first incident" needs to be a guided journey.
+   This aligns with vision note #2 above: "open with simple shape, deepen as you progress."
+
+8. LIKES: fractals, originality, Tree of Life development idea
+   The visual identity lands. The Mandelbrot menu, fractal buildings, algorithmic art —
+   all good. Tree of Life as the expanding hub building resonates (pun intended).
+   This is our differentiator. Double down on it.
+
+9. RAINBOW UNIT COLOR SCHEME — 7 COLORS FOR 7 UNIT TYPES
+   Current colors: workers blue, soldiers red, archers green — too easy to confuse with enemies.
+   New scheme based on 7 rainbow colors (for the future 7 player unit types):
+     Violet   — Gatherer (worker)
+     Indigo   — Warden (soldier)
+     Blue     — Ranger (archer)
+     Green    — [future unit 4]
+     Yellow   — [future unit 5]
+     Orange   — [future unit 6]
+     Red      — [future unit 7 / Sage?]
+   Enemy colors should MIRROR this — same hue but desaturated/darkened/shifted toward black,
+   so you can tell friend from foe at a glance by saturation, not just color.
+   This replaces the current arbitrary color assignment.
+
+---
+LOG ANALYSIS NOTES (from the 3 sessions):
+- Game 3: zero buildings, zero training, all wood — suggests controls/UI not discoverable
+- Worker flee/resume spam: 40+ events per incident, workers oscillating near enemies
+- Enemies rank up to Corporal by pounding TH unchallenged — feels unfair for new players
+- No towers built in any game, no formations discovered, no squads created
+- Idle military doesn't auto-intercept enemies attacking TH (aggro range too short?)
+- Starting gold unspent in Game 3 (300g at death) — she didn't know how/what to build
+---

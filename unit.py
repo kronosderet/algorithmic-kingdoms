@@ -2057,7 +2057,7 @@ class Unit(Entity):
 
     def _draw_worker_shape(self, surf, sx, sy, r, z, is_enemy):
         """Draw worker as rounded hexagon (superellipse) with self-similar inners."""
-        color = (25, 35, 55) if is_enemy else (50, 130, 220)  # v10g2: enemy near-black
+        color = (25, 35, 55) if is_enemy else (138, 43, 226)  # Violet — Gatherer
         rotation = math.pi / 6
         n_pts = 36 if r < 8 else 48
 
@@ -2080,7 +2080,7 @@ class Unit(Entity):
 
     def _draw_soldier_shape(self, surf, sx, sy, r, z, is_enemy):
         """Draw soldier as blade-like polar rose (v10g2)."""
-        color = (35, 12, 12) if is_enemy else (200, 60, 60)
+        color = (30, 5, 55) if is_enemy else (75, 0, 180)  # Indigo — Warden
         k = 2.5  # 5 petals
         rotation = -math.pi / 2  # petal points up
         n_pts = 36 if r < 8 else 60
@@ -2100,11 +2100,11 @@ class Unit(Entity):
                 lambda t: self._blade_func(t, k) * (1.0 + 0.12 * math.sin(13 * t)),
                 n_pts, rotation)
             if len(jagged) >= 3:
-                pygame.draw.polygon(surf, (80, 10, 10), jagged, max(1, int(2 * z)))
+                pygame.draw.polygon(surf, (50, 10, 80), jagged, max(1, int(2 * z)))
 
     def _draw_archer_shape(self, surf, sx, sy, r, z, is_enemy):
         """Draw archer as golden spiral bow with filled body (v10g2: enhanced visibility)."""
-        color = (35, 10, 30) if is_enemy else (50, 190, 50)  # v10g2: enemy near-black
+        color = (12, 30, 75) if is_enemy else (30, 100, 255)  # Blue — Ranger
         phi = (1 + math.sqrt(5)) / 2
         b = math.log(phi) / (math.pi / 2)
         n_arc = 30 if r < 10 else 50

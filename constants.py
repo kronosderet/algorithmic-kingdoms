@@ -7,7 +7,7 @@ FPS = 60
 TILE_SIZE = 32
 MAP_COLS, MAP_ROWS = 128, 128
 CAMERA_SPEED = 400
-EDGE_SCROLL_MARGIN = 15
+EDGE_SCROLL_MARGIN = 25
 ZOOM_MIN = 0.4
 ZOOM_MAX = 2.0
 ZOOM_STEP = 0.1
@@ -395,10 +395,15 @@ UNIT_DEFS = {
     "archer": {"gold": 55, "wood": 25, "steel": 4, "hp": 75, "speed": 75, "attack": 9, "range": 170, "cd": 1.4, "train": 11},
 }
 
-UNIT_COLORS = {
-    "worker": (50, 130, 220),
-    "soldier": (200, 60, 60),
-    "archer": (50, 190, 50),
+UNIT_COLORS = {  # Rainbow scheme: 7 colors for 7 unit types (ROYGBIV reversed)
+    "worker":  (138, 43, 226),   # Violet — Gatherer
+    "soldier": (75, 0, 180),     # Indigo — Warden
+    "archer":  (30, 100, 255),   # Blue — Ranger
+    # Future unit types:
+    # unit_4:  (50, 205, 50),    # Green
+    # unit_5:  (255, 220, 50),   # Yellow
+    # unit_6:  (255, 140, 0),    # Orange
+    # unit_7:  (220, 20, 60),    # Red — Sage
 }
 
 UNIT_LABELS = {"worker": "G", "soldier": "W", "archer": "R",
@@ -424,11 +429,11 @@ ENEMY_DEFS = {
     "enemy_warlock":      {"hp": 90,  "speed": 45, "attack": 15, "range": 100, "cd": 3.0, "aoe_radius": 30},
 }
 
-ENEMY_COLORS = {  # v10g2: black-dominant with faint color accents
-    "enemy_soldier": (35, 12, 12),
-    "enemy_archer": (35, 10, 30),
-    "enemy_siege": (50, 25, 5),
-    "enemy_elite": (50, 10, 25),
+ENEMY_COLORS = {  # Dark mirror of player rainbow — same hue, desaturated/darkened
+    "enemy_soldier":      (30, 5, 55),    # dark indigo (mirrors Warden)
+    "enemy_archer":       (12, 30, 75),   # dark blue (mirrors Ranger)
+    "enemy_siege":        (50, 25, 5),    # dark amber
+    "enemy_elite":        (50, 10, 25),   # dark crimson
     # v10_6: new enemy type colors
     "enemy_sapper":       (45, 40, 10),   # dark olive
     "enemy_shieldbearer": (40, 40, 45),   # dark steel
