@@ -527,13 +527,30 @@ FORMATION_SPRING_DAMP = 0.7      # damping ratio (0=bouncy, 1=critical)
 FORMATION_SPRING_MAX = 120       # max spring force px/sec²
 FORMATION_COMBAT_LEASH = 80      # px — max stray before rubber-band
 
-# Formation rotation
-FORMATION_ROTATION_SPEED = 0.3   # rad/sec base rotation
-ROSE_SWEEP_DAMAGE_MULT = 0.15    # bonus damage per sweep tick
-ROSE_SWEEP_INTERVAL = 1.5        # seconds between sweep damage checks
-SPIRAL_TIGHTEN_RATE = 0.5        # radius change rate
-SIERPINSKI_PULSE_RADIUS = 15.0   # vertex outward pulse distance
-KOCH_CONTRACT_RATE = 0.3         # perimeter contraction speed
+# Formation rotation & combat abilities (v10_epsilon)
+FORMATION_ROTATION_SPEED = 0.3     # rad/sec base rotation
+ROSE_SWEEP_DMG_FRACTION = 0.15     # 15% of unit ATK per sweep hit
+ROSE_SWEEP_COOLDOWN = 1.5          # seconds between hits on same target
+ROSE_SWEEP_RADIUS = 20.0           # px — contact distance for sweep hit
+ROSE_ROTATION_ENERGY_COST = 2.0    # energy/sec drained per member while rotating
+# v10_epsilon: Spiral tighten/loosen
+SPIRAL_C_MIN = 10.0                # tightest spiral (Vogel c)
+SPIRAL_C_MAX = 30.0                # loosest spiral
+SPIRAL_C_STEP = 2.0                # per scroll tick
+
+# v10_epsilon: Sierpinski vertex pulse
+SIERPINSKI_PULSE_EXPAND = 1.8      # multiply spacing temporarily
+SIERPINSKI_PULSE_DURATION = 0.4    # seconds expanded
+SIERPINSKI_PULSE_COOLDOWN = 3.0    # seconds between pulses
+SIERPINSKI_PULSE_DMG = 0.10        # 10% ATK to nearby enemies
+SIERPINSKI_PULSE_RADIUS = 25.0     # px — damage range from vertex
+
+# v10_epsilon: Koch perimeter contract
+KOCH_CONTRACT_FACTOR = 0.4         # shrink to 40% radius
+KOCH_CONTRACT_DURATION = 0.6       # seconds contracted
+KOCH_CONTRACT_COOLDOWN = 4.0       # seconds between contracts
+KOCH_CONTRACT_DMG = 0.12           # 12% ATK to trapped enemies
+KOCH_CONTRACT_RADIUS = 35.0        # px — trap range from perimeter
 
 # Physics arrival (replaces old grid-snap)
 PHYSICS_ARRIVAL_DIST = 12.0      # px — "arrived at waypoint"
@@ -772,6 +789,14 @@ HARMONY_IDEAL_RATIOS = {
     FORMATION_GOLDEN_SPIRAL: 1.618,     # golden ratio φ → perfect fifth (3:2)
     FORMATION_SIERPINSKI: 3.0,          # 3 triangle vertices → major interval (3:1)
     FORMATION_KOCH: 1.0,                # 6-fold hexagonal → perfect unison (1:1)
+}
+
+# v10_epsilon: Musical interval labels for chord preview
+HARMONY_LABELS = {
+    FORMATION_POLAR_ROSE: "octave",
+    FORMATION_GOLDEN_SPIRAL: "fifth",
+    FORMATION_SIERPINSKI: "major",
+    FORMATION_KOCH: "unison",
 }
 
 # Discovery requirements per formation

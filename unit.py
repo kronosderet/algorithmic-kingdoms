@@ -1641,9 +1641,10 @@ class Unit(Entity):
         leader = squad.leader
         front_x, front_y = self._get_front_direction(game)
         rotation = getattr(squad, 'rotation_angle', 0.0)
+        params = squad.get_formation_params() if hasattr(squad, 'get_formation_params') else None
         ox, oy = formation_slot(
             squad.formation, squad.alive_count,
-            slot_idx, front_x, front_y)
+            slot_idx, front_x, front_y, params=params)
         # Apply squad rotation
         if rotation != 0.0:
             cos_r = math.cos(rotation)

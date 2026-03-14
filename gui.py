@@ -1064,6 +1064,54 @@ class GUI:
             total_dps = sum(u.attack_power / max(0.5, getattr(u, 'attack_cooldown', 1.0)) for u in combat)
             draw_text(surf, f"~{total_dps:.0f} DPS", 20, card_y + 2, self.font_xs, (220, 160, 80))
 
+        # v10_epsilon: Chord preview — show harmony quality per discovered formation
+        # Only for free (non-squad) combat units
+        soldiers = [u for u in selected if u.unit_type == "soldier"]
+        archers = [u for u in selected if u.unit_type == "archer"]
+        s_count = len(soldiers)
+        a_count = len(archers)
+        if (s_count + a_count) >= 2 and hasattr(game, 'discovered_formations'):
+            free_combat = [u for u in selected
+                           if u.unit_type in ("soldier", "archer")
+                           and game.player_squad_mgr.is_free(u)]
+            if len(free_combat) >= 2:
+                from squads import compute_harmony
+                from constants import HARMONY_LABELS, RESONANCE_COLORS, FORMATION_NAMES
+                chord_y = card_y + 20
+                draw_text(surf, f"{s_count}S {a_count}A", 20, chord_y,
+                          self.font_xs, (180, 180, 200))
+                chord_y += 14
+                for fmt_idx in sorted(game.discovered_formations):
+                    h = compute_harmony(fmt_idx, s_count, a_count)
+                    h_pct = int(h * 100)
+                    label = HARMONY_LABELS.get(fmt_idx, "")
+                    fname = FORMATION_NAMES.get(fmt_idx, "?")[:4]
+                    res_col = RESONANCE_COLORS.get(fmt_idx, (100, 100, 100))
+                    # Quality descriptor
+                    if h >= 0.95:
+                        qual = "perfect"
+                        q_col = (255, 230, 80)
+                    elif h >= 0.80:
+                        qual = "rich"
+                        q_col = res_col
+                    elif h >= 0.60:
+                        qual = "thin"
+                        q_col = (160, 160, 140)
+                    else:
+                        qual = "weak"
+                        q_col = (120, 80, 80)
+                    # Compact display: "Rose ♪ 100% octave [████████]"
+                    draw_text(surf, fname, 20, chord_y, self.font_xs, res_col)
+                    draw_text(surf, f"{h_pct}%", 60, chord_y, self.font_xs, q_col)
+                    # Mini harmony bar
+                    bar_x, bar_w, bar_h = 92, 60, 5
+                    pygame.draw.rect(surf, (30, 30, 40), (bar_x, chord_y + 4, bar_w, bar_h), border_radius=2)
+                    fill_w = max(1, int(bar_w * max(0, h - 0.3) / 0.7))
+                    pygame.draw.rect(surf, q_col, (bar_x, chord_y + 4, fill_w, bar_h), border_radius=2)
+                    if label:
+                        draw_text(surf, label, bar_x + bar_w + 4, chord_y, self.font_xs, (140, 140, 160))
+                    chord_y += 13
+
         # Action buttons on right side
         all_workers = all(u.unit_type == "worker" for u in selected)
         if all_workers:

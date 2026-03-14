@@ -228,7 +228,28 @@ class Game:
 
             elif event.type == pygame.MOUSEWHEEL:
                 mx, my = pygame.mouse.get_pos()
-                if GAME_AREA_Y <= my < GAME_AREA_Y + GAME_AREA_H:
+                # v10_epsilon: Ctrl+scroll adjusts Spiral formation tightness
+                mods = pygame.key.get_mods()
+                if mods & pygame.KMOD_CTRL:
+                    from constants import (FORMATION_GOLDEN_SPIRAL, SPIRAL_C_MIN,
+                                           SPIRAL_C_MAX, SPIRAL_C_STEP,
+                                           RESONANCE_COLORS)
+                    handled = False
+                    for u in self.selected:
+                        if not hasattr(u, 'unit_type'):
+                            continue
+                        sq = self.player_squad_mgr.get_squad(u)
+                        if sq and sq.formation == FORMATION_GOLDEN_SPIRAL:
+                            sq.spiral_c = max(SPIRAL_C_MIN,
+                                              min(SPIRAL_C_MAX,
+                                                  sq.spiral_c + event.y * SPIRAL_C_STEP))
+                            if not handled:
+                                label = "tight" if sq.spiral_c <= 14 else "loose" if sq.spiral_c >= 26 else "normal"
+                                self.add_notification(
+                                    f"Spiral: {label} (c={sq.spiral_c:.0f})",
+                                    1.0, RESONANCE_COLORS[FORMATION_GOLDEN_SPIRAL])
+                                handled = True
+                elif GAME_AREA_Y <= my < GAME_AREA_Y + GAME_AREA_H:
                     self.camera.apply_zoom(event.y * ZOOM_STEP, mx, my)
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
@@ -403,18 +424,35 @@ class Game:
                     self.add_notification(
                         f"Squad dissolved — {len(freed)} units freed", 2.5, (255, 180, 40))
 
-        # v10_delta: R key — toggle formation rotation for selected squad
+        # v10_epsilon: R key — toggle Rose rotation (sweep combat)
         if key == pygame.K_r and combat_sel:
-            from constants import FORMATION_ROTATION_SPEED
+            from constants import FORMATION_ROTATION_SPEED, FORMATION_POLAR_ROSE
+            seen = set()
+            for u in combat_sel:
+                sq = self.player_squad_mgr.get_squad(u)
+                if sq and sq.squad_id not in seen and sq.formation == FORMATION_POLAR_ROSE:
+                    seen.add(sq.squad_id)
+                    sq.is_rotating = not sq.is_rotating
+                    sq.rotation_speed = FORMATION_ROTATION_SPEED if sq.is_rotating else 0.0
+                    label = "Rose sweep activated" if sq.is_rotating else "Rose sweep stopped"
+                    self.add_notification(label, 1.5, (220, 80, 40))
+
+        # v10_epsilon: V key — formation ability (Sierpinski pulse / Koch contract)
+        if key == pygame.K_v and combat_sel:
+            from constants import (FORMATION_SIERPINSKI, FORMATION_KOCH,
+                                   RESONANCE_COLORS)
             seen = set()
             for u in combat_sel:
                 sq = self.player_squad_mgr.get_squad(u)
                 if sq and sq.squad_id not in seen:
                     seen.add(sq.squad_id)
-                    sq.is_rotating = not sq.is_rotating
-                    sq.rotation_speed = FORMATION_ROTATION_SPEED if sq.is_rotating else 0.0
-                    label = "activated" if sq.is_rotating else "stopped"
-                    self.add_notification(f"Formation rotation {label}", 1.5, (200, 180, 255))
+                    if sq.activate_ability():
+                        if sq.formation == FORMATION_SIERPINSKI:
+                            self.add_notification("Sierpinski pulse!",
+                                                  1.0, RESONANCE_COLORS[FORMATION_SIERPINSKI])
+                        elif sq.formation == FORMATION_KOCH:
+                            self.add_notification("Koch contract!",
+                                                  1.0, RESONANCE_COLORS[FORMATION_KOCH])
 
         # build hotkeys (need worker selected)
         if workers_selected:
@@ -1228,6 +1266,11 @@ class Game:
 
         # v10_8: update resonance fields
         self._update_resonance()
+
+        # v10_epsilon: update formation rotation, sweep damage, and abilities
+        for squad in self.player_squad_mgr.squad_list:
+            squad.update_rotation(dt, self)
+            squad.update_ability(dt, self)
 
         # v10_beta: passive healing near town hall (spatial grid per TH instead of n×m)
         town_halls = [b for b in self.player_buildings

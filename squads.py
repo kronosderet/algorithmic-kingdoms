@@ -20,6 +20,13 @@ from constants import (
     RESONANCE_MULTI_SQUAD_PENALTY,
     HARMONY_IDEAL_RATIOS,
     FORMATION_MIN_VIABLE,
+    ROSE_SWEEP_DMG_FRACTION, ROSE_SWEEP_COOLDOWN,
+    ROSE_SWEEP_RADIUS, ROSE_ROTATION_ENERGY_COST,
+    SPIRAL_C_MIN, SPIRAL_C_MAX,
+    SIERPINSKI_PULSE_EXPAND, SIERPINSKI_PULSE_DURATION,
+    SIERPINSKI_PULSE_COOLDOWN, SIERPINSKI_PULSE_DMG, SIERPINSKI_PULSE_RADIUS,
+    KOCH_CONTRACT_FACTOR, KOCH_CONTRACT_DURATION,
+    KOCH_CONTRACT_COOLDOWN, KOCH_CONTRACT_DMG, KOCH_CONTRACT_RADIUS,
 )
 from utils import dist
 
@@ -53,7 +60,7 @@ def _polar_rose_slot(n, slot_index, front_dx, front_dy):
     return (x, y)
 
 
-def _golden_spiral_slot(n, slot_index, front_dx, front_dy):
+def _golden_spiral_slot(n, slot_index, front_dx, front_dy, c_override=None):
     """Vogel sunflower: θ_n = n * golden_angle, r_n = c * sqrt(n).
 
     Fibonacci-spaced — same golden ratio as archer bow shapes.
@@ -61,7 +68,7 @@ def _golden_spiral_slot(n, slot_index, front_dx, front_dy):
     """
     if slot_index == 0:
         return (0.0, 0.0)
-    c = FORMATION_SPIRAL_C
+    c = c_override if c_override is not None else FORMATION_SPIRAL_C
     theta = slot_index * _GOLDEN_ANGLE
     r = c * math.sqrt(slot_index)
     angle = math.atan2(front_dy, front_dx)
@@ -88,7 +95,7 @@ def _sierpinski_points(depth, spacing):
     return result
 
 
-def _sierpinski_slot(n, slot_index, front_dx, front_dy):
+def _sierpinski_slot(n, slot_index, front_dx, front_dy, spacing_mult=1.0):
     """Sierpinski triangle: recursive triangular clusters.
 
     depth = floor(log3(n)). 3 units → triangle. 9 → depth-2 fractal.
@@ -96,7 +103,7 @@ def _sierpinski_slot(n, slot_index, front_dx, front_dy):
     """
     if slot_index == 0:
         return (0.0, 0.0)
-    spacing = FORMATION_SIERPINSKI_SPACING
+    spacing = FORMATION_SIERPINSKI_SPACING * spacing_mult
     depth = max(1, int(math.log(max(3, n)) / math.log(3)))
     positions = _sierpinski_points(depth, spacing)
     if slot_index - 1 < len(positions):
@@ -144,7 +151,7 @@ def _koch_perimeter(depth, radius):
     return pts
 
 
-def _koch_slot(n, slot_index, front_dx, front_dy):
+def _koch_slot(n, slot_index, front_dx, front_dy, radius_mult=1.0):
     """Koch snowflake: units along perimeter curve.
 
     Depth scales with count: <4 → triangle, 4-12 → depth-1, 13+ → depth-2.
@@ -152,7 +159,7 @@ def _koch_slot(n, slot_index, front_dx, front_dy):
     """
     if slot_index == 0:
         return (0.0, 0.0)
-    radius = FORMATION_KOCH_RADIUS
+    radius = FORMATION_KOCH_RADIUS * radius_mult
     depth = 0
     if n >= 4:
         depth = 1
@@ -173,7 +180,8 @@ def _koch_slot(n, slot_index, front_dx, front_dy):
     return (rx, ry)
 
 
-def formation_slot(formation_type, squad_size, slot_index, front_dx, front_dy):
+def formation_slot(formation_type, squad_size, slot_index, front_dx, front_dy,
+                   params=None):
     """Dispatch to the right formation calculator.
 
     Args:
@@ -181,18 +189,110 @@ def formation_slot(formation_type, squad_size, slot_index, front_dx, front_dy):
         squad_size: total alive members in squad
         slot_index: 0 = leader, 1+ = followers
         front_dx, front_dy: unit vector pointing toward threat/movement
+        params: optional dict with ability overrides:
+            spiral_c: Vogel spacing for Spiral
+            spacing_mult: multiplier for Sierpinski spacing (pulse)
+            radius_mult: multiplier for Koch radius (contract)
     Returns:
         (x_offset, y_offset) from leader position
     """
     if formation_type == FORMATION_POLAR_ROSE:
         return _polar_rose_slot(squad_size, slot_index, front_dx, front_dy)
     elif formation_type == FORMATION_GOLDEN_SPIRAL:
-        return _golden_spiral_slot(squad_size, slot_index, front_dx, front_dy)
+        c = params.get('spiral_c') if params else None
+        return _golden_spiral_slot(squad_size, slot_index, front_dx, front_dy,
+                                   c_override=c)
     elif formation_type == FORMATION_SIERPINSKI:
-        return _sierpinski_slot(squad_size, slot_index, front_dx, front_dy)
+        mult = params.get('spacing_mult', 1.0) if params else 1.0
+        return _sierpinski_slot(squad_size, slot_index, front_dx, front_dy,
+                                spacing_mult=mult)
     elif formation_type == FORMATION_KOCH:
-        return _koch_slot(squad_size, slot_index, front_dx, front_dy)
+        mult = params.get('radius_mult', 1.0) if params else 1.0
+        return _koch_slot(squad_size, slot_index, front_dx, front_dy,
+                          radius_mult=mult)
     return (0.0, 0.0)
+
+
+# ---------------------------------------------------------------------------
+# v10_epsilon: Type-aware slot classification
+# ---------------------------------------------------------------------------
+
+def _classify_soldier_slots(formation, n):
+    """Return set of slot indices preferred for soldiers (melee/exposed positions).
+
+    Archers get the remaining slots (protected/ranged positions).
+    Slot 0 is always the leader and is not classified here.
+    """
+    if n <= 1:
+        return set()
+
+    soldier_slots = set()
+
+    if formation == FORMATION_POLAR_ROSE:
+        # Soldiers at petal tips (outermost positions).
+        # Compute radial distance for each follower slot; highest = petal tips.
+        followers = max(1, n - 1)
+        k = 0.5 + n / 4.0
+        dists = []
+        for s in range(1, n):
+            theta = (2.0 * math.pi * (s - 1)) / followers
+            r = abs(math.cos(k * theta))
+            dists.append((r, s))
+        dists.sort(reverse=True)
+        # Top half are petal tips → soldier-preferred
+        half = max(1, len(dists) // 2)
+        for _, idx in dists[:half]:
+            soldier_slots.add(idx)
+
+    elif formation == FORMATION_GOLDEN_SPIRAL:
+        # Soldiers at inner rings (low slot indices) — protective core.
+        half = max(1, (n - 1) // 2)
+        for s in range(1, 1 + half):
+            soldier_slots.add(s)
+
+    elif formation == FORMATION_SIERPINSKI:
+        # Soldiers at vertex positions (exposed, tanky).
+        # In recursive Sierpinski, vertex positions are at multiples of
+        # sub-triangle count. For simplicity: first 3 slots are always vertices.
+        spacing = FORMATION_SIERPINSKI_SPACING
+        depth = max(1, int(math.log(max(3, n)) / math.log(3)))
+        positions = _sierpinski_points(depth, spacing)
+        # Vertices are the 3 outermost points (highest distance from centroid)
+        if positions:
+            indexed = [(math.hypot(px, py), i + 1) for i, (px, py) in enumerate(positions)]
+            indexed.sort(reverse=True)
+            # Top third are vertex positions → soldier-preferred
+            third = max(1, len(indexed) // 3)
+            for _, idx in indexed[:third]:
+                if idx < n:
+                    soldier_slots.add(idx)
+
+    elif formation == FORMATION_KOCH:
+        # Soldiers at convex peaks (outward-facing points).
+        # Koch perimeter: after each subdivision, peaks are at indices 2, 6, 10...
+        # (every 4th point starting from 2 in depth-1+)
+        radius = FORMATION_KOCH_RADIUS
+        depth = 0
+        if n >= 4:
+            depth = 1
+        if n >= 13:
+            depth = 2
+        perimeter = _koch_perimeter(depth, radius)
+        if perimeter:
+            # Convex peaks are points farthest from center
+            total_slots = max(1, n - 1)
+            indexed = []
+            for s in range(1, n):
+                frac = (s - 1) / total_slots
+                point_idx = min(int(frac * (len(perimeter) - 1)), len(perimeter) - 1)
+                px, py = perimeter[point_idx]
+                indexed.append((math.hypot(px, py), s))
+            indexed.sort(reverse=True)
+            half = max(1, len(indexed) // 2)
+            for _, idx in indexed[:half]:
+                soldier_slots.add(idx)
+
+    return soldier_slots
 
 
 # ---------------------------------------------------------------------------
@@ -285,7 +385,13 @@ class Squad:
         self.rotation_angle = 0.0
         self.rotation_speed = 0.0
         self.is_rotating = False
-        self.sweep_timer = 0.0
+        # v10_epsilon: sweep combat
+        self.sweep_hit_timers = {}  # enemy_eid -> cooldown remaining
+        # v10_epsilon: formation abilities
+        self.spiral_c = FORMATION_SPIRAL_C       # Vogel spacing (adjustable)
+        self.ability_timer = 0.0                  # active ability duration left
+        self.ability_cooldown = 0.0               # cooldown remaining
+        self.ability_active = False               # is ability currently firing
 
     def add_member(self, unit):
         if unit not in self.members and len(self.members) < SQUAD_MAX_SIZE:
@@ -316,14 +422,165 @@ class Squad:
             self.members.insert(0, self.leader)
 
     def _rebuild_slots(self):
-        """Assign slot indices to alive members."""
+        """Assign slot indices to alive members (type-aware).
+
+        v10_epsilon: Soldiers get exposed/melee-optimal slots,
+        archers get protected/ranged-optimal slots per formation geometry.
+        Leader (index 0) keeps their slot regardless of type.
+        """
         self._slot_cache.clear()
         alive = [m for m in self.members if m.alive]
-        for i, m in enumerate(alive):
-            self._slot_cache[m.eid] = i
+        if not alive:
+            return
+        n = len(alive)
+        # Leader is always slot 0
+        leader = alive[0]
+        self._slot_cache[leader.eid] = 0
+        if n <= 1:
+            return
+        # Classify which slots prefer soldiers
+        soldier_preferred = _classify_soldier_slots(self.formation, n)
+        # Split followers by type
+        followers = alive[1:]
+        soldiers = [u for u in followers if u.unit_type == "soldier"]
+        archers = [u for u in followers if u.unit_type == "archer"]
+        others = [u for u in followers if u.unit_type not in ("soldier", "archer")]
+        # Available follower slots (1..n-1)
+        preferred = sorted(s for s in soldier_preferred if s > 0)
+        remaining = sorted(s for s in range(1, n) if s not in soldier_preferred)
+        # Assign soldiers to preferred slots, archers to remaining
+        slot_queue = preferred + remaining
+        unit_queue = soldiers + others + archers
+        for unit, slot in zip(unit_queue, slot_queue):
+            self._slot_cache[unit.eid] = slot
+        # Safety: any leftover units get appended
+        assigned = set(self._slot_cache.values())
+        free_slots = [s for s in range(n) if s not in assigned]
+        unassigned = [u for u in alive if u.eid not in self._slot_cache]
+        for unit, slot in zip(unassigned, free_slots):
+            self._slot_cache[unit.eid] = slot
 
     def get_slot_index(self, unit):
         return self._slot_cache.get(unit.eid, -1)
+
+    def update_rotation(self, dt, game):
+        """v10_epsilon: Advance rotation angle and process Rose sweep damage.
+
+        Called each frame from game loop. Only active for Rose formations
+        with is_rotating == True.
+        """
+        if not self.is_rotating:
+            return
+        if self.formation != FORMATION_POLAR_ROSE:
+            self.is_rotating = False
+            self.rotation_speed = 0.0
+            return
+
+        # Advance rotation angle
+        self.rotation_angle += self.rotation_speed * dt
+
+        # Drain energy from all alive members
+        for m in self.members:
+            if m.alive and hasattr(m, 'energy'):
+                m.energy = max(0, m.energy - ROSE_ROTATION_ENERGY_COST * dt)
+
+        # Tick sweep cooldowns
+        expired = [eid for eid, t in self.sweep_hit_timers.items() if t <= 0]
+        for eid in expired:
+            del self.sweep_hit_timers[eid]
+        for eid in self.sweep_hit_timers:
+            self.sweep_hit_timers[eid] -= dt
+
+        # Sweep damage: petal-tip soldiers damage nearby enemies
+        n = self.alive_count
+        soldier_slots = _classify_soldier_slots(self.formation, n)
+        for m in self.members:
+            if not m.alive or m.unit_type != "soldier":
+                continue
+            slot_idx = self._slot_cache.get(m.eid, -1)
+            if slot_idx not in soldier_slots:
+                continue
+            # Use enemy spatial grid for efficient neighbor query
+            nearby = game.enemy_grid.query_radius(m.x, m.y, ROSE_SWEEP_RADIUS)
+            for enemy in nearby:
+                if not enemy.alive or enemy.eid in self.sweep_hit_timers:
+                    continue
+                d = dist(m.x, m.y, enemy.x, enemy.y)
+                if d < ROSE_SWEEP_RADIUS:
+                    dmg = max(1, int(m.atk * ROSE_SWEEP_DMG_FRACTION))
+                    enemy.take_damage(dmg, m)
+                    self.sweep_hit_timers[enemy.eid] = ROSE_SWEEP_COOLDOWN
+
+    def get_formation_params(self):
+        """v10_epsilon: Return params dict for formation_slot overrides."""
+        p = {}
+        if self.formation == FORMATION_GOLDEN_SPIRAL:
+            p['spiral_c'] = self.spiral_c
+        elif self.formation == FORMATION_SIERPINSKI and self.ability_active:
+            p['spacing_mult'] = SIERPINSKI_PULSE_EXPAND
+        elif self.formation == FORMATION_KOCH and self.ability_active:
+            p['radius_mult'] = KOCH_CONTRACT_FACTOR
+        return p or None
+
+    def activate_ability(self):
+        """v10_epsilon: Activate formation-specific ability (V key)."""
+        if self.ability_cooldown > 0 or self.ability_active:
+            return False
+        if self.formation == FORMATION_SIERPINSKI:
+            self.ability_active = True
+            self.ability_timer = SIERPINSKI_PULSE_DURATION
+            return True
+        elif self.formation == FORMATION_KOCH:
+            self.ability_active = True
+            self.ability_timer = KOCH_CONTRACT_DURATION
+            return True
+        return False
+
+    def update_ability(self, dt, game):
+        """v10_epsilon: Update formation ability timers and effects."""
+        if self.ability_cooldown > 0:
+            self.ability_cooldown -= dt
+        if not self.ability_active:
+            return
+
+        self.ability_timer -= dt
+
+        if self.formation == FORMATION_SIERPINSKI:
+            # Vertex pulse: damage nearby enemies from soldier positions
+            if self.ability_timer <= 0:
+                # Pulse ends — deal burst damage
+                soldier_slots = _classify_soldier_slots(self.formation, self.alive_count)
+                for m in self.members:
+                    if not m.alive or m.unit_type != "soldier":
+                        continue
+                    slot_idx = self._slot_cache.get(m.eid, -1)
+                    if slot_idx not in soldier_slots:
+                        continue
+                    nearby = game.enemy_grid.query_radius(
+                        m.x, m.y, SIERPINSKI_PULSE_RADIUS)
+                    for enemy in nearby:
+                        if enemy.alive:
+                            dmg = max(1, int(m.atk * SIERPINSKI_PULSE_DMG))
+                            enemy.take_damage(dmg, m)
+                self.ability_active = False
+                self.ability_cooldown = SIERPINSKI_PULSE_COOLDOWN
+
+        elif self.formation == FORMATION_KOCH:
+            # Contract: damage trapped enemies near leader
+            if self.ability_timer <= 0:
+                if self.leader and self.leader.alive:
+                    nearby = game.enemy_grid.query_radius(
+                        self.leader.x, self.leader.y, KOCH_CONTRACT_RADIUS)
+                    for enemy in nearby:
+                        if enemy.alive:
+                            dmg = max(1, int(self.leader.atk * KOCH_CONTRACT_DMG))
+                            # Use average squad ATK instead
+                            atk_sum = sum(m.atk for m in self.members if m.alive)
+                            atk_avg = atk_sum / max(1, self.alive_count)
+                            dmg = max(1, int(atk_avg * KOCH_CONTRACT_DMG))
+                            enemy.take_damage(dmg, self.leader)
+                self.ability_active = False
+                self.ability_cooldown = KOCH_CONTRACT_COOLDOWN
 
     @property
     def alive_count(self):
@@ -543,9 +800,10 @@ class SquadManager:
                 continue
             slot_idx = squad.get_slot_index(m)
             if slot_idx > 0:
+                params = squad.get_formation_params()
                 ox, oy = formation_slot(
                     squad.formation, squad.alive_count,
-                    slot_idx, front_x, front_y)
+                    slot_idx, front_x, front_y, params=params)
                 m.command_move(wx + ox, wy + oy, game)
             else:
                 m.command_move(wx, wy, game)
