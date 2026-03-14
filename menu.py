@@ -227,9 +227,10 @@ class MainMenu:
                            self._BTN_Y, self._BTN_W, self._BTN_H)
 
     def _get_exit_btn_rect(self):
-        # v10_epsilon1: bottom-right corner with golden padding
+        # v10_epsilon1: bottom-right, at h/phi (≈445) from top
+        exit_y = int(SCREEN_HEIGHT / self._PHI) - 45 // 2  # centered on golden section
         return pygame.Rect(SCREEN_WIDTH - self._BTN_W - self._EXIT_PAD,
-                           SCREEN_HEIGHT - 45 - self._EXIT_PAD,
+                           exit_y,
                            self._BTN_W, 45)
 
     def _check_buttons(self, pos):

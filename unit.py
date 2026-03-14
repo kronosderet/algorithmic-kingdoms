@@ -454,9 +454,11 @@ class Unit(Entity):
         self.energy -= actual
         return actual
 
-    def _physics_step(self, target_x, target_y, dt, game, arrival_dist=None):
+    def _physics_step(self, target_x, target_y, dt, game, arrival_dist=None,
+                      do_brake=True):
         """Move toward target using acceleration/deceleration physics.
-        Returns True when arrived within arrival_dist."""
+        Returns True when arrived within arrival_dist.
+        do_brake=False: steer toward target at full speed, no braking."""
         if arrival_dist is None:
             arrival_dist = PHYSICS_ARRIVAL_DIST
 
@@ -465,8 +467,9 @@ class Unit(Entity):
         dist_to_target = math.hypot(dx, dy)
 
         if dist_to_target < 1.0:
-            self.vx, self.vy = 0.0, 0.0
-            self.current_speed = 0.0
+            if do_brake:
+                self.vx, self.vy = 0.0, 0.0
+                self.current_speed = 0.0
             return True
 
         # Direction to target
@@ -490,26 +493,29 @@ class Unit(Entity):
         if self.unit_type == "worker" and self.carry_amount > 0:
             eff_speed *= ENERGY_CARRY_SPEED_MULT
 
-        # Braking distance: d = v² / (2*decel)
-        braking_d = (self.current_speed ** 2) / (2.0 * self.decel + 0.01)
+        if do_brake:
+            # Braking distance: d = v² / (2*decel)
+            braking_d = (self.current_speed ** 2) / (2.0 * self.decel + 0.01)
 
-        if dist_to_target <= arrival_dist:
-            # Arrived — brake to stop (braking costs no energy)
-            self.vx *= max(0.0, 1.0 - self.decel * dt / max(1.0, self.current_speed))
-            self.vy *= max(0.0, 1.0 - self.decel * dt / max(1.0, self.current_speed))
-            self.current_speed = math.hypot(self.vx, self.vy)
-            if self.current_speed < 2.0:
-                self.vx, self.vy = 0.0, 0.0
-                self.current_speed = 0.0
-                return True
-            # Still coasting to stop — no energy cost
-            return False
+            if dist_to_target <= arrival_dist:
+                # Arrived — brake to stop (braking costs no energy)
+                self.vx *= max(0.0, 1.0 - self.decel * dt / max(1.0, self.current_speed))
+                self.vy *= max(0.0, 1.0 - self.decel * dt / max(1.0, self.current_speed))
+                self.current_speed = math.hypot(self.vx, self.vy)
+                if self.current_speed < 2.0:
+                    self.vx, self.vy = 0.0, 0.0
+                    self.current_speed = 0.0
+                    return True
+                # Still coasting to stop — no energy cost
+                return False
 
-        # Desired velocity
-        if dist_to_target < braking_d:
-            # Need to decelerate — target speed scales with distance
-            desired_speed = eff_speed * (dist_to_target / max(1.0, braking_d))
+            # Desired velocity — decelerate near target
+            if dist_to_target < braking_d:
+                desired_speed = eff_speed * (dist_to_target / max(1.0, braking_d))
+            else:
+                desired_speed = eff_speed
         else:
+            # No braking — full speed cruise toward target
             desired_speed = eff_speed
 
         desired_vx = dir_x * desired_speed
@@ -1071,26 +1077,34 @@ class Unit(Entity):
                 self.state = "idle"
             return
 
-        # v10_epsilon1: lookahead path following — only brake at final waypoint
+        # v10_epsilon1: lookahead path following — cruise through, brake at final
         # Skip past intermediate waypoints we're already close to
         while self.path_index < len(self.path) - 1:
             wc, wr = self.path[self.path_index]
             wx, wy = tile_center(wc, wr)
-            if dist(self.x, self.y, wx, wy) < TILE_SIZE * 0.8:
+            if dist(self.x, self.y, wx, wy) < TILE_SIZE:
                 self.path_index += 1
             else:
                 break
 
-        # Target: look 2-3 waypoints ahead for smooth steering, unless near end
+        # Target: look ahead for smooth steering
         lookahead = min(self.path_index + 3, len(self.path) - 1)
         tc, tr = self.path[lookahead]
         tx, ty = tile_center(tc, tr)
 
-        is_final = (self.path_index >= len(self.path) - 1)
-        arrival = PHYSICS_ARRIVAL_DIST if is_final else TILE_SIZE * 0.8
-        arrived = self._physics_step(tx, ty, dt, game, arrival_dist=arrival)
-        if arrived and is_final:
-            self.path_index = len(self.path)  # trigger arrival logic next frame
+        is_final = (lookahead >= len(self.path) - 1)
+        if is_final:
+            # Final waypoint: brake and stop
+            arrived = self._physics_step(tx, ty, dt, game,
+                                         arrival_dist=PHYSICS_ARRIVAL_DIST)
+            if arrived:
+                self.path_index = len(self.path)  # trigger arrival next frame
+        else:
+            # Intermediate: cruise at full speed, no braking
+            self._physics_step(tx, ty, dt, game, do_brake=False)
+            # Advance past reached lookahead target (handles curved paths)
+            if dist(self.x, self.y, tx, ty) < TILE_SIZE:
+                self.path_index = lookahead + 1
 
     def _gather(self, dt, game):
         if not self.gather_tile:
