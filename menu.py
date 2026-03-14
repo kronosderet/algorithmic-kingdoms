@@ -204,7 +204,7 @@ class MainMenu:
     _TITLE_Y = int(SCREEN_HEIGHT * 0.22)
     _SUB_Y = int(SCREEN_HEIGHT * 0.32)
     _BTN_Y = int(SCREEN_HEIGHT * 0.46)
-    _EXIT_Y = int(SCREEN_HEIGHT * 0.68)  # v10_1: pushed down to avoid overlap
+    _EXIT_Y = int(SCREEN_HEIGHT * 0.78)  # v10_epsilon1: pushed further down
     _BTN_W = 180
     _BTN_H = 80
     _BTN_GAP = 10
@@ -399,7 +399,7 @@ class MainMenu:
         self.screen.blit(hint_surf,
                          hint_surf.get_rect(center=(cx, SCREEN_HEIGHT - 50)))
 
-        ver_surf = self.font_ver.render("v10_delta", True, (50, 50, 65))
+        ver_surf = self.font_ver.render("v10_epsilon1", True, (50, 50, 65))
         self.screen.blit(ver_surf,
                          ver_surf.get_rect(bottomleft=(12, SCREEN_HEIGHT - 8)))
 

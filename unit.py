@@ -552,7 +552,10 @@ class Unit(Entity):
         return False
 
     def _apply_repulsion(self, dt, game):
-        """Soft collision avoidance — push away from nearby same-owner units."""
+        """Soft collision avoidance — push away from nearby same-owner units.
+        Workers at work (gathering/building/repairing) are anchored — no repulsion."""
+        if self.unit_type == "worker" and self.state in ("gathering", "building", "repairing"):
+            return
         grid = game.player_grid if self.owner == "player" else game.enemy_grid
         force_x, force_y = 0.0, 0.0
         for other in grid.query_radius(self.x, self.y, REPULSION_RADIUS):
@@ -718,12 +721,29 @@ class Unit(Entity):
         elif cmd == "attack_move":
             self.command_attack_move(args[0], args[1], game)
 
+    def _find_adjacent_tile(self, col, row, game):
+        """Find nearest passable tile adjacent to (col,row) for worker to stand beside work."""
+        sc, sr = self.get_tile()
+        best = None
+        best_d = 9999
+        for dc, dr in [(-1, 0), (1, 0), (0, -1), (0, 1),
+                        (-1, -1), (1, -1), (-1, 1), (1, 1)]:
+            nc, nr = col + dc, row + dr
+            if game.game_map.is_passable(nc, nr):
+                d = abs(nc - sc) + abs(nr - sr)  # Manhattan to worker
+                if d < best_d:
+                    best_d = d
+                    best = (nc, nr)
+        return best if best else (col, row)
+
     def command_gather(self, col, row, game):
         if self.unit_type != "worker":
             return
         self._clear_tasks()
         self.gather_tile = (col, row)
-        self._path_to(col, row, game)
+        # Path to adjacent tile so worker stands beside the resource, not on it
+        adj = self._find_adjacent_tile(col, row, game)
+        self._path_to(adj[0], adj[1], game)
         self.state = "moving"
 
     def command_gather_nearest(self, game, resource_type=None):
@@ -894,7 +914,8 @@ class Unit(Entity):
             new_tile = self._find_nearest_resource_tile(rtype, game)
             if new_tile:
                 self.gather_tile = new_tile
-                self._path_to(new_tile[0], new_tile[1], game)
+                adj = self._find_adjacent_tile(new_tile[0], new_tile[1], game)
+                self._path_to(adj[0], adj[1], game)
                 self.state = "moving"
                 return True
             return False
@@ -903,7 +924,8 @@ class Unit(Entity):
             new_tile = self._find_nearest_resource_tile(fallback, game)
             if new_tile:
                 self.gather_tile = new_tile
-                self._path_to(new_tile[0], new_tile[1], game)
+                adj = self._find_adjacent_tile(new_tile[0], new_tile[1], game)
+                self._path_to(adj[0], adj[1], game)
                 self.state = "moving"
                 return True
         return False
@@ -1054,8 +1076,9 @@ class Unit(Entity):
         # v10 fix: proximity check -- must be within 2 tiles of resource
         tx, ty = tile_center(tc, tr)
         if dist(self.x, self.y, tx, ty) > TILE_SIZE * 2:
-            # pushed away (separation) or never arrived — re-path
-            self._path_to(tc, tr, game)
+            # pushed away or never arrived — re-path to adjacent tile
+            adj = self._find_adjacent_tile(tc, tr, game)
+            self._path_to(adj[0], adj[1], game)
             self.state = "moving"
             return
         tile_t = game.game_map.get_tile(tc, tr)
