@@ -39,6 +39,8 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE,
                        MSG_LOG_MAX, MSG_LOG_VISIBLE, MSG_LOG_FADE,
                        MSG_COL_INFO, MSG_COL_DISCOVERY, MSG_COL_ATTACK,
                        MSG_COL_ECONOMY, MSG_COL_COMMAND,
+                       DISCOVERY_SLOWMO_DURATION, DISCOVERY_SLOWMO_FACTOR,
+                       DISCOVERY_BANNER_DURATION,
                        display_name)
 from utils import dist, pos_to_tile, draw_text, ruin_rebuild_cost
 from game_map import GameMap
@@ -126,6 +128,10 @@ class Game:
         self._message_log: list[list] = []  # [[text, game_time, color], ...]
         self.show_message_log = False  # toggle with L key
 
+        # formation discovery event (major announcement)
+        self._discovery_banner: list | None = None  # [title, subtitle, timer, formation_idx]
+        self._discovery_slowmo = 0.0  # remaining slowmo time
+
         # wave clear tracking
         self._had_enemies = False
 
@@ -212,6 +218,15 @@ class Game:
             dt = self.clock.tick(FPS) / 1000.0
             dt = min(dt, 0.05)
             self.handle_events()
+            # discovery slowmo: scale game dt but keep real-time for UI
+            real_dt = dt
+            if self._discovery_slowmo > 0:
+                self._discovery_slowmo -= real_dt
+                dt = dt * DISCOVERY_SLOWMO_FACTOR
+            if self._discovery_banner:
+                self._discovery_banner[2] -= real_dt
+                if self._discovery_banner[2] <= 0:
+                    self._discovery_banner = None
             if not self.paused:
                 self.game_time += dt
             if not self.game_over and not self.game_won and not self.paused:
@@ -900,9 +915,14 @@ class Game:
 
             self.discovered_formations.add(fmt_idx)
             note = DISCOVERY_NOTIFICATIONS.get(fmt_idx, "New formation discovered!")
-            self.add_notification(note, 4.0, (255, 220, 80))
+            self.add_message(note, MSG_COL_DISCOVERY)
             discovered_any = True
             best_formation = fmt_idx
+            # Trigger major discovery event
+            title = f"Formation Discovered: {FORMATION_NAMES[fmt_idx]}"
+            subtitle = note.split("-- ")[-1] if "-- " in note else ""
+            self._discovery_banner = [title, subtitle, DISCOVERY_BANNER_DURATION, fmt_idx]
+            self._discovery_slowmo = DISCOVERY_SLOWMO_DURATION
 
         if not discovered_any:
             # Subtle hint
@@ -1524,6 +1544,10 @@ class Game:
             draw_text(self.screen, f"[L] Log ({n})", 10,
                       SCREEN_HEIGHT - BOTTOM_PANEL_H - 18, self.font_xs, (70, 70, 90))
 
+        # discovery banner (major event announcement)
+        if self._discovery_banner:
+            self._render_discovery_banner()
+
         # v10_alpha: Draw tooltip overlay (last, on top of everything)
         self.gui.draw_tooltip(self.screen)
 
@@ -1549,6 +1573,58 @@ class Game:
             draw_text(self.screen, text, SCREEN_WIDTH // 2, y, self.font_notif,
                       fade_color, center=True)
             y += 28
+
+    def _render_discovery_banner(self):
+        """Draw a prominent center-screen formation discovery announcement."""
+        if not self._discovery_banner:
+            return
+        title, subtitle, timer, fmt_idx = self._discovery_banner
+        # fade in/out
+        if timer > DISCOVERY_BANNER_DURATION - 0.3:
+            alpha = (DISCOVERY_BANNER_DURATION - timer) / 0.3  # fade in
+        elif timer < 0.5:
+            alpha = timer / 0.5  # fade out
+        else:
+            alpha = 1.0
+        alpha = max(0.0, min(1.0, alpha))
+
+        cx = SCREEN_WIDTH // 2
+        cy = GAME_AREA_Y + GAME_AREA_H // 2 - 20
+
+        # banner box dimensions
+        box_w, box_h = 460, 80
+        box_x = cx - box_w // 2
+        box_y = cy - box_h // 2
+
+        # background with alpha
+        bg = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
+        bg.fill((15, 15, 30, int(210 * alpha)))
+        self.screen.blit(bg, (box_x, box_y))
+
+        # border — formation color
+        fmt_color = RESONANCE_COLORS.get(fmt_idx, (255, 220, 80))
+        border_a = int(255 * alpha)
+        border_col = (*fmt_color, border_a)
+        border_surf = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
+        pygame.draw.rect(border_surf, border_col, (0, 0, box_w, box_h), 2)
+        # inner glow line
+        pygame.draw.rect(border_surf, (*fmt_color, int(80 * alpha)),
+                         (2, 2, box_w - 4, box_h - 4), 1)
+        self.screen.blit(border_surf, (box_x, box_y))
+
+        # title text
+        title_color = tuple(int(c * alpha) for c in fmt_color)
+        draw_text(self.screen, title, cx, cy - 12, self.font_notif, title_color, center=True)
+
+        # subtitle text
+        if subtitle:
+            sub_color = tuple(max(0, int(200 * alpha)) for _ in range(3))
+            draw_text(self.screen, subtitle, cx, cy + 16, self.font_sm, sub_color, center=True)
+
+        # hotkey hint at bottom
+        hint_color = (int(120 * alpha), int(120 * alpha), int(140 * alpha))
+        draw_text(self.screen, f"F{fmt_idx + 1} to use this formation",
+                  cx, cy + box_h // 2 - 8, self.font_xs, hint_color, center=True)
 
     def _render_cmd_effects(self):
         """Draw expanding ring confirmations at command target positions."""

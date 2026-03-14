@@ -836,11 +836,16 @@ DISCOVERY_RATIO_TOLERANCE = 0.35  # 35% deviation from ideal ratio allowed for d
 
 # Discovery notification text
 DISCOVERY_NOTIFICATIONS = {
-    FORMATION_POLAR_ROSE: "Formation Discovered: Rose — The petals bloom with harmonic resonance!",
-    FORMATION_GOLDEN_SPIRAL: "Formation Discovered: Spiral — The golden ratio sings!",
-    FORMATION_SIERPINSKI: "Formation Discovered: Sierpinski — Triangular symmetry resonates!",
-    FORMATION_KOCH: "Formation Discovered: Koch — Hexagonal perfection achieved!",
+    FORMATION_POLAR_ROSE: "Formation Discovered: Rose -- The petals bloom with harmonic resonance!",
+    FORMATION_GOLDEN_SPIRAL: "Formation Discovered: Spiral -- The golden ratio sings!",
+    FORMATION_SIERPINSKI: "Formation Discovered: Sierpinski -- Triangular symmetry resonates!",
+    FORMATION_KOCH: "Formation Discovered: Koch -- Hexagonal perfection achieved!",
 }
+
+# Discovery event timing
+DISCOVERY_SLOWMO_DURATION = 1.5    # seconds of slow-motion
+DISCOVERY_SLOWMO_FACTOR = 0.15     # game speed during slowmo (15%)
+DISCOVERY_BANNER_DURATION = 3.0    # seconds the banner stays visible
 
 # GUI hint text for undiscovered formations
 DISCOVERY_HINTS = {
