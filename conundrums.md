@@ -1,4 +1,4 @@
-# Mathematical Conundrums — Algorithmic Kingdoms
+# Mathematical Conundrums — Resonance
 
 > Design tensions that emerge from the math and from system interactions.
 > Not bugs — features we need to think carefully about.

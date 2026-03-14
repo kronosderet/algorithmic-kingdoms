@@ -1,4 +1,4 @@
-# GDD Roadmap — Algorithmic Kingdoms
+# GDD Roadmap — Resonance
 
 > Living document. Tracks the path from simple RTS to mathematical odyssey.
 > Current implemented version: **v10_delta** (see `GDD_Current_v10.md` for full spec)
@@ -12,7 +12,7 @@
 
 ## The Vision
 
-Algorithmic Kingdoms is a game that teaches math the way math deserves to be taught — not with pencil and paper, but with armies that sing trigonometric harmonies, formations that warp spacetime through golden ratios, and enemies that cast hexes powered by divergent series. Every system in the game IS a mathematical object wearing a gameplay costume. The player learns to wield mathematics as a force multiplier without ever seeing an equation.
+Resonance is a game that teaches math the way math deserves to be taught — not with pencil and paper, but with armies that sing trigonometric harmonies, formations that warp spacetime through golden ratios, and enemies that cast hexes powered by divergent series. Every system in the game IS a mathematical object wearing a gameplay costume. The player learns to wield mathematics as a force multiplier without ever seeing an equation.
 
 The game opens as a simple gather-and-survive RTS. But like a fractal, every layer reveals three more beneath it. Survive long enough, experiment boldly enough, and the game unfolds into something that has no bottom.
 

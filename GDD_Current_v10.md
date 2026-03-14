@@ -1,4 +1,4 @@
-# Game Design Document — Algorithmic Kingdoms v10_7 (Current)
+# Game Design Document — Resonance v10_7 (Current)
 
 > Reflects the actual implemented state of all systems.
 > Last updated: 2026-03-13
@@ -7,7 +7,7 @@
 
 ## 1. Overview
 
-**Title:** Algorithmic Kingdoms
+**Title:** Resonance
 **Tagline:** Gather, Build, Survive!
 **Engine:** Python 3.10 + Pygame 2.6.1, NumPy
 **Distribution:** PyInstaller single-file .exe (console hidden)

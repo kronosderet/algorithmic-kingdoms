@@ -1,5 +1,5 @@
 """
-Proof-of-Concept: Fractal UI Elements for Algorithmic Kingdoms
+Proof-of-Concept: Fractal UI Elements for Resonance
 Phase 4 — The Fractal Interface
 
 Demonstrates:
@@ -442,7 +442,7 @@ class FractalButton:
 def main():
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
-    pygame.display.set_caption("Fractal UI PoC — Algorithmic Kingdoms Phase 4")
+    pygame.display.set_caption("Fractal UI PoC — Resonance Phase 4")
     clock = pygame.time.Clock()
 
     # fonts

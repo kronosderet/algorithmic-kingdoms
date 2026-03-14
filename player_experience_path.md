@@ -1,4 +1,4 @@
-# Player Experience Path — Algorithmic Kingdoms
+# Player Experience Path — Resonance
 
 > What the player **feels**, **learns**, and **does** — minute by minute.
 > Written from the inside out: not "what systems exist" but "what is it like to play this."
