@@ -517,9 +517,9 @@ MOVEMENT_PROFILES = {
 MOVEMENT_PROFILE_DEFAULT = {"accel": 180, "decel": 200, "max_speed": 60}
 
 # Collision avoidance (soft repulsion)
-REPULSION_RADIUS = 20.0          # px — units start pushing apart
-REPULSION_STRENGTH = 200.0       # px/sec² peak force
-REPULSION_FALLOFF = 1.5          # power falloff (1=linear, 2=quadratic)
+REPULSION_RADIUS = 16.0          # px — units start pushing apart
+REPULSION_STRENGTH = 80.0        # px/sec² peak force (gentle nudge, not a shove)
+REPULSION_FALLOFF = 2.0          # power falloff (quadratic — strong only when stacked)
 
 # Formation gravitation (spring physics)
 FORMATION_SPRING_K = 3.0         # spring constant (higher = snappier)

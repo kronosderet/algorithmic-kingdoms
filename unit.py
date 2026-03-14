@@ -584,6 +584,14 @@ class Unit(Entity):
 
     def _integrate_velocity(self, dt, game):
         """Final position update — called ONCE per frame after all forces."""
+        # Friction: idle/stationary units bleed velocity quickly (no infinite drift)
+        if self.state in ("idle", "gathering", "building", "repairing"):
+            damping = 0.85  # lose 15% velocity per frame
+            self.vx *= damping
+            self.vy *= damping
+            if abs(self.vx) < 0.5 and abs(self.vy) < 0.5:
+                self.vx, self.vy = 0.0, 0.0
+                self.current_speed = 0.0
         # Clamp to passable tile
         if abs(self.vx) > 0.1 or abs(self.vy) > 0.1:
             nx = self.x + self.vx * dt
@@ -1061,12 +1069,26 @@ class Unit(Entity):
                 self.state = "idle"
             return
 
-        # v10_delta: physics-based waypoint following
-        tc, tr = self.path[self.path_index]
+        # v10_epsilon1: lookahead path following — only brake at final waypoint
+        # Skip past intermediate waypoints we're already close to
+        while self.path_index < len(self.path) - 1:
+            wc, wr = self.path[self.path_index]
+            wx, wy = tile_center(wc, wr)
+            if dist(self.x, self.y, wx, wy) < TILE_SIZE * 0.8:
+                self.path_index += 1
+            else:
+                break
+
+        # Target: look 2-3 waypoints ahead for smooth steering, unless near end
+        lookahead = min(self.path_index + 3, len(self.path) - 1)
+        tc, tr = self.path[lookahead]
         tx, ty = tile_center(tc, tr)
-        arrived = self._physics_step(tx, ty, dt, game, arrival_dist=PHYSICS_ARRIVAL_DIST)
-        if arrived:
-            self.path_index += 1
+
+        is_final = (self.path_index >= len(self.path) - 1)
+        arrival = PHYSICS_ARRIVAL_DIST if is_final else TILE_SIZE * 0.8
+        arrived = self._physics_step(tx, ty, dt, game, arrival_dist=arrival)
+        if arrived and is_final:
+            self.path_index = len(self.path)  # trigger arrival logic next frame
 
     def _gather(self, dt, game):
         if not self.gather_tile:
