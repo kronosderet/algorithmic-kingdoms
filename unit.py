@@ -764,7 +764,8 @@ class Unit(Entity):
             if tile:
                 self._clear_tasks()
                 self.gather_tile = tile
-                self._path_to(tile[0], tile[1], game)
+                adj = self._find_adjacent_tile(tile[0], tile[1], game)
+                self._path_to(adj[0], adj[1], game)
                 self.state = "moving"
                 return
             # v10_delta1: specific type not found — fall through to any resource
@@ -782,7 +783,8 @@ class Unit(Entity):
                 best = (c, r)
         if best:
             self.gather_tile = best
-            self._path_to(best[0], best[1], game)
+            adj = self._find_adjacent_tile(best[0], best[1], game)
+            self._path_to(adj[0], adj[1], game)
             self.state = "moving"
 
     def command_attack(self, target, game):
@@ -1101,6 +1103,7 @@ class Unit(Entity):
             # pushed away or never arrived — re-path to adjacent tile
             adj = self._find_adjacent_tile(tc, tr, game)
             self._path_to(adj[0], adj[1], game)
+            self.gather_timer = 0.0  # reset — must re-gather from scratch
             self.state = "moving"
             return
         tile_t = game.game_map.get_tile(tc, tr)
@@ -1193,7 +1196,8 @@ class Unit(Entity):
             tc, tr = self.gather_tile
             tile_t = game.game_map.get_tile(tc, tr)
             if tile_t in (TERRAIN_TREE, TERRAIN_GOLD, TERRAIN_IRON, TERRAIN_STONE):
-                self._path_to(tc, tr, game)
+                adj = self._find_adjacent_tile(tc, tr, game)
+                self._path_to(adj[0], adj[1], game)
                 self.state = "moving"
                 return
             else:

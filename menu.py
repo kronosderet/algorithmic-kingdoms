@@ -200,14 +200,16 @@ class MainMenu:
             self._render()
 
     # --- Layout: golden ratio positioning ---
-    # Title at ~38% height (phi-derived), buttons centered at ~55%
-    _TITLE_Y = int(SCREEN_HEIGHT * 0.22)
-    _SUB_Y = int(SCREEN_HEIGHT * 0.32)
-    _BTN_Y = int(SCREEN_HEIGHT * 0.46)
-    _EXIT_Y = int(SCREEN_HEIGHT * 0.78)  # v10_epsilon1: pushed further down
+    _PHI = (1.0 + 5.0 ** 0.5) / 2.0  # ≈ 1.618
+    # Title at h/phi³ — first golden subdivision
+    _TITLE_Y = int(SCREEN_HEIGHT / (_PHI ** 3))          # ≈170
+    _SUB_Y = _TITLE_Y + int(68 / _PHI)                   # ≈212
+    # Difficulty buttons at h/phi² — second golden subdivision
+    _BTN_Y = int(SCREEN_HEIGHT / (_PHI ** 2))             # ≈275
     _BTN_W = 180
     _BTN_H = 80
     _BTN_GAP = 10
+    _EXIT_PAD = 30  # corner padding for quit button
 
     def _get_easy_btn_rect(self):
         cx = SCREEN_WIDTH // 2
@@ -225,8 +227,10 @@ class MainMenu:
                            self._BTN_Y, self._BTN_W, self._BTN_H)
 
     def _get_exit_btn_rect(self):
-        # v10_1: same width as difficulty buttons to avoid overlap
-        return pygame.Rect(SCREEN_WIDTH // 2 - self._BTN_W // 2, self._EXIT_Y, self._BTN_W, 45)
+        # v10_epsilon1: bottom-right corner with golden padding
+        return pygame.Rect(SCREEN_WIDTH - self._BTN_W - self._EXIT_PAD,
+                           SCREEN_HEIGHT - 45 - self._EXIT_PAD,
+                           self._BTN_W, 45)
 
     def _check_buttons(self, pos):
         if self._get_easy_btn_rect().collidepoint(pos):
