@@ -210,7 +210,7 @@ def main():
     rows_per_frame = 6  # render N rows per frame for responsiveness
 
     # Menu overlay elements
-    title = "ALGORITHMIC KINGDOMS"
+    title = "RESONANCE"
     menu_items = ["[1] Easy  -  Douady Rabbit", "[2] Medium  -  Dendrite",
                   "[3] Hard  -  Chaos", "", "[SPACE] Toggle drift",
                   "[ESC] Quit"]

@@ -1,7 +1,7 @@
 # GDD Roadmap — Resonance
 
 > Living document. Tracks the path from simple RTS to mathematical odyssey.
-> Current implemented version: **v10_delta** (see `GDD_Current_v10.md` for full spec)
+> Current implemented version: **v10_epsilon1** (see `GDD_Current_v10.md` for full spec)
 > Last updated: 2026-03-14
 >
 > *"This game should be combat math. The paradox of it being nonexistent anywhere*
@@ -593,6 +593,97 @@ This means the player intuitively learns: "adding a Soldier (2) to my formation 
 | Named units | Rank 5+ with 2+ revealed characteristics gets procedural name |
 
 **Estimate:** 6-8 sessions (largest version — the audio system + GF(7) rewrite + Healer unit is substantial)
+
+### 11.9 Orbital Resonance — The Periodic Table of Formations
+
+*"The whole periodic table is just formations of electrons filling orbitals by a precise algorithm."*
+
+The harmony system's deepest layer. Instead of hand-authoring resonance effects per unit composition, effects **emerge algorithmically** from how units fill formation slots — exactly like electron orbital filling determines an element's chemical properties.
+
+#### The Mapping
+
+| Chemistry | Game Equivalent |
+|---|---|
+| **Orbitals** | Formation slot positions (energy level = distance from center, angular position) |
+| **Electrons** | Units filling slots (type = quantum number) |
+| **Aufbau filling** | Slot assignment: fill lowest energy first |
+| **Hund's rule** | Spread unit types across slots before doubling |
+| **Pauli exclusion** | No two identical units in same slot |
+| **Shell completion** | Full formation tier = noble gas = maximum resonance |
+| **Valence electrons** | Outermost occupied slots = determines combat behavior |
+| **Ionization energy** | How hard to remove outermost unit = formation toughness |
+| **Reactivity** | Unfilled shells = volatile but combinable |
+
+#### Quantum Numbers
+
+Each unit type has an intrinsic quantum number:
+
+| Unit | Tone | Quantum # | Character |
+|---|---|---|---|
+| Worker | Do (1) | 0 | Neutral / catalytic |
+| Soldier | Re (2) | +1 | Heavy / magnetic (melee aura) |
+| Archer | Mi (3) | -1 | Light / electric (ranged aura) |
+| Shield | Fa (4) | +2 | Dense / crystalline (armor aura) |
+| Knight | Sol (5) | -2 | Volatile / kinetic (mobility aura) |
+| Healer | La (6) | +3 | Resonant / harmonic (regen aura) |
+| Sage | Ti (7) | ±∞ | Unstable / transcendent (wildcard) |
+
+#### Energy Levels & Filling
+
+Each formation defines **energy levels** for its slots:
+
+- **Rose**: Petal tips = high energy, center = low. Fills center out.
+- **Spiral**: Inner rings = low, outer = high. Natural Aufbau order.
+- **Sierpinski**: Corner nodes = low, fractal edges = high. Hierarchical filling.
+- **Koch**: Straight segments = low, curve peaks = high. Coastline filling.
+
+Already implemented in `_classify_slots()` — the existing slot classification (center/inner/outer/edge) maps directly to energy shells.
+
+#### Emergent Properties
+
+The electron configuration (pattern of which slots hold which unit types) becomes a fingerprint:
+
+| Computed Property | Formula | Gameplay Effect |
+|---|---|---|
+| **Magnetism** | Σ(quantum numbers) | Net positive = melee aura radius. Net negative = ranged aura. Zero = balanced |
+| **Ionization energy** | Energy level of outermost occupied slot | Formation toughness (damage resistance, harder to break) |
+| **Reactivity** | (Unfilled slots in highest shell) / (total shell capacity) | Volatile: bonus damage but lower stability |
+| **Electronegativity** | |Σ(quantum#)| / occupied_slots | How strongly formation "pulls" nearby free units |
+| **Bond capacity** | Unfilled valence slots | How many other formations can bond with this one |
+
+#### Molecular Bonding (Formation Mixing)
+
+When two formations are within proximity, **molecular orbital theory** applies:
+
+```
+config_A = fill_orbitals(formation_A, units_A)
+config_B = fill_orbitals(formation_B, units_B)
+bond_order = molecular_orbital(config_A, config_B)
+effect = derive_properties(combined_config, bond_order)
+```
+
+- **Constructive interference** (bonding): Complementary valence (one excess +, other excess -) → shared aura, combined effect > sum of parts
+- **Destructive interference** (antibonding): Identical valence → repulsion, weaker combined effect
+- **Bond order** = (bonding - antibonding) / 2 → strength of the combined resonance
+- **Ionic bonding**: One formation "donates" a unit to complete another's shell → strong directional bond
+- **Covalent bonding**: Formations share units at boundary → mutual benefit, moderate strength
+
+Two Rose squads with complementary configs form a stronger bond than two identical ones. A Rose + Koch pair creates a "molecule" where Rose provides offense and Koch provides control — the bond makes both stronger.
+
+#### What's Hand-Crafted vs. Algorithmic
+
+| Layer | Approach |
+|---|---|
+| Slot energy levels | **Authored** per formation (already done via `_classify_slots`) |
+| Unit quantum numbers | **Authored** per unit type (7 values total) |
+| Filling algorithm | **Algorithmic** — Aufbau + Hund's rule |
+| Configuration fingerprint | **Algorithmic** — computed from filling pattern |
+| Property values (magnetism, etc.) | **Algorithmic** — formulas, not tables |
+| Effect presentation (colors, particles, gameplay) | **Authored** — "high magnetism" = red glow + melee aura |
+| Bond calculations | **Algorithmic** — molecular orbital math |
+| Special "noble gas" effects | **Authored** — unique reward for achieving perfect shells |
+
+The periodic table writes itself. Different unit compositions in the same formation create different elements. Different formation pairs create different molecules. The player discovers chemistry by playing an RTS.
 
 ---
 

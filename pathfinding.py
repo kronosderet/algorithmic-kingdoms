@@ -5,7 +5,7 @@ from constants import TERRAIN_MOVE_COST
 DIAG_COST = math.sqrt(2)
 
 
-def a_star(sc, sr, ec, er, game_map, blocked_set=None, max_nodes=4000):
+def a_star(sc, sr, ec, er, game_map, blocked_set=None, max_nodes=12000):
     if not game_map.is_passable(ec, er):
         # find nearest passable neighbor to target
         best = None

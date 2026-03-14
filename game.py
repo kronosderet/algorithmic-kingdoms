@@ -835,25 +835,39 @@ class Game:
         total = soldiers + archers
         if total < PENDING_GROUP_MIN:
             return
-        ratio = soldiers / max(1, archers) if archers > 0 else float(soldiers)
+        veterans = sum(1 for u in units if u.alive and getattr(u, 'rank', 0) >= 1)
 
         from constants import (FORMATION_DISCOVERY, DISCOVERY_RATIO_TOLERANCE,
-                               DISCOVERY_NOTIFICATIONS)
+                               DISCOVERY_NOTIFICATIONS, HARMONY_IDEAL_RATIOS)
 
         discovered_any = False
         best_formation = None
         for fmt_idx, recipe in FORMATION_DISCOVERY.items():
             if fmt_idx in self.discovered_formations:
                 continue
-            if total < recipe["min_units"]:
+            if total < recipe["min_size"]:
                 continue
-            ideal = recipe["ratio"]
-            if abs(ratio - ideal) <= DISCOVERY_RATIO_TOLERANCE or (ideal > 10 and archers == 0):
-                self.discovered_formations.add(fmt_idx)
-                note = DISCOVERY_NOTIFICATIONS.get(fmt_idx, "New formation discovered!")
-                self.add_notification(note, 4.0, (255, 220, 80))
-                discovered_any = True
-                best_formation = fmt_idx
+            if veterans < recipe["min_veterans"]:
+                continue
+            # Check ratio
+            if recipe.get("any_ratio"):
+                pass  # Rose: any composition works
+            else:
+                majority = max(soldiers, archers)
+                minority = min(soldiers, archers)
+                if minority == 0:
+                    continue  # monotone can't discover non-Rose
+                actual_ratio = majority / minority
+                ideal = HARMONY_IDEAL_RATIOS[fmt_idx]
+                deviation = abs(actual_ratio - ideal) / max(ideal, 0.01)
+                if deviation >= DISCOVERY_RATIO_TOLERANCE:
+                    continue
+
+            self.discovered_formations.add(fmt_idx)
+            note = DISCOVERY_NOTIFICATIONS.get(fmt_idx, "New formation discovered!")
+            self.add_notification(note, 4.0, (255, 220, 80))
+            discovered_any = True
+            best_formation = fmt_idx
 
         if not discovered_any:
             # Subtle hint

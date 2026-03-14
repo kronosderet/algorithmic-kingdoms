@@ -227,8 +227,12 @@ class MainMenu:
                            self._BTN_Y, self._BTN_W, self._BTN_H)
 
     def _get_exit_btn_rect(self):
-        # v10_epsilon1: bottom-right, at h/phi (≈445) from top
-        exit_y = int(SCREEN_HEIGHT / self._PHI) - 45 // 2  # centered on golden section
+        # v10_epsilon1: bottom-right corner, golden subdivision below difficulty row
+        # Space below buttons: from (_BTN_Y + _BTN_H) to (SCREEN_HEIGHT - hint bar ~50)
+        # Place exit at 1/φ of that remaining space
+        top_of_space = self._BTN_Y + self._BTN_H
+        bottom_of_space = SCREEN_HEIGHT - 60  # above hint bar
+        exit_y = int(top_of_space + (bottom_of_space - top_of_space) / (self._PHI ** 2)) - 22
         return pygame.Rect(SCREEN_WIDTH - self._BTN_W - self._EXIT_PAD,
                            exit_y,
                            self._BTN_W, 45)

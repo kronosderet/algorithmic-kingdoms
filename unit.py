@@ -1156,7 +1156,17 @@ class Unit(Entity):
                 if dropoff:
                     bc, br = dropoff.get_tile()
                     self._path_to(bc, br, game, exclude_building=dropoff)
-                    self.state = "returning"
+                    if self.path:
+                        self.state = "returning"
+                    else:
+                        # A* failed — try adjacent tiles of dropoff
+                        for dc, dr in [(-1,0),(1,0),(0,-1),(0,1)]:
+                            self._path_to(bc + dc, br + dr, game)
+                            if self.path:
+                                self.state = "returning"
+                                break
+                        else:
+                            self.state = "idle"
                 else:
                     self.state = "idle"
             else:

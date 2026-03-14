@@ -55,4 +55,4 @@ python -m PyInstaller v10_epsilon1.spec --noconfirm
 ## Important Notes
 - The game uses a tile-based map with pixel-level unit positioning
 - Enemy waves scale with difficulty and wave number
-- Git remote: github.com/kronosderet/algorithmic-kingdoms
+- Git remote: github.com/kronosderet/algorithmic-kingdoms (repo name predates rename to Resonance)
