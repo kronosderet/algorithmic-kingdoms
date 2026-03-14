@@ -59,7 +59,7 @@ from constants import (UNIT_DEFS, ENEMY_DEFS, UNIT_COLORS, ENEMY_COLORS,
                        ENERGY_EXHAUSTED_SPEED, ENERGY_EXHAUSTED_THRESHOLD,
                        ENERGY_TIRED_COOLDOWN_MULT, ENERGY_IDLE_REGEN_MULT,
                        ENERGY_FLEE_DRAIN_MULT, ENERGY_CARRY_REGEN_MULT,
-                       HARMONY_ENERGY_MULT)
+                       ENERGY_CARRY_SPEED_MULT, HARMONY_ENERGY_MULT)
 from utils import dist, pos_to_tile, tile_center, draw_text
 from pathfinding import a_star
 from entity_base import Entity, _process_combat_hit
@@ -120,8 +120,8 @@ class Unit(Entity):
         self.energy = float(ep["max"])
         self.max_energy = float(ep["max"])
         self.energy_regen = float(ep["regen"])
-        self.energy_move_cost = ep["move_cost"]
-        self.energy_sprint_cost = ep.get("sprint_cost", 12.0)
+        self.energy_accel_cost = ep.get("accel_cost", 10.0)
+        self.energy_cruise_cost = ep.get("cruise_cost", 2.0)
         self.energy_attack_cost = ep.get("attack_cost", 6.0)
         self.energy_gather_cost = ep.get("gather_cost", 0.0)
 
@@ -418,11 +418,16 @@ class Unit(Entity):
     # -- v10_delta: Physics + Energy -------------------------------------------
 
     def _energy_factor(self):
-        """Returns 0.4–1.0 speed multiplier based on current energy."""
+        """Returns speed multiplier based on current energy.
+        Above 20%: full speed (1.0). Below 20%: degrades to EXHAUSTED_SPEED."""
         if self.max_energy <= 0:
             return 1.0
         ratio = self.energy / self.max_energy
-        return ENERGY_EXHAUSTED_SPEED + (1.0 - ENERGY_EXHAUSTED_SPEED) * ratio
+        if ratio >= ENERGY_EXHAUSTED_THRESHOLD:
+            return 1.0
+        # 0-20% range: linear ramp from EXHAUSTED_SPEED to 1.0
+        t = ratio / ENERGY_EXHAUSTED_THRESHOLD
+        return ENERGY_EXHAUSTED_SPEED + (1.0 - ENERGY_EXHAUSTED_SPEED) * t
 
     def _energy_tick(self, dt, game):
         """Regenerate energy. Rate depends on state + formation harmony."""
@@ -481,11 +486,15 @@ class Unit(Entity):
         if koch_slow < 1.0 and not getattr(self, '_dissonance_nullified', False):
             eff_speed *= (1.0 - koch_slow)
 
+        # Workers move slower when carrying resources
+        if self.unit_type == "worker" and self.carry_amount > 0:
+            eff_speed *= ENERGY_CARRY_SPEED_MULT
+
         # Braking distance: d = v² / (2*decel)
         braking_d = (self.current_speed ** 2) / (2.0 * self.decel + 0.01)
 
         if dist_to_target <= arrival_dist:
-            # Arrived — brake to stop
+            # Arrived — brake to stop (braking costs no energy)
             self.vx *= max(0.0, 1.0 - self.decel * dt / max(1.0, self.current_speed))
             self.vy *= max(0.0, 1.0 - self.decel * dt / max(1.0, self.current_speed))
             self.current_speed = math.hypot(self.vx, self.vy)
@@ -493,7 +502,7 @@ class Unit(Entity):
                 self.vx, self.vy = 0.0, 0.0
                 self.current_speed = 0.0
                 return True
-            # Still coasting to stop — position updated by _integrate_velocity
+            # Still coasting to stop — no energy cost
             return False
 
         # Desired velocity
@@ -522,10 +531,16 @@ class Unit(Entity):
             self.vx += dvx
             self.vy += dvy
 
-        # Energy drain for movement
-        is_sprinting = self.current_speed > self.speed * 0.9
-        move_cost = self.energy_sprint_cost if is_sprinting else self.energy_move_cost
-        self._drain_energy(move_cost * dt)
+        # Energy drain: acceleration is expensive, cruising is cheap, braking is free
+        if desired_speed > self.current_speed + 1.0:
+            # Accelerating — high energy cost
+            self._drain_energy(self.energy_accel_cost * dt)
+        elif desired_speed < self.current_speed - 1.0:
+            # Decelerating/braking — free
+            pass
+        else:
+            # Cruising at steady speed — low energy cost
+            self._drain_energy(self.energy_cruise_cost * dt)
 
         # Position updated by _integrate_velocity (centralized, once per frame)
         self.current_speed = math.hypot(self.vx, self.vy)

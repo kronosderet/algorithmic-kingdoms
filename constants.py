@@ -532,7 +532,7 @@ FORMATION_ROTATION_SPEED = 0.3     # rad/sec base rotation
 ROSE_SWEEP_DMG_FRACTION = 0.15     # 15% of unit ATK per sweep hit
 ROSE_SWEEP_COOLDOWN = 1.5          # seconds between hits on same target
 ROSE_SWEEP_RADIUS = 20.0           # px — contact distance for sweep hit
-ROSE_ROTATION_ENERGY_COST = 2.0    # energy/sec drained per member while rotating
+ROSE_ROTATION_ENERGY_COST = 5.0    # energy/sec shared across squad while rotating
 # v10_epsilon: Spiral tighten/loosen
 SPIRAL_C_MIN = 10.0                # tightest spiral (Vogel c)
 SPIRAL_C_MAX = 30.0                # loosest spiral
@@ -544,6 +544,7 @@ SIERPINSKI_PULSE_DURATION = 0.4    # seconds expanded
 SIERPINSKI_PULSE_COOLDOWN = 3.0    # seconds between pulses
 SIERPINSKI_PULSE_DMG = 0.10        # 10% ATK to nearby enemies
 SIERPINSKI_PULSE_RADIUS = 25.0     # px — damage range from vertex
+SIERPINSKI_PULSE_ENERGY = 20.0     # squad pool energy cost to activate pulse
 
 # v10_epsilon: Koch perimeter contract
 KOCH_CONTRACT_FACTOR = 0.4         # shrink to 40% radius
@@ -551,6 +552,7 @@ KOCH_CONTRACT_DURATION = 0.6       # seconds contracted
 KOCH_CONTRACT_COOLDOWN = 4.0       # seconds between contracts
 KOCH_CONTRACT_DMG = 0.12           # 12% ATK to trapped enemies
 KOCH_CONTRACT_RADIUS = 35.0        # px — trap range from perimeter
+KOCH_CONTRACT_ENERGY = 25.0        # squad pool energy cost to activate contract
 
 # Physics arrival (replaces old grid-snap)
 PHYSICS_ARRIVAL_DIST = 12.0      # px — "arrived at waypoint"
@@ -559,28 +561,34 @@ PHYSICS_WORKER_SNAP_DIST = 48.0  # px — workers snap to exact position at task
 # ---------------------------------------------------------------------------
 # v10_delta: Stamina / Energy System
 # ---------------------------------------------------------------------------
+# Energy model: acceleration costs a lot, cruising costs a little, braking is free.
+# "accel_cost" = energy/sec while accelerating (dv > 0)
+# "cruise_cost" = energy/sec while at constant speed
+# "attack_cost" = energy per attack swing
+# Braking/deceleration costs nothing.
 ENERGY_PROFILES = {
-    "soldier":        {"max": 100, "regen": 8,  "move_cost": 3.0, "sprint_cost": 12.0, "attack_cost": 6.0},
-    "archer":         {"max": 80,  "regen": 10, "move_cost": 2.0, "sprint_cost": 10.0, "attack_cost": 4.0},
-    "worker":         {"max": 120, "regen": 18, "move_cost": 1.0, "sprint_cost": 4.0,  "gather_cost": 2.0, "attack_cost": 0},
-    "enemy_soldier":  {"max": 100, "regen": 7,  "move_cost": 3.0, "sprint_cost": 12.0, "attack_cost": 6.0},
-    "enemy_archer":   {"max": 80,  "regen": 7,  "move_cost": 2.0, "sprint_cost": 10.0, "attack_cost": 4.0},
-    "enemy_siege":    {"max": 150, "regen": 4,  "move_cost": 2.0, "sprint_cost": 6.0,  "attack_cost": 10.0},
-    "enemy_elite":    {"max": 120, "regen": 6,  "move_cost": 3.0, "sprint_cost": 12.0, "attack_cost": 8.0},
-    "enemy_sapper":   {"max": 70,  "regen": 5,  "move_cost": 3.0, "sprint_cost": 15.0, "attack_cost": 8.0},
-    "enemy_shieldbearer": {"max": 130, "regen": 5, "move_cost": 2.0, "sprint_cost": 8.0, "attack_cost": 5.0},
-    "enemy_healer":   {"max": 90,  "regen": 9,  "move_cost": 2.0, "sprint_cost": 8.0,  "attack_cost": 3.0},
-    "enemy_raider":   {"max": 70,  "regen": 5,  "move_cost": 3.0, "sprint_cost": 15.0, "attack_cost": 8.0},
-    "enemy_warlock":  {"max": 100, "regen": 6,  "move_cost": 2.0, "sprint_cost": 10.0, "attack_cost": 7.0},
+    "soldier":        {"max": 100, "regen": 8,  "accel_cost": 10.0, "cruise_cost": 2.0, "attack_cost": 6.0},
+    "archer":         {"max": 80,  "regen": 10, "accel_cost": 8.0,  "cruise_cost": 1.5, "attack_cost": 4.0},
+    "worker":         {"max": 150, "regen": 15, "accel_cost": 6.0,  "cruise_cost": 1.0, "attack_cost": 0,  "gather_cost": 2.0},
+    "enemy_soldier":  {"max": 100, "regen": 7,  "accel_cost": 10.0, "cruise_cost": 2.0, "attack_cost": 6.0},
+    "enemy_archer":   {"max": 80,  "regen": 7,  "accel_cost": 8.0,  "cruise_cost": 1.5, "attack_cost": 4.0},
+    "enemy_siege":    {"max": 150, "regen": 4,  "accel_cost": 5.0,  "cruise_cost": 1.0, "attack_cost": 10.0},
+    "enemy_elite":    {"max": 120, "regen": 6,  "accel_cost": 12.0, "cruise_cost": 2.5, "attack_cost": 8.0},
+    "enemy_sapper":   {"max": 70,  "regen": 5,  "accel_cost": 12.0, "cruise_cost": 2.0, "attack_cost": 8.0},
+    "enemy_shieldbearer": {"max": 130, "regen": 5, "accel_cost": 8.0, "cruise_cost": 1.5, "attack_cost": 5.0},
+    "enemy_healer":   {"max": 90,  "regen": 9,  "accel_cost": 6.0,  "cruise_cost": 1.0, "attack_cost": 3.0},
+    "enemy_raider":   {"max": 70,  "regen": 5,  "accel_cost": 12.0, "cruise_cost": 2.0, "attack_cost": 8.0},
+    "enemy_warlock":  {"max": 100, "regen": 6,  "accel_cost": 8.0,  "cruise_cost": 1.5, "attack_cost": 7.0},
 }
-ENERGY_PROFILE_DEFAULT = {"max": 100, "regen": 8, "move_cost": 3.0, "sprint_cost": 12.0, "attack_cost": 6.0}
+ENERGY_PROFILE_DEFAULT = {"max": 100, "regen": 8, "accel_cost": 10.0, "cruise_cost": 2.0, "attack_cost": 6.0}
 
-ENERGY_EXHAUSTED_SPEED = 0.4        # 40% speed at zero energy
+ENERGY_EXHAUSTED_SPEED = 0.6        # 60% speed at zero energy (not crippling)
 ENERGY_EXHAUSTED_THRESHOLD = 0.2    # below 20% → exhausted debuffs
-ENERGY_TIRED_COOLDOWN_MULT = 1.5    # +50% attack cooldown when exhausted
-ENERGY_IDLE_REGEN_MULT = 2.0        # 2× regen when standing still
+ENERGY_TIRED_COOLDOWN_MULT = 1.3    # +30% attack cooldown when exhausted
+ENERGY_IDLE_REGEN_MULT = 3.0        # 3× regen when standing still (quick recovery)
 ENERGY_FLEE_DRAIN_MULT = 1.5        # fleeing costs 50% more energy
-ENERGY_CARRY_REGEN_MULT = 0.7       # workers regen slower while carrying
+ENERGY_CARRY_SPEED_MULT = 0.7       # workers move 30% slower when carrying resources
+ENERGY_CARRY_REGEN_MULT = 0.85      # workers regen slightly slower while carrying
 
 # Harmonic energy field
 HARMONY_ENERGY_MULT = 0.8           # harmony bonus to energy regen

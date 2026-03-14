@@ -25,8 +25,10 @@ from constants import (
     SPIRAL_C_MIN, SPIRAL_C_MAX,
     SIERPINSKI_PULSE_EXPAND, SIERPINSKI_PULSE_DURATION,
     SIERPINSKI_PULSE_COOLDOWN, SIERPINSKI_PULSE_DMG, SIERPINSKI_PULSE_RADIUS,
+    SIERPINSKI_PULSE_ENERGY,
     KOCH_CONTRACT_FACTOR, KOCH_CONTRACT_DURATION,
     KOCH_CONTRACT_COOLDOWN, KOCH_CONTRACT_DMG, KOCH_CONTRACT_RADIUS,
+    KOCH_CONTRACT_ENERGY,
 )
 from utils import dist
 
@@ -476,13 +478,18 @@ class Squad:
             self.rotation_speed = 0.0
             return
 
+        # Stop rotation if squad is out of energy
+        if self._squad_energy() < 1.0:
+            self.is_rotating = False
+            self.rotation_speed = 0.0
+            return
+
         # Advance rotation angle
         self.rotation_angle += self.rotation_speed * dt
 
-        # Drain energy from all alive members
-        for m in self.members:
-            if m.alive and hasattr(m, 'energy'):
-                m.energy = max(0, m.energy - ROSE_ROTATION_ENERGY_COST * dt)
+        # Drain energy from squad pool (shared cost across alive members)
+        total_cost = ROSE_ROTATION_ENERGY_COST * dt
+        self._drain_squad_energy(total_cost)
 
         # Tick sweep cooldowns
         expired = [eid for eid, t in self.sweep_hit_timers.items() if t <= 0]
@@ -511,6 +518,19 @@ class Squad:
                     enemy.take_damage(dmg, m)
                     self.sweep_hit_timers[enemy.eid] = ROSE_SWEEP_COOLDOWN
 
+    def _drain_squad_energy(self, total_cost):
+        """Distribute energy cost evenly across alive members."""
+        alive = [m for m in self.members if m.alive and hasattr(m, 'energy')]
+        if not alive:
+            return
+        per_unit = total_cost / len(alive)
+        for m in alive:
+            m.energy = max(0, m.energy - per_unit)
+
+    def _squad_energy(self):
+        """Total energy pool of alive members."""
+        return sum(m.energy for m in self.members if m.alive and hasattr(m, 'energy'))
+
     def get_formation_params(self):
         """v10_epsilon: Return params dict for formation_slot overrides."""
         p = {}
@@ -523,14 +543,21 @@ class Squad:
         return p or None
 
     def activate_ability(self):
-        """v10_epsilon: Activate formation-specific ability (V key)."""
+        """v10_epsilon: Activate formation-specific ability (V key).
+        Draws from squad energy pool — all members share the cost."""
         if self.ability_cooldown > 0 or self.ability_active:
             return False
         if self.formation == FORMATION_SIERPINSKI:
+            if self._squad_energy() < SIERPINSKI_PULSE_ENERGY:
+                return False
+            self._drain_squad_energy(SIERPINSKI_PULSE_ENERGY)
             self.ability_active = True
             self.ability_timer = SIERPINSKI_PULSE_DURATION
             return True
         elif self.formation == FORMATION_KOCH:
+            if self._squad_energy() < KOCH_CONTRACT_ENERGY:
+                return False
+            self._drain_squad_energy(KOCH_CONTRACT_ENERGY)
             self.ability_active = True
             self.ability_timer = KOCH_CONTRACT_DURATION
             return True
