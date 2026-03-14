@@ -1125,10 +1125,10 @@ class Game:
             u._dissonance_nullified = False
             u._resonance_visual = -1
 
-        # Clear Koch slow on all enemies
+        # Clear Koch slow on all enemies (1.0 = no slow)
         for e in self.enemy_units:
             if e.alive:
-                e._koch_slow_factor = 0.0
+                e._koch_slow_factor = 1.0
 
         # Stamp resonance attributes per squad
         for squad in self.player_squad_mgr.squad_list:
@@ -1165,7 +1165,7 @@ class Game:
                     for e in self.enemy_grid.query_radius(
                             squad.leader.x, squad.leader.y, kr):
                         if e.alive:
-                            e._koch_slow_factor = max(e._koch_slow_factor, value)
+                            e._koch_slow_factor = min(e._koch_slow_factor, value)
 
         # Dissonance pass: nullify resonance near dissonant enemies
         for e in self.enemy_units:

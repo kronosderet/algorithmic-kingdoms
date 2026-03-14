@@ -194,7 +194,7 @@ class Unit(Entity):
         self._sierpinski_aoe_factor = 1.0
         self._dissonance_nullified = False
         self._resonance_visual = -1  # -1=none, 0=rose, 1=spiral, 2=sierpinski, 3=koch
-        self._koch_slow_factor = 0.0
+        self._koch_slow_factor = 1.0  # 1.0 = no slow; Koch resonance sets < 1.0 on enemies
         self.dissonant_formation = -1  # -1=none, 0-3=anti-formation type
 
     # -- Helpers ---------------------------------------------------------------
@@ -476,10 +476,10 @@ class Unit(Entity):
             terrain_cost = max(1.0, terrain_cost * 0.6)
         eff_speed = (self.max_speed / terrain_cost) * self._energy_factor()
 
-        # Koch resonance slow
-        slow = getattr(self, '_koch_slow_factor', 1.0)
-        if slow < 1.0 and not getattr(self, '_dissonance_nullified', False):
-            eff_speed *= slow
+        # Koch resonance slow (value = slow %, e.g. 0.45 = 45% slow → 55% speed)
+        koch_slow = getattr(self, '_koch_slow_factor', 1.0)
+        if koch_slow < 1.0 and not getattr(self, '_dissonance_nullified', False):
+            eff_speed *= (1.0 - koch_slow)
 
         # Braking distance: d = v² / (2*decel)
         braking_d = (self.current_speed ** 2) / (2.0 * self.decel + 0.01)
