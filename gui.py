@@ -21,7 +21,13 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, TOP_BAR_H, BOTTOM_PANEL_H,
                        PRODUCTION_TICK_INTERVAL, BUILD_PROXIMITY,
                        FORGE_TIME, SMELTER_REFINERY_BONUS,
                        STANCE_AGGRESSIVE, STANCE_NAMES, STANCE_COLORS,
-                       FORMATION_NAMES)
+                       FORMATION_POLAR_ROSE, FORMATION_GOLDEN_SPIRAL,
+                       FORMATION_SIERPINSKI, FORMATION_KOCH,
+                       FORMATION_NAMES,
+                       RESONANCE_COLORS,
+                       DISCOVERY_HINTS,
+                       TOOLTIP_DATA, TOOLTIP_HOVER_DELAY, TOOLTIP_MAX_WIDTH,
+                       TOOLTIP_BG, TOOLTIP_BORDER, TOOLTIP_PADDING)
 from utils import draw_text, ruin_rebuild_cost
 from entities import Building, Unit
 
@@ -33,6 +39,12 @@ class GUI:
         self.font_xs = None
         self.font_lg = None
         self.buttons = []  # list of (rect, label, callback, enabled)
+        # Tooltip state
+        self._tooltip_zones = []  # list of (rect, tooltip_key) — rebuilt each frame
+        self._hover_key = None    # currently hovered tooltip key
+        self._hover_time = 0.0    # seconds spent hovering on current key
+        self._last_mx = 0
+        self._last_my = 0
 
     def init_fonts(self):
         self.font = pygame.font.SysFont(None, 22)
@@ -56,6 +68,79 @@ class GUI:
                     surf.blit(rendered, (x, y))
                     return
             surf.blit(font.render("..", True, color), (x, y))
+
+    def _register_tooltip(self, rect, key):
+        """Register a rectangular zone with a tooltip key for this frame."""
+        self._tooltip_zones.append((rect, key))
+
+    def update_tooltip(self, dt):
+        """Call once per frame to track hover timing."""
+        mx, my = pygame.mouse.get_pos()
+        # Check if mouse moved significantly (reset timer on large movement)
+        if abs(mx - self._last_mx) > 3 or abs(my - self._last_my) > 3:
+            self._hover_time = 0.0
+        self._last_mx, self._last_my = mx, my
+
+        # Find which tooltip zone the mouse is in
+        current_key = None
+        for rect, key in self._tooltip_zones:
+            if rect.collidepoint(mx, my):
+                current_key = key
+                break
+
+        if current_key != self._hover_key:
+            self._hover_key = current_key
+            self._hover_time = 0.0
+        elif current_key is not None:
+            self._hover_time += dt
+
+        # Clear zones for next frame
+        self._tooltip_zones.clear()
+
+    def draw_tooltip(self, surf):
+        """Render the active tooltip card if hover delay is met."""
+        if self._hover_key is None or self._hover_time < TOOLTIP_HOVER_DELAY:
+            return
+        text = TOOLTIP_DATA.get(self._hover_key)
+        if not text:
+            return
+
+        mx, my = self._last_mx, self._last_my
+        lines = text.split("\n")
+        font = self.font_xs
+        if not font:
+            return
+
+        # Measure text
+        line_h = font.get_height() + 2
+        pad = TOOLTIP_PADDING
+        max_w = 0
+        for line in lines:
+            w = font.size(line)[0]
+            if w > max_w:
+                max_w = w
+        card_w = min(max_w + pad * 2, TOOLTIP_MAX_WIDTH + pad * 2)
+        card_h = len(lines) * line_h + pad * 2
+
+        # Position: prefer below-right of cursor, clamp to screen
+        tx = mx + 14
+        ty = my + 18
+        if tx + card_w > SCREEN_WIDTH - 4:
+            tx = mx - card_w - 4
+        if ty + card_h > SCREEN_HEIGHT - 4:
+            ty = my - card_h - 4
+
+        # Draw card background (with alpha via surface)
+        card_surf = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
+        card_surf.fill(TOOLTIP_BG)
+        surf.blit(card_surf, (tx, ty))
+        pygame.draw.rect(surf, TOOLTIP_BORDER, (tx, ty, card_w, card_h), 1, border_radius=3)
+
+        # Draw text lines
+        # First line is title (brighter), rest are description
+        for i, line in enumerate(lines):
+            col = (240, 240, 250) if i == 0 else (180, 180, 195)
+            draw_text(surf, line, tx + pad, ty + pad + i * line_h, font, col)
 
     @staticmethod
     def cost_str(gold=0, wood=0, iron=0, steel=0, stone=0):
@@ -157,6 +242,7 @@ class GUI:
         for res_type, amount, color in res_list:
             self._draw_res_icon(surf, x + 8, 20, res_type)
             draw_text(surf, str(int(amount)), x + 20, 12, self.font, color)
+            self._register_tooltip(pygame.Rect(x, 2, 76, 36), f"res_{res_type}")
             x += 80
 
         # --- Separator ---
@@ -167,41 +253,52 @@ class GUI:
         pop = len(player_units)
         pop_x = sep_x + 12
         draw_text(surf, f"Pop {pop}", pop_x, 12, self.font, (180, 200, 255))
+        self._register_tooltip(pygame.Rect(pop_x, 4, 60, 30), "pop")
 
-        # --- Wave info (right side, with visual timer bar) ---
-        wave_x = SCREEN_WIDTH - 380
-        pygame.draw.line(surf, COL_GUI_BORDER, (wave_x - 12, 6), (wave_x - 12, 34))
+        # --- v10_9: Tension meter + incident state (right side) ---
+        tension_x = SCREEN_WIDTH - 380
+        pygame.draw.line(surf, COL_GUI_BORDER, (tension_x - 12, 6), (tension_x - 12, 34))
 
-        wave_str = f"Wave {enemy_ai.wave_number}/{enemy_ai.max_waves}"
-        draw_text(surf, wave_str, wave_x, 4, self.font_sm, COL_TEXT)
+        # Incident counter
+        inc_str = f"{enemy_ai.incident_number}/{enemy_ai.incidents_required}"
+        draw_text(surf, inc_str, tension_x, 4, self.font_sm, COL_TEXT)
+        self._register_tooltip(pygame.Rect(tension_x, 2, 48, 18), "incident_counter")
 
-        # next wave timer bar
-        threshold = enemy_ai.first_wave_time if not enemy_ai.first_wave_sent else enemy_ai.wave_interval
-        time_left = max(0, threshold - enemy_ai.wave_timer)
-        timer_ratio = 1.0 - min(1.0, enemy_ai.wave_timer / threshold) if threshold > 0 else 0
-        bar_x = wave_x
-        bar_y = 20
-        bar_w = 100
-        bar_h = 10
-        pygame.draw.rect(surf, (40, 25, 25), (bar_x, bar_y, bar_w, bar_h))
-        # color transitions from green (safe) to red (imminent)
-        if timer_ratio > 0.5:
-            bar_col = (60, 180, 60)
-        elif timer_ratio > 0.2:
-            bar_col = (200, 180, 40)
+        # Tension bar (120px wide)
+        bar_x = tension_x + 50
+        bar_y = 6
+        bar_w = 120
+        bar_h = 12
+        t = max(0.0, min(1.0, enemy_ai.tension))
+        pygame.draw.rect(surf, (30, 30, 40), (bar_x, bar_y, bar_w, bar_h))
+        # Color gradient: blue → amber → red
+        if t < 0.5:
+            r = int(60 + t * 2 * 180)
+            g = int(120 + t * 2 * 60)
+            b = int(200 - t * 2 * 150)
         else:
-            bar_col = (220, 60, 40)
-        fill_w = int(bar_w * timer_ratio)
-        if fill_w > 0:
+            r = int(240)
+            g = int(180 - (t - 0.5) * 2 * 150)
+            b = int(50 - (t - 0.5) * 2 * 50)
+        bar_col = (max(0, min(255, r)), max(0, min(255, g)), max(0, min(255, b)))
+        fill_w = max(1, int(bar_w * t))
+        if t > 0.01:
             pygame.draw.rect(surf, bar_col, (bar_x, bar_y, fill_w, bar_h))
         pygame.draw.rect(surf, COL_GUI_BORDER, (bar_x, bar_y, bar_w, bar_h), 1)
-        draw_text(surf, f"{int(time_left)}s", bar_x + bar_w + 6, bar_y - 1, self.font_xs, COL_TEXT)
+        self._register_tooltip(pygame.Rect(bar_x, bar_y, bar_w, bar_h), "tension_bar")
 
-        # enemy estimate
-        est_x = wave_x + bar_w + 40
-        if enemy_ai.wave_number > 0 and enemy_ai.wave_number < enemy_ai.max_waves:
-            next_count = enemy_ai.get_wave_count(enemy_ai.wave_number + 1)
-            draw_text(surf, f"~{next_count}", est_x, 12, self.font_sm, (180, 100, 100))
+        # State text (narrative)
+        state_text = getattr(enemy_ai, 'narrative_text', "Calm")
+        # Color by FSM state
+        state_colors = {
+            "calm": (120, 160, 200),
+            "foreboding": (200, 180, 80),
+            "imminent": (255, 100, 50),
+            "active": (255, 60, 60),
+            "aftermath": (150, 200, 150),
+        }
+        state_col = state_colors.get(enemy_ai.state, COL_TEXT)
+        draw_text(surf, state_text, bar_x, bar_y + bar_h + 2, self.font_xs, state_col)
 
     # ------------------------------------------------------------------
     # BOTTOM PANEL
@@ -213,25 +310,99 @@ class GUI:
 
         self.buttons.clear()
 
+        # v10_8d: Squad bar only shows once squads have been discovered
+        unlocks = game.unlocks
+        if unlocks["has_squad"] or unlocks["has_barracks"]:
+            squad_bar_h = 25
+            self._draw_squad_bar(surf, py, squad_bar_h, game)
+            context_py = py + squad_bar_h
+        else:
+            context_py = py
+
         # v10_2: inspected enemy takes priority when nothing player-selected
         if not selected and inspected_enemy:
-            self._draw_enemy_panel(surf, py, inspected_enemy)
+            self._draw_enemy_panel(surf, context_py, inspected_enemy)
             return
 
         if not selected:
-            self._draw_global_buttons(surf, py, game)
+            self._draw_global_buttons(surf, context_py, game)
             return
 
         entity = selected[0]
 
         # info section
         if isinstance(entity, Building):
-            self._draw_building_panel(surf, py, entity, game)
+            self._draw_building_panel(surf, context_py, entity, game)
         elif isinstance(entity, Unit):
             if len(selected) > 1:
-                self._draw_multi_unit_panel(surf, py, selected, game)
+                self._draw_multi_unit_panel(surf, context_py, selected, game)
             else:
-                self._draw_unit_panel(surf, py, entity, game)
+                self._draw_unit_panel(surf, context_py, entity, game)
+
+    # ------------------------------------------------------------------
+    # v10_8: SQUAD BAR — horizontal strip showing all player squads
+    # ------------------------------------------------------------------
+    def _draw_squad_bar(self, surf, py, h, game):
+        """Draw squad cards as a horizontal strip at top of bottom panel."""
+        pygame.draw.rect(surf, (25, 25, 35), (0, py, SCREEN_WIDTH, h))
+        pygame.draw.line(surf, (50, 50, 60), (0, py + h), (SCREEN_WIDTH, py + h))
+
+        squads = [s for s in game.player_squad_mgr.squad_list if s.alive_count > 0]
+        if not squads:
+            draw_text(surf, "No squads (train Rank 1+ units to form squads)",
+                      10, py + 6, self.font_xs, (80, 80, 100))
+            return
+
+        # Determine which squads are selected
+        selected_squad_ids = set()
+        for e in game.selected:
+            if isinstance(e, Unit):
+                sq = game.player_squad_mgr.get_squad(e)
+                if sq:
+                    selected_squad_ids.add(sq.squad_id)
+
+        card_w = 80
+        card_h = h - 4
+        gap = 4
+        x = 6
+        for i, squad in enumerate(squads):
+            is_sel = squad.squad_id in selected_squad_ids
+            fmt = squad.formation
+            res_color = RESONANCE_COLORS.get(fmt, (100, 100, 100))
+
+            # card background
+            bg = (50, 50, 65) if is_sel else (35, 35, 45)
+            card_rect = pygame.Rect(x, py + 2, card_w, card_h)
+            pygame.draw.rect(surf, bg, card_rect, border_radius=3)
+
+            # border: bright if selected, dim if not
+            border_col = res_color if is_sel else (60, 60, 70)
+            pygame.draw.rect(surf, border_col, card_rect, 1 if not is_sel else 2, border_radius=3)
+
+            # content: [index] formation_name count
+            idx_label = str(i + 1)
+            fname = FORMATION_NAMES[fmt][:4]  # Rose, Spir, Sier, Koch
+            cnt = squad.alive_count
+            draw_text(surf, idx_label, x + 3, py + 5, self.font_xs, (200, 200, 220))
+            draw_text(surf, fname, x + 14, py + 5, self.font_xs, res_color)
+            draw_text(surf, f"x{cnt}", x + card_w - 18, py + 5, self.font_xs, (160, 160, 180))
+
+            # clickable: select this squad
+            def _click_squad(sq=squad):
+                shift = pygame.key.get_mods() & pygame.KMOD_SHIFT
+                if not shift:
+                    for ee in game.selected:
+                        ee.selected = False
+                    game.selected.clear()
+                for m in sq.members:
+                    if m.alive and m not in game.selected:
+                        m.selected = True
+                        game.selected.append(m)
+            self.buttons.append((card_rect, f"S{i+1}", _click_squad, True))
+
+            x += card_w + gap
+            if x + card_w > SCREEN_WIDTH - 10:
+                break  # overflow protection
 
     # ------------------------------------------------------------------
     # ENEMY INSPECTION PANEL (v10_2)
@@ -249,6 +420,7 @@ class GUI:
         pygame.draw.circle(surf, (200, 60, 60), (40, py + 40), 20, 2)
         label = UNIT_LABELS.get(e.unit_type, "?")
         draw_text(surf, label, 40, py + 40, self.font_lg, (255, 255, 255), center=True)
+        self._register_tooltip(pygame.Rect(20, py + 20, 40, 40), f"enemy_{e.unit_type}")
 
         # "ENEMY" tag
         draw_text(surf, "ENEMY", 80, py + 8, self.font_xs, (255, 80, 80))
@@ -302,6 +474,15 @@ class GUI:
         elif e.unit_type == "enemy_warlock":
             draw_text(surf, f"Warlock: AOE {e.aoe_radius}px splash damage", 80, ability_y, self.font_xs, (180, 100, 220))
 
+        # v10_8: dissonance tag
+        dis_fmt = getattr(e, 'dissonant_formation', -1)
+        if dis_fmt >= 0:
+            from constants import RESONANCE_DISSONANCE_COLORS
+            fmt_names = {0: "Rose", 1: "Spiral", 2: "Sierpinski", 3: "Koch"}
+            dis_col = RESONANCE_DISSONANCE_COLORS.get(dis_fmt, (150, 50, 50))
+            draw_text(surf, f"Dissonant (anti-{fmt_names.get(dis_fmt, '?')})",
+                      80, ability_y + 14, self.font_xs, dis_col)
+
         # right-side hint
         draw_text(surf, "Right-click with units to attack", SCREEN_WIDTH - 250, py + 100,
                   self.font_xs, (100, 80, 80))
@@ -318,6 +499,7 @@ class GUI:
         pygame.draw.rect(surf, COL_GUI_BORDER, (15, py + 10, 50, 50), 1, border_radius=4)
         label = BUILDING_LABELS.get(b.building_type, "??")
         draw_text(surf, label, 40, py + 35, self.font_lg, (255, 255, 255), center=True)
+        self._register_tooltip(pygame.Rect(15, py + 10, 50, 50), f"bld_{b.building_type}")
 
         # name
         name = display_name(b.building_type)
@@ -442,7 +624,7 @@ class GUI:
                                  lambda bld=b: [w.command_ungarrison(game) for w in list(bld.garrison)])
         elif b.building_type == "barracks":
             ud = UNIT_DEFS["soldier"]
-            self._add_button(surf, btn_x, btn_y, btn_w, btn_h, "Train Warden (W)",
+            self._add_button(surf, btn_x, btn_y, btn_w, btn_h, "Train Warden (T)",
                              lambda: b.start_train("soldier", game),
                              game.resources.can_afford(gold=ud["gold"], steel=ud["steel"]),
                              cost_text=self.unit_cost_str("soldier"))
@@ -502,46 +684,154 @@ class GUI:
                                  lambda: setattr(b, 'smelter_boosted', not b.smelter_boosted))
 
     # ------------------------------------------------------------------
-    # SINGLE UNIT PANEL (player)
+    # SINGLE UNIT PANEL (player) — v10_8c rework
     # ------------------------------------------------------------------
     def _draw_unit_panel(self, surf, py, u, game):
+        import math as _m
         color = UNIT_COLORS.get(u.unit_type, (150, 150, 150))
-        pygame.draw.circle(surf, color, (40, py + 35), 20)
-        pygame.draw.circle(surf, COL_GUI_BORDER, (40, py + 35), 20, 1)
-        label = UNIT_LABELS.get(u.unit_type, "?")
-        draw_text(surf, label, 40, py + 35, self.font_lg, (255, 255, 255), center=True)
+        cx, cy = 40, py + 42
+        portrait_r = 24
 
-        # name + rank
+        # HP arc around portrait (green arc proportional to HP %)
+        hp_ratio = u.hp / u.max_hp if u.max_hp > 0 else 0
+        # dark bg arc
+        pygame.draw.circle(surf, (30, 30, 40), (cx, cy), portrait_r + 3, 3)
+        # HP arc: draw as thick arc segments
+        if hp_ratio > 0:
+            hp_col = (0, 200, 50) if hp_ratio > 0.5 else (220, 180, 0) if hp_ratio > 0.25 else (220, 50, 50)
+            arc_r = portrait_r + 3
+            segments = int(24 * hp_ratio)
+            for i in range(segments):
+                angle = -_m.pi / 2 + (2 * _m.pi * i / 24)
+                ax = cx + int(arc_r * _m.cos(angle))
+                ay = cy + int(arc_r * _m.sin(angle))
+                pygame.draw.circle(surf, hp_col, (ax, ay), 2)
+
+        # portrait fill
+        pygame.draw.circle(surf, color, (cx, cy), portrait_r)
+        pygame.draw.circle(surf, COL_GUI_BORDER, (cx, cy), portrait_r, 1)
+        label = UNIT_LABELS.get(u.unit_type, "?")
+        draw_text(surf, label, cx, cy, self.font_lg, (255, 255, 255), center=True)
+        self._register_tooltip(pygame.Rect(cx - portrait_r, cy - portrait_r,
+                               portrait_r * 2, portrait_r * 2), f"unit_{u.unit_type}")
+
+        # rank stars below portrait
+        if u.unit_type != "worker" and u.rank > 0:
+            rank_col = RANK_COLORS.get(u.rank, (180, 180, 100))
+            star_y = cy + portrait_r + 6
+            for i in range(min(u.rank, 5)):
+                sx = cx - (min(u.rank, 5) - 1) * 5 + i * 10
+                pygame.draw.polygon(surf, rank_col, [
+                    (sx, star_y - 4), (sx + 2, star_y - 1),
+                    (sx + 5, star_y - 1), (sx + 3, star_y + 1),
+                    (sx + 4, star_y + 4), (sx, star_y + 2),
+                    (sx - 4, star_y + 4), (sx - 3, star_y + 1),
+                    (sx - 5, star_y - 1), (sx - 2, star_y - 1),
+                ])
+
+        # === INFO COLUMN (75-360) ===
+        ix = 78
+
+        # Row 1: Name + rank badge
         name = display_name(u.unit_type)
+        rank_col = COL_TEXT
         if u.unit_type != "worker" and u.rank < len(MILITARY_RANKS):
             rank_name = MILITARY_RANKS[u.rank]
             rank_col = RANK_COLORS.get(u.rank, COL_TEXT)
-            name += f" [{rank_name}]"
+            draw_text(surf, name, ix, py + 4, self.font, rank_col)
+            # rank badge
+            badge_x = ix + self.font.size(name)[0] + 6
+            badge_w = self.font_xs.size(rank_name)[0] + 8
+            pygame.draw.rect(surf, rank_col, (badge_x, py + 5, badge_w, 14), border_radius=3)
+            draw_text(surf, rank_name, badge_x + 4, py + 5, self.font_xs, (10, 10, 10))
+            self._register_tooltip(pygame.Rect(badge_x, py + 5, badge_w, 14), f"rank_{u.rank}")
+        elif u.unit_type == "worker":
+            draw_text(surf, name, ix, py + 4, self.font, COL_TEXT)
+            # worker specialty badge
+            primary_skill, primary_rank = u.get_primary_skill()
+            if primary_skill and primary_rank > 0:
+                sc = WORKER_SKILL_COLORS.get(primary_skill, COL_TEXT)
+                skill_display = WORKER_SKILL_NAMES.get(primary_skill, primary_skill)
+                rank_name = WORKER_RANKS[primary_rank]
+                badge_text = f"{skill_display} {rank_name}"
+                badge_x = ix + self.font.size(name)[0] + 6
+                badge_w = self.font_xs.size(badge_text)[0] + 8
+                pygame.draw.rect(surf, (*sc, 180), (badge_x, py + 5, badge_w, 14), border_radius=3)
+                draw_text(surf, badge_text, badge_x + 4, py + 5, self.font_xs, (255, 255, 255))
+                self._register_tooltip(pygame.Rect(badge_x, py + 5, badge_w, 14), f"wrank_{rank_name}")
         else:
-            rank_col = COL_TEXT
-        draw_text(surf, name, 80, py + 8, self.font, rank_col)
+            draw_text(surf, name, ix, py + 4, self.font, rank_col)
 
-        # traits (inline, compact)
+        # Row 2: Trait dots (colored circles with tooltip-like labels)
         if u.traits:
-            trait_names = ", ".join(t.replace("_", " ").title() for t in sorted(u.traits))
-            trait_cols = [TRAIT_DISPLAY.get(t, {}).get("color", COL_TEXT) for t in sorted(u.traits)]
-            self._draw_clipped(surf, trait_names, 80, py + 22,
-                               self.font_xs, trait_cols[0] if trait_cols else COL_TEXT, max_width=240)
+            tx = ix
+            for t in sorted(u.traits):
+                td = TRAIT_DISPLAY.get(t, {})
+                tc = td.get("color", (140, 140, 140))
+                pygame.draw.circle(surf, tc, (tx + 5, py + 24), 4)
+                trait_label = t.replace("_", " ").title()[:8]
+                draw_text(surf, trait_label, tx + 12, py + 19, self.font_xs, tc)
+                tw = self.font_xs.size(trait_label)[0] + 18
+                self._register_tooltip(pygame.Rect(tx, py + 17, tw, 14), f"trait_{t}")
+                tx += tw
+                if tx > 340:
+                    break
 
-        # HP bar (visual, green)
-        self._draw_hp_bar(surf, 80, py + 36, 160, 12, u.hp, u.max_hp, (0, 180, 0))
+        # Row 3: HP bar (wider, with number overlay)
+        hp_bar_x, hp_bar_y = ix, py + 33
+        hp_bar_w, hp_bar_h = 200, 10
+        pygame.draw.rect(surf, (30, 30, 40), (hp_bar_x, hp_bar_y, hp_bar_w, hp_bar_h), border_radius=2)
+        hp_col = (0, 200, 50) if hp_ratio > 0.5 else (220, 180, 0) if hp_ratio > 0.25 else (220, 50, 50)
+        fill_w = int(hp_bar_w * hp_ratio)
+        if fill_w > 0:
+            pygame.draw.rect(surf, hp_col, (hp_bar_x, hp_bar_y, fill_w, hp_bar_h), border_radius=2)
+        draw_text(surf, f"{int(u.hp)}/{int(u.max_hp)}", hp_bar_x + hp_bar_w + 6, hp_bar_y - 1, self.font_xs, hp_col)
 
-        # stats + state on same line
+        # Row 4: Stats line with state indicator
         state_str = u.state
-        if u.state == "fleeing" and u.owner == "player":
-            state_str = "fleeing!"
-        if u.stance != STANCE_AGGRESSIVE:
-            state_str += f" [{STANCE_NAMES[u.stance]}]"
-        draw_text(surf, f"ATK: {u.attack_power}  SPD: {u.speed}  |  {state_str}",
-                  80, py + 54, self.font_sm, (180, 180, 200))
+        state_col = (120, 200, 120)  # green = normal
+        if u.state == "fleeing":
+            state_str = "FLEEING"
+            state_col = (255, 80, 80)
+        elif u.state == "attacking":
+            state_str = "FIGHTING"
+            state_col = (255, 160, 60)
+        elif u.state == "gathering":
+            state_str = "MINING"
+            state_col = (200, 180, 80)
+        elif u.state == "returning":
+            state_str = "HAULING"
+            state_col = (100, 180, 220)
+        elif u.state == "building":
+            state_str = "BUILDING"
+            state_col = (100, 200, 255)
+        elif u.state == "idle":
+            state_str = "IDLE"
+            state_col = (100, 100, 130)
+        elif u.state == "moving":
+            state_str = "MOVING"
+            state_col = (160, 160, 200)
 
-        # XP bar for military
+        # state tag (rounded rect)
+        tag_w = self.font_xs.size(state_str)[0] + 8
+        pygame.draw.rect(surf, (*state_col[:3], 60), (ix, py + 47, tag_w, 14), border_radius=3)
+        pygame.draw.rect(surf, state_col, (ix, py + 47, tag_w, 14), 1, border_radius=3)
+        draw_text(surf, state_str, ix + 4, py + 48, self.font_xs, state_col)
+
+        # stats after state tag
+        stat_x = ix + tag_w + 8
+        if u.stance != STANCE_AGGRESSIVE:
+            stance_col = STANCE_COLORS.get(u.stance, (180, 220, 255))
+            stance_name = STANCE_NAMES[u.stance]
+            draw_text(surf, stance_name, stat_x, py + 48, self.font_xs, stance_col)
+            stat_x += self.font_xs.size(stance_name)[0] + 8
+        draw_text(surf, f"ATK:{u.attack_power}  SPD:{u.speed}", stat_x, py + 48, self.font_xs, (150, 150, 170))
+
+        # Row 5: XP / Carrying / Skills
+        row5_y = py + 65
+
         if u.unit_type != "worker":
+            # XP progress bar (thin, under stats)
             next_rank = u.rank + 1
             if next_rank < len(RANK_XP_THRESHOLDS):
                 current_threshold = RANK_XP_THRESHOLDS[u.rank]
@@ -549,44 +839,34 @@ class GUI:
                 xp_in_rank = u.xp - current_threshold
                 xp_needed = next_threshold - current_threshold
                 xp_ratio = min(1.0, xp_in_rank / xp_needed) if xp_needed > 0 else 1.0
-                bar_x, bar_y = 80, py + 72
-                bar_w, bar_h = 120, 6
-                pygame.draw.rect(surf, (40, 40, 50), (bar_x, bar_y, bar_w, bar_h))
                 fill_col = RANK_COLORS.get(next_rank, (180, 180, 100))
-                pygame.draw.rect(surf, fill_col, (bar_x, bar_y, int(bar_w * xp_ratio), bar_h))
-                draw_text(surf, f"XP {u.xp}/{next_threshold}",
-                          bar_x + bar_w + 6, bar_y - 2, self.font_xs, (140, 140, 160))
+                pygame.draw.rect(surf, (40, 40, 50), (ix, row5_y, 160, 5), border_radius=2)
+                pygame.draw.rect(surf, fill_col, (ix, row5_y, int(160 * xp_ratio), 5), border_radius=2)
+                draw_text(surf, f"XP {u.xp}/{next_threshold}", ix + 166, row5_y - 2,
+                          self.font_xs, (140, 140, 160))
             else:
-                draw_text(surf, f"XP {u.xp} (MAX)", 80, py + 72, self.font_xs, (255, 215, 0))
+                draw_text(surf, "MAX RANK", ix, row5_y - 2, self.font_xs, (255, 215, 0))
 
-        # carrying
-        if u.carry_amount > 0:
+        elif u.unit_type == "worker":
+            # Carrying indicator (colored resource icon + amount)
             carry_colors = {"gold": COL_GOLD, "wood": COL_WOOD, "iron": COL_IRON_C, "stone": COL_STONE}
-            cc = carry_colors.get(u.carry_type, COL_GOLD)
-            draw_text(surf, f"Carrying {u.carry_amount} {u.carry_type}", 80, py + 84, self.font_sm, cc)
+            if u.carry_amount > 0:
+                cc = carry_colors.get(u.carry_type, COL_GOLD)
+                pygame.draw.rect(surf, cc, (ix, row5_y, 8, 8), border_radius=2)
+                draw_text(surf, f"{u.carry_amount} {u.carry_type}", ix + 12, row5_y - 1, self.font_xs, cc)
 
-        # worker skill info (compact)
-        if u.unit_type == "worker":
-            primary_skill, primary_rank = u.get_primary_skill()
-            if primary_skill and primary_rank > 0:
-                skill_display = WORKER_SKILL_NAMES.get(primary_skill, primary_skill)
-                rank_name = WORKER_RANKS[primary_rank]
-                bonus = int(WORKER_RANK_SPEED_BONUS.get(primary_rank, 0) * 100)
-                sc = WORKER_SKILL_COLORS.get(primary_skill, COL_TEXT)
-                draw_text(surf, f"{skill_display} {rank_name} (+{bonus}%)",
-                          80, py + 84, self.font_sm, sc)
-            # skill XP bars (up to 2, more compact)
-            bar_y = py + 100
+            # skill XP inline badges
             active_skills = [(s, u.skill_xp[s], u.skill_ranks[s])
                              for s in u.skill_xp if u.skill_xp[s] > 0]
             active_skills.sort(key=lambda t: (-t[2], -t[1]))
-            for skill_name, xp, rank in active_skills[:2]:
-                skill_short = WORKER_SKILL_NAMES.get(skill_name, skill_name)[:6]
+            skill_x = ix + (100 if u.carry_amount > 0 else 0)
+            for skill_name, xp, rank in active_skills[:3]:
                 sc = WORKER_SKILL_COLORS.get(skill_name, (160, 160, 180))
-                draw_text(surf, skill_short, 80, bar_y, self.font_xs, sc)
-                bar_x = 130
-                bar_w, bar_h = 70, 5
-                pygame.draw.rect(surf, (40, 40, 50), (bar_x, bar_y + 3, bar_w, bar_h))
+                skill_short = WORKER_SKILL_NAMES.get(skill_name, skill_name)[:4]
+                rank_label = WORKER_RANKS[rank][0]
+                badge_text = f"{skill_short}:{rank_label}"
+                bw = self.font_xs.size(badge_text)[0] + 6
+                # mini XP bar behind badge
                 if rank < len(WORKER_RANK_XP) - 1:
                     cur_thresh = WORKER_RANK_XP[rank]
                     next_thresh = WORKER_RANK_XP[rank + 1]
@@ -595,104 +875,100 @@ class GUI:
                     ratio = min(1.0, xp_in_rank / xp_needed) if xp_needed > 0 else 1.0
                 else:
                     ratio = 1.0
-                pygame.draw.rect(surf, sc, (bar_x, bar_y + 3, int(bar_w * ratio), bar_h))
-                rank_label = WORKER_RANKS[rank][0]
-                draw_text(surf, rank_label, bar_x + bar_w + 4, bar_y, self.font_xs, sc)
-                bar_y += 13
+                pygame.draw.rect(surf, (30, 30, 40), (skill_x, row5_y, bw, 12), border_radius=2)
+                pygame.draw.rect(surf, (*sc[:3], 80), (skill_x, row5_y, int(bw * ratio), 12), border_radius=2)
+                draw_text(surf, badge_text, skill_x + 3, row5_y, self.font_xs, sc)
+                skill_x += bw + 4
+                if skill_x > 340:
+                    break
 
-        # build buttons for workers
+        # Row 6: Gather hint for idle workers
+        if u.unit_type == "worker" and u.state == "idle":
+            draw_text(surf, "RClick resource or use gather buttons →", ix, py + 80,
+                      self.font_xs, (100, 100, 130))
+
+        # === ACTION COLUMN (right side) ===
         if u.unit_type == "worker":
-            self._draw_build_buttons(surf, py, game)
-
-        # command buttons for combat units
-        if u.unit_type in ("soldier", "archer"):
+            self._draw_worker_action_buttons(surf, py, game)
+        elif u.unit_type in ("soldier", "archer"):
             self._draw_command_buttons(surf, py, game)
 
     # ------------------------------------------------------------------
-    # MULTI UNIT PANEL
+    # WORKER ACTION BUTTONS — v10_8c: build + gather in one panel
     # ------------------------------------------------------------------
-    def _draw_multi_unit_panel(self, surf, py, selected, game):
-        draw_text(surf, f"{len(selected)} units selected", 20, py + 8, self.font)
-
-        # aggregate HP
-        total_hp = sum(u.hp for u in selected)
-        total_max = sum(u.max_hp for u in selected)
-        self._draw_hp_bar(surf, 20, py + 28, 120, 10, total_hp, total_max, (0, 170, 0))
-
-        # unit type icons with counts
-        x = 20
-        counts = {}
-        rank_counts = {}
-        for u in selected:
-            counts[u.unit_type] = counts.get(u.unit_type, 0) + 1
-            if u.unit_type not in rank_counts:
-                rank_counts[u.unit_type] = {}
-            rank_counts[u.unit_type][u.rank] = rank_counts[u.unit_type].get(u.rank, 0) + 1
-        y = py + 48
-        for utype, cnt in counts.items():
-            color = UNIT_COLORS.get(utype, (150, 150, 150))
-            pygame.draw.circle(surf, color, (x + 10, y + 10), 10)
-            pygame.draw.circle(surf, COL_GUI_BORDER, (x + 10, y + 10), 10, 1)
-            label = UNIT_LABELS.get(utype, "?")
-            draw_text(surf, label, x + 10, y + 10, self.font_sm, (255, 255, 255), center=True)
-            rc = rank_counts.get(utype, {})
-            ranked = sum(v for r, v in rc.items() if r > 0)
-            if ranked > 0:
-                rank_parts = []
-                for r in sorted(rc.keys()):
-                    if r > 0:
-                        rank_parts.append(f"{rc[r]}{'*' * r}")
-                count_text = f"x{cnt} ({' '.join(rank_parts)})"
-            else:
-                count_text = f"x{cnt}"
-            draw_text(surf, count_text, x + 25, y + 3, self.font_sm)
-            x += 90
-
-        # build buttons for all-worker selection
-        all_workers = all(u.unit_type == "worker" for u in selected)
-        if all_workers:
-            self._draw_build_buttons(surf, py, game)
-
-        # command buttons for all-combat selection
-        all_combat = all(u.unit_type in ("soldier", "archer") for u in selected)
-        if all_combat:
-            self._draw_command_buttons(surf, py, game)
-
-    # ------------------------------------------------------------------
-    # BUILD BUTTONS
-    # ------------------------------------------------------------------
-    def _draw_build_buttons(self, surf, py, game):
+    def _draw_worker_action_buttons(self, surf, py, game):
+        """v10_8d: Build buttons + gather — progressively revealed."""
         btn_x = 400
-        btn_y_start = py + 5
-        btn_w, btn_h = 140, 38
+        btn_y_start = py + 2
+        btn_w, btn_h = 105, 28
         bd = BUILDING_DEFS
-        self._add_button(surf, btn_x, btn_y_start, btn_w, btn_h, "Tree of Life (1)",
+        unlocks = game.unlocks
+
+        # Tree of Life: always visible (core building)
+        self._add_button(surf, btn_x, btn_y_start, btn_w, btn_h, "Tree of Life(1)",
                          lambda: game.start_placement("town_hall"),
                          game.resources.can_afford(gold=bd["town_hall"]["gold"], wood=bd["town_hall"]["wood"]),
                          cost_text=self.building_cost_str("town_hall"))
-        self._add_button(surf, btn_x + btn_w + 6, btn_y_start, btn_w, btn_h, "War Nexus (2)",
-                         lambda: game.start_placement("barracks"),
-                         game.resources.can_afford(gold=bd["barracks"]["gold"], wood=bd["barracks"]["wood"]),
-                         cost_text=self.building_cost_str("barracks"))
-        self._add_button(surf, btn_x, btn_y_start + btn_h + 4, btn_w, btn_h, "Crucible (3)",
-                         lambda: game.start_placement("refinery"),
-                         game.resources.can_afford(gold=bd["refinery"]["gold"], wood=bd["refinery"]["wood"], iron=bd["refinery"]["iron"]),
-                         cost_text=self.building_cost_str("refinery"))
-        self._add_button(surf, btn_x + btn_w + 6, btn_y_start + btn_h + 4, btn_w, btn_h, "Sentinel (4)",
-                         lambda: game.start_placement("tower"),
-                         game.resources.can_afford(gold=bd["tower"]["gold"], iron=bd["tower"].get("iron", 0),
-                                                   stone=bd["tower"].get("stone", 0)),
-                         cost_text=self.building_cost_str("tower"))
 
-        # v10.2: Foreman helper building buttons (conditional on worker rank)
+        # War Nexus: visible after first wave or ~60s of play (player needs army)
+        if unlocks["first_wave_cleared"] or game.game_time > 60:
+            self._add_button(surf, btn_x + btn_w + 4, btn_y_start, btn_w, btn_h, "War Nexus(2)",
+                             lambda: game.start_placement("barracks"),
+                             game.resources.can_afford(gold=bd["barracks"]["gold"], wood=bd["barracks"]["wood"]),
+                             cost_text=self.building_cost_str("barracks"))
+        else:
+            # teaser: locked button with hint
+            self._draw_locked_button(surf, btn_x + btn_w + 4, btn_y_start, btn_w, btn_h,
+                                     "???", "Survive first wave")
+
+        # Build row 2
+        r2y = btn_y_start + btn_h + 2
+
+        # Crucible: visible after iron is discovered
+        if unlocks["has_iron"]:
+            self._add_button(surf, btn_x, r2y, btn_w, btn_h, "Crucible(3)",
+                             lambda: game.start_placement("refinery"),
+                             game.resources.can_afford(gold=bd["refinery"]["gold"], wood=bd["refinery"]["wood"], iron=bd["refinery"]["iron"]),
+                             cost_text=self.building_cost_str("refinery"))
+        elif game.game_time > 30:
+            self._draw_locked_button(surf, btn_x, r2y, btn_w, btn_h, "???", "Mine Iron")
+
+        # Sentinel: visible after barracks built
+        if unlocks["has_barracks"]:
+            self._add_button(surf, btn_x + btn_w + 4, r2y, btn_w, btn_h, "Sentinel(4)",
+                             lambda: game.start_placement("tower"),
+                             game.resources.can_afford(gold=bd["tower"]["gold"], iron=bd["tower"].get("iron", 0),
+                                                       stone=bd["tower"].get("stone", 0)),
+                             cost_text=self.building_cost_str("tower"))
+        elif unlocks["has_iron"]:
+            self._draw_locked_button(surf, btn_x + btn_w + 4, r2y, btn_w, btn_h, "???", "Build Barracks")
+
+        # Gather row: 4 resource-colored buttons
+        r3y = r2y + btn_h + 4
+        gather_w = 52
+        res_defs = [
+            ("wood",  COL_WOOD,   "Wood"),
+            ("gold",  COL_GOLD,   "Gold"),
+            ("iron",  COL_IRON_C, "Iron"),
+            ("stone", COL_STONE,  "Stone"),
+        ]
+        for i, (rtype, rcol, rlabel) in enumerate(res_defs):
+            gx = btn_x + i * (gather_w + 3)
+            self._add_button(surf, gx, r3y, gather_w, 22, rlabel,
+                             lambda rt=rtype: game.command_gather_nearest_selected(rt))
+            # colored underline
+            pygame.draw.line(surf, rcol, (gx + 2, r3y + 21), (gx + gather_w - 2, r3y + 21), 2)
+        draw_text(surf, "Gather:", btn_x - 45, r3y + 4, self.font_xs, (120, 120, 140))
+
+        # Foreman buildings (if applicable)
         foreman_skills = set()
         workers = [u for u in game.selected if isinstance(u, Unit) and u.unit_type == "worker"]
         for w in workers:
             for skill_name in FOREMAN_BUILDINGS:
-                if w.get_skill_rank(skill_name) >= 1:  # Foreman+
+                if w.get_skill_rank(skill_name) >= 1:
                     foreman_skills.add(skill_name)
         if foreman_skills:
-            row3_y = btn_y_start + 2 * (btn_h + 4)
+            r4y = r3y + 26
             fx = btn_x
             for skill_name in sorted(foreman_skills):
                 btype = FOREMAN_BUILDINGS[skill_name]
@@ -700,100 +976,333 @@ class GUI:
                 can_afford = game.resources.can_afford(
                     gold=bd_new["gold"], wood=bd_new["wood"],
                     stone=bd_new.get("stone", 0))
-                label = display_name(btype)
-                self._add_button(surf, fx, row3_y, btn_w, btn_h, label,
+                blabel = display_name(btype)
+                self._add_button(surf, fx, r4y, btn_w, btn_h, blabel,
                                  lambda bt=btype: game.start_placement(bt),
                                  can_afford,
                                  cost_text=self.building_cost_str(btype))
-                fx += btn_w + 6
+                fx += btn_w + 4
                 if fx + btn_w > SCREEN_WIDTH - 20:
                     fx = btn_x
-                    row3_y += btn_h + 4
+                    r4y += btn_h + 2
+
+    # ------------------------------------------------------------------
+    # MULTI UNIT PANEL — v10_8c rework
+    # ------------------------------------------------------------------
+    def _draw_multi_unit_panel(self, surf, py, selected, game):
+        # Group by type
+        by_type = {}
+        for u in selected:
+            by_type.setdefault(u.unit_type, []).append(u)
+
+        # Total count header
+        draw_text(surf, f"{len(selected)} units", 20, py + 4, self.font, COL_TEXT)
+
+        # Aggregate HP bar
+        total_hp = sum(u.hp for u in selected)
+        total_max = sum(u.max_hp for u in selected)
+        hp_ratio = total_hp / total_max if total_max > 0 else 0
+        hp_col = (0, 200, 50) if hp_ratio > 0.5 else (220, 180, 0) if hp_ratio > 0.25 else (220, 50, 50)
+        self._draw_hp_bar(surf, 100, py + 7, 100, 8, total_hp, total_max, hp_col)
+        draw_text(surf, f"{int(hp_ratio * 100)}%", 206, py + 4, self.font_xs, hp_col)
+
+        # Type cards — each gets a mini row with icon, count, state breakdown bar
+        card_y = py + 20
+        state_colors = {
+            "idle": (80, 80, 100), "moving": (100, 100, 180), "gathering": (200, 180, 60),
+            "returning": (80, 160, 200), "attacking": (220, 100, 60), "fleeing": (255, 50, 50),
+            "building": (80, 200, 255),
+        }
+        for utype in ["worker", "soldier", "archer"]:
+            units = by_type.get(utype, [])
+            if not units:
+                continue
+            color = UNIT_COLORS.get(utype, (150, 150, 150))
+            cnt = len(units)
+
+            # icon circle
+            pygame.draw.circle(surf, color, (30, card_y + 8), 8)
+            label = UNIT_LABELS.get(utype, "?")
+            draw_text(surf, label, 30, card_y + 8, self.font_xs, (255, 255, 255), center=True)
+
+            # count + rank summary
+            rank_counts = {}
+            for u in units:
+                rank_counts[u.rank] = rank_counts.get(u.rank, 0) + 1
+            ranked = sum(v for r, v in rank_counts.items() if r > 0)
+            if ranked > 0:
+                parts = [f"{v}{'*' * r}" for r, v in sorted(rank_counts.items()) if r > 0]
+                count_text = f"x{cnt} ({' '.join(parts)})"
+            else:
+                count_text = f"x{cnt}"
+            draw_text(surf, count_text, 42, card_y + 2, self.font_xs, COL_TEXT)
+
+            # state distribution bar (stacked horizontal)
+            bar_x, bar_w, bar_h = 120, 100, 6
+            states = {}
+            for u in units:
+                states[u.state] = states.get(u.state, 0) + 1
+            pygame.draw.rect(surf, (30, 30, 40), (bar_x, card_y + 10, bar_w, bar_h), border_radius=2)
+            bx = bar_x
+            for st, sc in states.items():
+                seg_w = max(1, int(bar_w * sc / cnt))
+                scol = state_colors.get(st, (100, 100, 100))
+                pygame.draw.rect(surf, scol, (bx, card_y + 10, seg_w, bar_h), border_radius=1)
+                bx += seg_w
+
+            # state legend (most common state)
+            top_state = max(states, key=states.get) if states else "idle"
+            scol = state_colors.get(top_state, (100, 100, 100))
+            draw_text(surf, f"{states.get(top_state, 0)} {top_state}", bar_x + bar_w + 6,
+                      card_y + 6, self.font_xs, scol)
+
+            card_y += 22
+
+        # DPS summary for combat units
+        combat = [u for u in selected if u.unit_type in ("soldier", "archer")]
+        if combat:
+            total_dps = sum(u.attack_power / max(0.5, getattr(u, 'attack_cooldown', 1.0)) for u in combat)
+            draw_text(surf, f"~{total_dps:.0f} DPS", 20, card_y + 2, self.font_xs, (220, 160, 80))
+
+        # Action buttons on right side
+        all_workers = all(u.unit_type == "worker" for u in selected)
+        if all_workers:
+            self._draw_worker_action_buttons(surf, py, game)
+
+        all_combat = all(u.unit_type in ("soldier", "archer") for u in selected)
+        if all_combat:
+            self._draw_command_buttons(surf, py, game)
 
     # ------------------------------------------------------------------
     # COMMAND BUTTONS (soldiers / archers)
     # ------------------------------------------------------------------
     def _draw_global_buttons(self, surf, py, game):
-        btn_w, btn_h = 140, 38
-        btn_y = py + 10
-        gap = 8
-        # center 4 buttons
-        total_w = 4 * btn_w + 3 * gap
-        btn_x = (SCREEN_WIDTH - total_w) // 2
+        """v10_8d: Global command buttons — progressively revealed."""
+        unlocks = game.unlocks
+        btn_w, btn_h = 120, 30
+        btn_y = py + 6
+        gap = 6
+        btn_x = 20
+        slot = 0
 
-        self._add_button(surf, btn_x, btn_y, btn_w, btn_h,
-                         "Defend Base", lambda: game.global_defend())
+        # Defend/Hunt only after combat exists
+        if unlocks["has_barracks"] or unlocks["has_squad"]:
+            self._add_button(surf, btn_x + slot * (btn_w + gap), btn_y, btn_w, btn_h,
+                             "Defend Base", lambda: game.global_defend())
+            slot += 1
+            self._add_button(surf, btn_x + slot * (btn_w + gap), btn_y, btn_w, btn_h,
+                             "Hunt Enemies", lambda: game.global_attack())
+            slot += 1
 
-        self._add_button(surf, btn_x + btn_w + gap, btn_y, btn_w, btn_h,
-                         "Hunt Enemies", lambda: game.global_attack())
+        # Town Bell: after garrison is meaningful (has workers + some economy)
+        if unlocks["has_iron"] or game.game_time > 120:
+            gc = GARRISON_COST
+            can_bell = game.resources.can_afford(wood=gc["wood"], iron=gc["iron"], stone=gc["stone"])
+            cost_str = f"{gc['wood']}W {gc['iron']}I {gc['stone']}S"
+            self._add_button(surf, btn_x + slot * (btn_w + gap), btn_y, btn_w, btn_h,
+                             "Town Bell", lambda: game.global_bell(),
+                             enabled=can_bell, cost_text=cost_str)
+            slot += 1
 
-        # Town Bell — costs resources
-        gc = GARRISON_COST
-        can_bell = game.resources.can_afford(wood=gc["wood"], iron=gc["iron"], stone=gc["stone"])
-        cost_str = f"{gc['wood']}W {gc['iron']}I {gc['stone']}S"
-        self._add_button(surf, btn_x + 2 * (btn_w + gap), btn_y, btn_w, btn_h,
-                         "Town Bell", lambda: game.global_bell(),
-                         enabled=can_bell, cost_text=cost_str)
+        # Resume: always after bell is available
+        if unlocks["has_iron"] or game.game_time > 120:
+            self._add_button(surf, btn_x + slot * (btn_w + gap), btn_y, btn_w, btn_h,
+                             "Resume Work", lambda: game.global_resume())
+            slot += 1
 
-        self._add_button(surf, btn_x + 3 * (btn_w + gap), btn_y, btn_w, btn_h,
-                         "Resume Work", lambda: game.global_resume())
-
-        # help text below
-        draw_text(surf, "Click to select  |  Right-click to command  |  1-4: Build  |  Q/W/E: Train",
-                  20, py + 60, self.font_xs, (70, 70, 90))
+        # v10_8d: contextual help text — changes based on progression
+        hint_y = py + 44
+        if game.game_time < 30:
+            hint = "Select workers and right-click resources to start gathering"
+        elif not unlocks["has_barracks"] and game.game_time < 120:
+            hint = "Build a War Nexus to train soldiers — enemies approach!"
+        elif unlocks["has_squad"]:
+            hint = "LClick: select  RClick: command  1-9: squad  Tab: cycle  A+click: atk-move  P: pause"
+        else:
+            hint = "LClick: select  RClick: command  Shift+click: add  P: pause"
+        draw_text(surf, hint, 20, hint_y, self.font_xs, (70, 70, 90))
 
     # ------------------------------------------------------------------
     def _draw_command_buttons(self, surf, py, game):
+        """v10_8d: Formation picker + stance picker — progressively unlocked."""
         btn_x = 400
-        btn_y_start = py + 5
-        btn_w, btn_h = 140, 38
+        btn_y_start = py + 2
+        unlocks = game.unlocks
 
         combat_sel = [e for e in game.selected
                       if hasattr(e, 'unit_type') and e.unit_type in ("soldier", "archer")]
+        if not combat_sel:
+            return
 
-        self._add_button(surf, btn_x, btn_y_start, btn_w, btn_h, "Attack Move",
-                         lambda: setattr(game, 'attack_move_mode', True))
+        # Determine current squad(s)
+        squads_seen = {}
+        for u in combat_sel:
+            sq = game.player_squad_mgr.get_squad(u)
+            if sq and sq.squad_id not in squads_seen:
+                squads_seen[sq.squad_id] = sq
+        primary_squad = list(squads_seen.values())[0] if squads_seen else None
+        cur_fmt = primary_squad.formation if primary_squad else 0
+        cur_stance = primary_squad.stance if primary_squad else 0
 
-        # Stance cycle button
-        if combat_sel:
-            cur_stance = combat_sel[0].stance
-            stance_label = STANCE_NAMES[cur_stance]
-            self._add_button(surf, btn_x + btn_w + 6, btn_y_start, btn_w, btn_h, stance_label,
-                             lambda: self._cycle_stance(game))
+        # No squad yet — show hint instead of formation buttons
+        if not primary_squad:
+            draw_text(surf, "Units need Rank 1+ to form squads and unlock formations",
+                      btn_x, btn_y_start + 6, self.font_xs, (100, 100, 140))
+            draw_text(surf, "X+click: attack-move", btn_x, btn_y_start + 22,
+                      self.font_xs, (70, 70, 90))
+            return
 
-            # Formation row: F1-F4 buttons
-            fmt_y = btn_y_start + btn_h + 4
-            fmt_w = 68
-            squad = game.player_squad_mgr.get_squad(combat_sel[0])
-            cur_fmt = squad.formation if squad else 0
-            for i, fname in enumerate(FORMATION_NAMES):
-                fx = btn_x + i * (fmt_w + 4)
-                label = f"F{i+1}:{fname}"
-                is_active = (i == cur_fmt)
-                def _set_fmt(idx=i):
-                    self._set_formation(game, idx)
-                self._add_button(surf, fx, fmt_y, fmt_w, 28, label, _set_fmt,
-                                 enabled=True)
+        # v10_alpha: Formation row — unlock through discovery (not squad size)
+        discovered = game.discovered_formations
+        fmt_w = 72
+        shown_fmts = 0
+        # Formation order for display: Rose, Spiral, Sierpinski, Koch (indices 0,1,2,3)
+        fmt_order = [FORMATION_POLAR_ROSE, FORMATION_GOLDEN_SPIRAL,
+                     FORMATION_SIERPINSKI, FORMATION_KOCH]
+        for display_i, fmt_idx in enumerate(fmt_order):
+            fname = FORMATION_NAMES[fmt_idx]
+            unlocked = fmt_idx in discovered
+            fx = btn_x + shown_fmts * (fmt_w + 3)
+            if not unlocked:
+                # Show discovery hint
+                hint = DISCOVERY_HINTS.get(fmt_idx, "?")
+                pygame.draw.rect(surf, (30, 30, 40), (fx, btn_y_start, fmt_w, 24), border_radius=3)
+                pygame.draw.rect(surf, (50, 50, 60), (fx, btn_y_start, fmt_w, 24), 1, border_radius=3)
+                draw_text(surf, hint, fx + 4, btn_y_start + 6,
+                          self.font_xs, (60, 60, 80))
+                self._register_tooltip(pygame.Rect(fx, btn_y_start, fmt_w, 24), f"fmt_{fname}")
+                shown_fmts += 1
+                continue
+
+            label = f"F{display_i+1}:{fname}"
+            is_active = (fmt_idx == cur_fmt)
+            res_color = RESONANCE_COLORS.get(fmt_idx, (100, 100, 100))
+            def _set_fmt(idx=fmt_idx):
+                self._set_formation(game, idx)
+                game.unlocks["formations_used"].add(idx)
+            self._add_button(surf, fx, btn_y_start, fmt_w, 24, label, _set_fmt,
+                             enabled=True)
+            if is_active:
+                pygame.draw.rect(surf, res_color, (fx, btn_y_start, fmt_w, 24), 2)
+            self._register_tooltip(pygame.Rect(fx, btn_y_start, fmt_w, 24), f"fmt_{fname}")
+            shown_fmts += 1
+
+        # Resonance value + harmony quality labels below formation buttons
+        if primary_squad and squads_seen:
+            from squads import (resonance_polar_rose_bonus, resonance_golden_spiral_miss,
+                                resonance_sierpinski_aoe_factor, resonance_koch_slow,
+                                compute_harmony, get_squad_composition)
+            n = primary_squad.alive_count
+            s_count, a_count = get_squad_composition(primary_squad)
+            labels = [
+                f"+{resonance_polar_rose_bonus(n)*100:.0f}% DMG",
+                f"{resonance_golden_spiral_miss(n)*100:.0f}% Evade",
+                f"{(1.0 - resonance_sierpinski_aoe_factor(n))*100:.0f}% AOE Red",
+                f"{resonance_koch_slow(n)*100:.0f}% Slow",
+            ]
+            label_map = {FORMATION_POLAR_ROSE: labels[0],
+                         FORMATION_GOLDEN_SPIRAL: labels[1],
+                         FORMATION_SIERPINSKI: labels[2],
+                         FORMATION_KOCH: labels[3]}
+            for display_i, fmt_idx in enumerate(fmt_order):
+                if fmt_idx not in discovered:
+                    continue
+                lx = btn_x + display_i * (fmt_w + 3)
+                res_col = RESONANCE_COLORS.get(fmt_idx, (100, 100, 100))
+                is_active = (fmt_idx == cur_fmt)
+                col = res_col if is_active else (80, 80, 80)
+                draw_text(surf, label_map[fmt_idx], lx + 2, btn_y_start + 24, self.font_xs, col)
+                # Show harmony quality when this formation is active
                 if is_active:
-                    pygame.draw.rect(surf, (180, 220, 255),
-                                     (fx, fmt_y, fmt_w, 28), 2)
+                    harmony = compute_harmony(fmt_idx, s_count, a_count)
+                    h_pct = int(harmony * 100)
+                    h_col = (255, 230, 80) if h_pct >= 100 else res_col
+                    draw_text(surf, f"{h_pct}%", lx + fmt_w - 22, btn_y_start + 24,
+                              self.font_xs, h_col)
+                    self._register_tooltip(pygame.Rect(lx, btn_y_start + 24, fmt_w, 12), "harmony")
 
-    def _cycle_stance(self, game):
-        for e in game.selected:
-            if hasattr(e, 'unit_type') and e.unit_type in ("soldier", "archer"):
-                next_stance = (e.stance + 1) % 4
-                e.command_set_stance(next_stance)
-                squad_mgr = game.player_squad_mgr
-                squad_mgr.set_stance(e, next_stance)
+        # Stance row — unlock progressively
+        # Aggressive: always, Defensive: rank 1+, Guard: rank 2+, Hunt: incident 3+
+        max_rank = unlocks["max_rank_seen"]
+        incident = game.enemy_ai.incident_number
+        stance_unlock = [True, max_rank >= 1, max_rank >= 2, incident >= 3]
+
+        stance_y = btn_y_start + 40
+        stance_w = 72
+        shown_stances = 0
+        for i, sname in enumerate(STANCE_NAMES):
+            sx = btn_x + shown_stances * (stance_w + 3)
+            if not stance_unlock[i]:
+                # locked stance hint
+                pygame.draw.rect(surf, (30, 30, 40), (sx, stance_y, stance_w, 24), border_radius=3)
+                pygame.draw.rect(surf, (50, 50, 60), (sx, stance_y, stance_w, 24), 1, border_radius=3)
+                if i == 1:
+                    hint = "Rank 1"
+                elif i == 2:
+                    hint = "Rank 2"
+                else:
+                    hint = "Wave 3"
+                draw_text(surf, hint, sx + 10, stance_y + 6, self.font_xs, (60, 60, 80))
+                self._register_tooltip(pygame.Rect(sx, stance_y, stance_w, 24), f"stance_{sname}")
+                shown_stances += 1
+                continue
+
+            label = f"F{i+5}:{sname}"
+            is_active = (i == cur_stance)
+            s_color = STANCE_COLORS.get(i, (180, 220, 255))
+            def _set_st(idx=i):
+                self._set_stance(game, idx)
+            self._add_button(surf, sx, stance_y, stance_w, 24, label, _set_st,
+                             enabled=True)
+            if is_active:
+                pygame.draw.rect(surf, s_color, (sx, stance_y, stance_w, 24), 2)
+            self._register_tooltip(pygame.Rect(sx, stance_y, stance_w, 24), f"stance_{sname}")
+            shown_stances += 1
+
+        # Hint: contextual based on game state
+        hint_y = stance_y + 28
+        if not unlocks["has_squad"]:
+            draw_text(surf, "Train units to Rank 1 to unlock squads and formations",
+                      btn_x, hint_y, self.font_xs, (100, 120, 80))
+        else:
+            draw_text(surf, "X+click: attack-move", btn_x, hint_y,
+                      self.font_xs, (70, 70, 90))
 
     def _set_formation(self, game, fmt_idx):
+        """Set formation on all selected squads (v10_8 squad-centric)."""
+        seen = set()
         for e in game.selected:
             if hasattr(e, 'unit_type') and e.unit_type in ("soldier", "archer"):
-                game.player_squad_mgr.set_formation(e, fmt_idx)
+                sq = game.player_squad_mgr.get_squad(e)
+                if sq and sq.squad_id not in seen:
+                    seen.add(sq.squad_id)
+                    sq.formation = fmt_idx
+
+    def _set_stance(self, game, stance_idx):
+        """Set stance on all selected squads (v10_8 squad-centric)."""
+        seen = set()
+        for e in game.selected:
+            if hasattr(e, 'unit_type') and e.unit_type in ("soldier", "archer"):
+                sq = game.player_squad_mgr.get_squad(e)
+                if sq and sq.squad_id not in seen:
+                    seen.add(sq.squad_id)
+                    sq.stance = stance_idx
+                    for m in sq.members:
+                        if m.alive:
+                            m.command_set_stance(stance_idx)
+                            m.stance = stance_idx
 
     # ------------------------------------------------------------------
     # BUTTONS
     # ------------------------------------------------------------------
+    def _draw_locked_button(self, surf, x, y, w, h, label, hint):
+        """v10_8d: Draw a locked/teaser button with unlock hint."""
+        rect = pygame.Rect(x, y, w, h)
+        pygame.draw.rect(surf, (25, 25, 35), rect, border_radius=4)
+        pygame.draw.rect(surf, (45, 45, 55), rect, 1, border_radius=4)
+        draw_text(surf, label, x + w // 2, y + h // 2 - 5, self.font_sm, (55, 55, 70), center=True)
+        draw_text(surf, hint, x + w // 2, y + h // 2 + 7, self.font_xs, (70, 60, 50), center=True)
+
     def _add_button(self, surf, x, y, w, h, label, callback, enabled=True, cost_text=None):
         rect = pygame.Rect(x, y, w, h)
         mx, my = pygame.mouse.get_pos()
@@ -814,6 +1323,10 @@ class GUI:
             draw_text(surf, label, x + w // 2, y + h // 2, self.font_sm, text_col, center=True)
 
         self.buttons.append((rect, label, callback, enabled))
+        # Auto-register tooltip for buttons with matching keys
+        tooltip_key = f"btn_{label.split('(')[0].strip()}"
+        if tooltip_key in TOOLTIP_DATA:
+            self._register_tooltip(rect, tooltip_key)
 
     def handle_click(self, pos):
         for rect, label, callback, enabled in self.buttons:

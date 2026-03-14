@@ -40,9 +40,10 @@ class Camera:
 
     def update(self, keys, dt, mx, my, suppress_wasd=False):
         dx, dy = 0, 0
-        if (not suppress_wasd and keys[pygame.K_w]) or keys[pygame.K_UP] or my < GAME_AREA_Y + EDGE_SCROLL_MARGIN:
+        in_game_area = GAME_AREA_Y <= my < SCREEN_HEIGHT - BOTTOM_PANEL_H
+        if (not suppress_wasd and keys[pygame.K_w]) or keys[pygame.K_UP] or (in_game_area and my < GAME_AREA_Y + EDGE_SCROLL_MARGIN):
             dy = -1
-        if (not suppress_wasd and keys[pygame.K_s]) or keys[pygame.K_DOWN] or (my > GAME_AREA_Y + GAME_AREA_H - EDGE_SCROLL_MARGIN and my < SCREEN_HEIGHT - BOTTOM_PANEL_H):
+        if (not suppress_wasd and keys[pygame.K_s]) or keys[pygame.K_DOWN] or (in_game_area and my > GAME_AREA_Y + GAME_AREA_H - EDGE_SCROLL_MARGIN):
             dy = 1
         if (not suppress_wasd and keys[pygame.K_a]) or keys[pygame.K_LEFT] or mx < EDGE_SCROLL_MARGIN:
             dx = -1

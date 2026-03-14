@@ -399,9 +399,8 @@ class MainMenu:
         self.screen.blit(hint_surf,
                          hint_surf.get_rect(center=(cx, SCREEN_HEIGHT - 50)))
 
-        ver_surf = self.font_ver.render("v10_2", True, (50, 50, 65))
+        ver_surf = self.font_ver.render("v10_delta", True, (50, 50, 65))
         self.screen.blit(ver_surf,
-                         ver_surf.get_rect(bottomright=(SCREEN_WIDTH - 12,
-                                                         SCREEN_HEIGHT - 8)))
+                         ver_surf.get_rect(bottomleft=(12, SCREEN_HEIGHT - 8)))
 
         pygame.display.flip()

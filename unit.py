@@ -12,7 +12,7 @@ from constants import (UNIT_DEFS, ENEMY_DEFS, UNIT_COLORS, ENEMY_COLORS,
                        ARROW_BASE_SPREAD, ARROW_MIN_SPREAD,
                        ARROW_FLIGHT_TIME, ARROW_LEAD_MIN_RANK,
                        ARROW_LEAD_FACTOR_PER_RANK,
-                       UNIT_SEPARATION_DIST, UNIT_SEPARATION_FORCE,
+                       FORMATION_COMBAT_LEASH,
                        WORKER_FLEE_RADIUS, WORKER_SAFE_TIME,
                        WORKER_FLEE_DISTANCE, REPAIR_RATE, REPAIR_COST_FRACTION,
                        ENEMY_FLEE_HP_FRACTION,
@@ -23,7 +23,7 @@ from constants import (UNIT_DEFS, ENEMY_DEFS, UNIT_COLORS, ENEMY_COLORS,
                        PATH_ARRIVAL_THRESHOLD, BUILD_PROXIMITY,
                        IDLE_AGGRO_RANGE,
                        RANK_XP_THRESHOLDS, RANK_BONUSES,
-                       SQUAD_FOLLOW_DIST, SQUAD_COHESION_FORCE,
+                       SQUAD_FOLLOW_DIST,
                        BUILDING_PRIORITY, UNIT_PRIORITY, RUIN_PRIORITY_MULT,
                        DISTANCE_NORMALIZATION, RANK_TARGETING_NOISE,
                        LOW_HP_FINISH_BONUS, LOW_HP_FINISH_THRESHOLD,
@@ -31,23 +31,35 @@ from constants import (UNIT_DEFS, ENEMY_DEFS, UNIT_COLORS, ENEMY_COLORS,
                        MORALE_CHECK_INTERVAL, MORALE_SCAN_RADIUS,
                        MORALE_FLEE_RATIO, MORALE_LEADER_AURA,
                        MORALE_LEADER_MIN_RANK, MORALE_RANK_RESISTANCE,
-                       FORMATION_FRONT_OFFSET, FORMATION_REAR_OFFSET,
-                       FORMATION_FORCE, FORMATION_RANK_PUSH,
                        RETARGET_INTERVAL, RETARGET_SWITCH_THRESHOLD,
                        THREAT_BONUS, TERRAIN_MOVE_COST,
                        TRAIT_POOL, TRAIT_CONFLICTS, TRAIT_ROLL_WEIGHTS,
                        TRAIT_MODIFIERS,
                        GARRISON_MAX_WORKERS,
-                       DROPOFF_BUILDING_TYPES,
+                       GARRISON_SPAWN_RADIUS,
                        SCAFFOLD_AURA_RANGE, SCAFFOLD_SPEED_BONUS,
                        PRODUCTION_RATES,
                        TOWER_UPGRADE_TIME,
                        STANCE_AGGRESSIVE, STANCE_DEFENSIVE, STANCE_GUARD,
-                       STANCE_HUNT,
+                       STANCE_HUNT, STANCE_GUARD_AGGRO_BONUS,
                        FORMATION_SLOT_ARRIVAL, FORMATION_REGROUP_DELAY,
                        SAPPER_BLAST_RADIUS, SENTINEL_CRY_SPEED_BONUS,
                        METAMORPH_HP_MULT, METAMORPH_ATK_MULT,
-                       METAMORPH_SPEED_MULT)
+                       METAMORPH_SPEED_MULT,
+                       WORKER_FLEE_COOLDOWN,
+                       LONE_WOLF_ISOLATION_DIST, MORALE_CLUSTER_RADIUS,
+                       ARROW_FLIGHT_DISTANCE_NORM, WARLOCK_AOE_EDGE_FACTOR,
+                       HEALER_FOLLOW_RANGE_MULT, REPATH_COOLDOWN,
+                       MOVEMENT_PROFILES, MOVEMENT_PROFILE_DEFAULT,
+                       REPULSION_RADIUS, REPULSION_STRENGTH, REPULSION_FALLOFF,
+                       FORMATION_SPRING_K, FORMATION_SPRING_DAMP,
+                       FORMATION_SPRING_MAX,
+                       PHYSICS_ARRIVAL_DIST, PHYSICS_WORKER_SNAP_DIST,
+                       ENERGY_PROFILES, ENERGY_PROFILE_DEFAULT,
+                       ENERGY_EXHAUSTED_SPEED, ENERGY_EXHAUSTED_THRESHOLD,
+                       ENERGY_TIRED_COOLDOWN_MULT, ENERGY_IDLE_REGEN_MULT,
+                       ENERGY_FLEE_DRAIN_MULT, ENERGY_CARRY_REGEN_MULT,
+                       HARMONY_ENERGY_MULT)
 from utils import dist, pos_to_tile, tile_center, draw_text
 from pathfinding import a_star
 from entity_base import Entity, _process_combat_hit
@@ -95,7 +107,23 @@ class Unit(Entity):
         self.heal_rate = d.get("heal_rate", 0.0)
         self.economy_only = d.get("economy_only", False)
         self.aoe_radius = d.get("aoe_radius", 0)
-        self.facing_angle = 0.0
+
+        # v10_delta: physics movement profile
+        mp = MOVEMENT_PROFILES.get(unit_type, MOVEMENT_PROFILE_DEFAULT)
+        self.accel = mp["accel"]
+        self.decel = mp["decel"]
+        self.max_speed = mp["max_speed"]
+        self.current_speed = 0.0
+
+        # v10_delta: energy / stamina system
+        ep = ENERGY_PROFILES.get(unit_type, ENERGY_PROFILE_DEFAULT)
+        self.energy = float(ep["max"])
+        self.max_energy = float(ep["max"])
+        self.energy_regen = float(ep["regen"])
+        self.energy_move_cost = ep["move_cost"]
+        self.energy_sprint_cost = ep.get("sprint_cost", 12.0)
+        self.energy_attack_cost = ep.get("attack_cost", 6.0)
+        self.energy_gather_cost = ep.get("gather_cost", 0.0)
 
         # state: idle, moving, gathering, building, attacking, returning
         self.state = "idle"
@@ -139,13 +167,13 @@ class Unit(Entity):
         self.trait_modifiers = {}
         if unit_type != "worker":
             self._roll_traits()
+        # v10_beta: command queue for shift-click waypoints
+        self._command_queue = []  # list of (command_type, args) tuples
         # v10_1: attack-move destination (enhanced aggro on arrival)
         self._attack_move_target = None
         # v10_6: stance system (replaces hold_ground)
         self.stance = STANCE_AGGRESSIVE
-        # v10_6: formation slot tracking
-        self._formation_slot_index = -1
-        self._formation_target = None
+        # v10_beta: formation lattice timer
         self._out_of_combat_timer = 0.0
         # v10_2: garrison
         self.garrison_target = None
@@ -159,6 +187,15 @@ class Unit(Entity):
         self.spawn_wave = 0       # wave this enemy was spawned in
         self.rooted = False       # straggler has taken root
         self.metamorphosed = False  # straggler has transformed
+        # v10_8: Worker flee cooldown
+        self._flee_resume_time = -999.0
+        # v10_8: Resonance attributes (set per-frame by game._update_resonance)
+        self._spiral_miss_chance = 0.0
+        self._sierpinski_aoe_factor = 1.0
+        self._dissonance_nullified = False
+        self._resonance_visual = -1  # -1=none, 0=rose, 1=spiral, 2=sierpinski, 3=koch
+        self._koch_slow_factor = 0.0
+        self.dissonant_formation = -1  # -1=none, 0-3=anti-formation type
 
     # -- Helpers ---------------------------------------------------------------
 
@@ -378,6 +415,181 @@ class Unit(Entity):
         """Force-apply rank bonuses (used for enemy veterans on respawn)."""
         self._apply_rank_bonuses()
 
+    # -- v10_delta: Physics + Energy -------------------------------------------
+
+    def _energy_factor(self):
+        """Returns 0.4–1.0 speed multiplier based on current energy."""
+        if self.max_energy <= 0:
+            return 1.0
+        ratio = self.energy / self.max_energy
+        return ENERGY_EXHAUSTED_SPEED + (1.0 - ENERGY_EXHAUSTED_SPEED) * ratio
+
+    def _energy_tick(self, dt, game):
+        """Regenerate energy. Rate depends on state + formation harmony."""
+        regen = self.energy_regen
+        # idle units regen faster
+        if self.state == "idle":
+            regen *= ENERGY_IDLE_REGEN_MULT
+        # workers carrying resources regen slower
+        if self.carry_amount > 0:
+            regen *= ENERGY_CARRY_REGEN_MULT
+        # v10_delta: harmonic energy field — formation harmony boosts regen
+        squad_mgr = game.player_squad_mgr if self.owner == "player" else game.enemy_squad_mgr
+        sq = squad_mgr.get_squad(self)
+        if sq:
+            cache = getattr(sq, '_resonance_cache', None)
+            if cache:
+                harmony = cache[2]  # 3rd element is harmony value
+                regen *= (1.0 + harmony * HARMONY_ENERGY_MULT)
+        self.energy = min(self.max_energy, self.energy + regen * dt)
+
+    def _drain_energy(self, amount):
+        """Drain energy, clamped to 0. Returns actual amount drained."""
+        actual = min(self.energy, amount)
+        self.energy -= actual
+        return actual
+
+    def _physics_step(self, target_x, target_y, dt, game, arrival_dist=None):
+        """Move toward target using acceleration/deceleration physics.
+        Returns True when arrived within arrival_dist."""
+        if arrival_dist is None:
+            arrival_dist = PHYSICS_ARRIVAL_DIST
+
+        dx = target_x - self.x
+        dy = target_y - self.y
+        dist_to_target = math.hypot(dx, dy)
+
+        if dist_to_target < 1.0:
+            self.vx, self.vy = 0.0, 0.0
+            self.current_speed = 0.0
+            return True
+
+        # Direction to target
+        inv_d = 1.0 / dist_to_target
+        dir_x, dir_y = dx * inv_d, dy * inv_d
+
+        # Effective max speed (energy + terrain)
+        tc, tr = pos_to_tile(self.x, self.y)
+        terrain_cost = TERRAIN_MOVE_COST.get(
+            game.game_map.get_tile(tc, tr), 1.0)
+        if "nimble" in self.traits:
+            terrain_cost = max(1.0, terrain_cost * 0.6)
+        eff_speed = (self.max_speed / terrain_cost) * self._energy_factor()
+
+        # Koch resonance slow
+        slow = getattr(self, '_koch_slow_factor', 1.0)
+        if slow < 1.0 and not getattr(self, '_dissonance_nullified', False):
+            eff_speed *= slow
+
+        # Braking distance: d = v² / (2*decel)
+        braking_d = (self.current_speed ** 2) / (2.0 * self.decel + 0.01)
+
+        if dist_to_target <= arrival_dist:
+            # Arrived — brake to stop
+            self.vx *= max(0.0, 1.0 - self.decel * dt / max(1.0, self.current_speed))
+            self.vy *= max(0.0, 1.0 - self.decel * dt / max(1.0, self.current_speed))
+            self.current_speed = math.hypot(self.vx, self.vy)
+            if self.current_speed < 2.0:
+                self.vx, self.vy = 0.0, 0.0
+                self.current_speed = 0.0
+                return True
+            # Still coasting to stop — position updated by _integrate_velocity
+            return False
+
+        # Desired velocity
+        if dist_to_target < braking_d:
+            # Need to decelerate — target speed scales with distance
+            desired_speed = eff_speed * (dist_to_target / max(1.0, braking_d))
+        else:
+            desired_speed = eff_speed
+
+        desired_vx = dir_x * desired_speed
+        desired_vy = dir_y * desired_speed
+
+        # Velocity delta
+        dvx = desired_vx - self.vx
+        dvy = desired_vy - self.vy
+        dv_mag = math.hypot(dvx, dvy)
+
+        if dv_mag > 0.01:
+            # Choose accel or decel rate based on whether speeding up or slowing
+            rate = self.accel if desired_speed >= self.current_speed else self.decel
+            max_dv = rate * dt
+            if dv_mag > max_dv:
+                scale = max_dv / dv_mag
+                dvx *= scale
+                dvy *= scale
+            self.vx += dvx
+            self.vy += dvy
+
+        # Energy drain for movement
+        is_sprinting = self.current_speed > self.speed * 0.9
+        move_cost = self.energy_sprint_cost if is_sprinting else self.energy_move_cost
+        self._drain_energy(move_cost * dt)
+
+        # Position updated by _integrate_velocity (centralized, once per frame)
+        self.current_speed = math.hypot(self.vx, self.vy)
+
+        # Update facing
+        if self.current_speed > 3.0:
+            self.facing_angle = math.atan2(self.vy, self.vx)
+
+        return False
+
+    def _apply_repulsion(self, dt, game):
+        """Soft collision avoidance — push away from nearby same-owner units."""
+        grid = game.player_grid if self.owner == "player" else game.enemy_grid
+        force_x, force_y = 0.0, 0.0
+        for other in grid.query_radius(self.x, self.y, REPULSION_RADIUS):
+            if other is self or not other.alive:
+                continue
+            dx = self.x - other.x
+            dy = self.y - other.y
+            d = math.hypot(dx, dy)
+            if d < 0.5:
+                # Stacked — splay with golden angle
+                angle = (self.eid * 2.399) % (2 * math.pi)
+                force_x += math.cos(angle) * REPULSION_STRENGTH
+                force_y += math.sin(angle) * REPULSION_STRENGTH
+            elif d < REPULSION_RADIUS:
+                overlap = 1.0 - d / REPULSION_RADIUS
+                strength = REPULSION_STRENGTH * (overlap ** REPULSION_FALLOFF)
+                force_x += (dx / d) * strength
+                force_y += (dy / d) * strength
+        # Apply as velocity impulse (capped)
+        f_mag = math.hypot(force_x, force_y)
+        if f_mag > REPULSION_STRENGTH:
+            force_x *= REPULSION_STRENGTH / f_mag
+            force_y *= REPULSION_STRENGTH / f_mag
+        self.vx += force_x * dt
+        self.vy += force_y * dt
+
+    def _integrate_velocity(self, dt, game):
+        """Final position update — called ONCE per frame after all forces."""
+        # Clamp to passable tile
+        if abs(self.vx) > 0.1 or abs(self.vy) > 0.1:
+            nx = self.x + self.vx * dt
+            ny = self.y + self.vy * dt
+            nc, nr = pos_to_tile(nx, ny)
+            if game.game_map.is_passable(nc, nr):
+                self.x, self.y = nx, ny
+            else:
+                # Slide along obstacle
+                # Try X only
+                nc2, nr2 = pos_to_tile(nx, self.y)
+                if game.game_map.is_passable(nc2, nr2):
+                    self.x = nx
+                    self.vy *= 0.3  # damp blocked axis
+                else:
+                    self.vx *= 0.3
+                # Try Y only
+                nc3, nr3 = pos_to_tile(self.x, ny)
+                if game.game_map.is_passable(nc3, nr3):
+                    self.y = ny
+                else:
+                    self.vy *= 0.3
+            self.current_speed = math.hypot(self.vx, self.vy)
+
     # -- Update ----------------------------------------------------------------
 
     def update(self, dt, game):
@@ -401,6 +613,22 @@ class Unit(Entity):
             if self.state == "fleeing":
                 return  # just started fleeing, skip normal update this frame
 
+        # v10_9: incident behaviour — flee_on_contact / probe_retreat
+        if self.owner == "enemy" and self.state != "fleeing":
+            ib = getattr(self, 'incident_behaviour', None)
+            if ib == "flee_on_contact" and self.state == "attacking":
+                self.contact_timer = getattr(self, 'contact_timer', 0.0) + dt
+                if self.contact_timer >= getattr(self, 'flee_contact_time', 3.0):
+                    self._start_enemy_flee(game)
+                    if self.state == "fleeing":
+                        return
+            elif ib == "probe_retreat":
+                self.probe_timer = getattr(self, 'probe_timer', 0.0) + dt
+                if self.probe_timer >= getattr(self, 'probe_duration', 8.0):
+                    self._start_enemy_flee(game)
+                    if self.state == "fleeing":
+                        return
+
         # enemy flee check -- low HP enemies run to map edge
         # v10_1: berserker trait ignores flee entirely
         if (self.owner == "enemy" and self.state != "fleeing"
@@ -416,6 +644,7 @@ class Unit(Entity):
                 return
 
         if self.state == "idle":
+            self._process_queue(game)  # v10_beta: shift-queue waypoints
             self._idle_behavior(dt, game)
         elif self.state == "moving":
             self._move_along_path(dt, game)
@@ -441,18 +670,38 @@ class Unit(Entity):
             else:
                 self._do_enemy_flee(dt, game)
 
-        # unit separation -- push apart when not actively moving along a path
+        # v10_delta: energy regeneration
+        self._energy_tick(dt, game)
+
+        # v10_delta: formation spring gravitation (replaces hard slot-seeking)
         if self.state in ("idle", "gathering", "building", "attacking", "repairing"):
-            self._apply_separation(dt, game)
+            self._formation_tick(dt, game)
+
+        # v10_delta: soft repulsion + final velocity integration
+        self._apply_repulsion(dt, game)
+        self._integrate_velocity(dt, game)
 
     # -- Commands --------------------------------------------------------------
 
-    def command_move(self, wx, wy, game):
+    def command_move(self, wx, wy, game, queued=False):
+        if queued:
+            self._command_queue.append(("move", (wx, wy)))
+            return
         self._clear_tasks()
         tc, tr = pos_to_tile(wx, wy)
         self._path_to(tc, tr, game)
         self.target_pos = (wx, wy)
         self.state = "moving"
+
+    def _process_queue(self, game):
+        """v10_beta: Pop next queued command when idle."""
+        if not self._command_queue or self.state != "idle":
+            return
+        cmd, args = self._command_queue.pop(0)
+        if cmd == "move":
+            self.command_move(args[0], args[1], game)
+        elif cmd == "attack_move":
+            self.command_attack_move(args[0], args[1], game)
 
     def command_gather(self, col, row, game):
         if self.unit_type != "worker":
@@ -461,6 +710,37 @@ class Unit(Entity):
         self.gather_tile = (col, row)
         self._path_to(col, row, game)
         self.state = "moving"
+
+    def command_gather_nearest(self, game, resource_type=None):
+        """v10_8c: Mine the nearest resource tile. If resource_type given, only that type."""
+        if self.unit_type != "worker":
+            return
+        if resource_type:
+            # Use existing method for specific type
+            tile = self._find_nearest_resource_tile(resource_type, game)
+            if tile:
+                self._clear_tasks()
+                self.gather_tile = tile
+                self._path_to(tile[0], tile[1], game)
+                self.state = "moving"
+                return
+            # v10_delta1: specific type not found — fall through to any resource
+            # (don't return silently with worker stuck)
+        self._clear_tasks()
+        my_col, my_row = self.get_tile()
+        best = None
+        best_d = 999999
+        for (c, r), remaining in game.game_map.resource_remaining.items():
+            if remaining <= 0:
+                continue
+            d = abs(c - my_col) + abs(r - my_row)
+            if d < best_d:
+                best_d = d
+                best = (c, r)
+        if best:
+            self.gather_tile = best
+            self._path_to(best[0], best[1], game)
+            self.state = "moving"
 
     def command_attack(self, target, game):
         self._clear_tasks()
@@ -471,12 +751,6 @@ class Unit(Entity):
         """Move to position with enhanced aggro on arrival."""
         self.command_move(wx, wy, game)
         self._attack_move_target = (wx, wy)
-
-    def command_hold_ground(self):
-        """Stop and hold position — fight in range, never chase."""
-        self._clear_tasks()
-        self.state = "idle"
-        self.stance = STANCE_DEFENSIVE
 
     def command_set_stance(self, stance):
         """Set unit stance (Aggressive/Defensive/Guard/Hunt)."""
@@ -514,10 +788,9 @@ class Unit(Entity):
         if self.garrison_target and self in self.garrison_target.garrison:
             self.garrison_target.garrison.remove(self)
         if self.garrison_target:
-            idx = 0
             angle = random.uniform(0, 2 * math.pi)
-            self.x = self.garrison_target.x + math.cos(angle) * 40
-            self.y = self.garrison_target.y + math.sin(angle) * 40
+            self.x = self.garrison_target.x + math.cos(angle) * GARRISON_SPAWN_RADIUS
+            self.y = self.garrison_target.y + math.sin(angle) * GARRISON_SPAWN_RADIUS
         self.garrison_target = None
         self.state = "idle"
 
@@ -537,8 +810,8 @@ class Unit(Entity):
             self.station_target.stationed_workers.remove(self)
         if self.station_target:
             angle = random.uniform(0, 2 * math.pi)
-            self.x = self.station_target.x + math.cos(angle) * 40
-            self.y = self.station_target.y + math.sin(angle) * 40
+            self.x = self.station_target.x + math.cos(angle) * GARRISON_SPAWN_RADIUS
+            self.y = self.station_target.y + math.sin(angle) * GARRISON_SPAWN_RADIUS
         self.station_target = None
         self.state = "idle"
 
@@ -600,15 +873,24 @@ class Unit(Entity):
         return (c, r)
 
     def _auto_resume_gather(self, rtype, game):
-        """Try to find and path to nearest tile of same resource type. Returns True if successful."""
-        if not rtype:
+        """Try to find and path to nearest tile of resource type. Returns True if successful.
+        If rtype is None, tries any gatherable resource."""
+        if rtype:
+            new_tile = self._find_nearest_resource_tile(rtype, game)
+            if new_tile:
+                self.gather_tile = new_tile
+                self._path_to(new_tile[0], new_tile[1], game)
+                self.state = "moving"
+                return True
             return False
-        new_tile = self._find_nearest_resource_tile(rtype, game)
-        if new_tile:
-            self.gather_tile = new_tile
-            self._path_to(new_tile[0], new_tile[1], game)
-            self.state = "moving"
-            return True
+        # v10_beta: fallback — try any resource type
+        for fallback in ("wood", "gold", "iron", "stone"):
+            new_tile = self._find_nearest_resource_tile(fallback, game)
+            if new_tile:
+                self.gather_tile = new_tile
+                self._path_to(new_tile[0], new_tile[1], game)
+                self.state = "moving"
+                return True
         return False
 
     # -- State behaviors -------------------------------------------------------
@@ -623,28 +905,21 @@ class Unit(Entity):
             if self.unit_type == "enemy_healer":
                 if self._healer_tick(dt, game):
                     return
-            # v9 squad follower: assist leader's target or follow leader
+            # v10_beta: squad follower — assist leader's target (formation_tick handles positioning)
             squad_mgr = game.player_squad_mgr if self.owner == "player" else game.enemy_squad_mgr
             leader = squad_mgr.get_leader(self)
             if leader and leader.alive:
-                # if leader is fighting, assist their target
                 if (leader.target_entity and leader.target_entity.alive
                         and leader.state == "attacking"):
                     self.target_entity = leader.target_entity
                     self.state = "attacking"
-                    return
-                # if too far from leader, move toward them
-                if dist(self.x, self.y, leader.x, leader.y) > SQUAD_FOLLOW_DIST:
-                    tc, tr = leader.get_tile()
-                    self._path_to(tc, tr, game)
-                    self.state = "moving"
                     return
 
             # v10_6: stance-based aggro range
             if self.stance == STANCE_DEFENSIVE:
                 aggro_range = self.attack_range
             elif self.stance == STANCE_GUARD:
-                aggro_range = self.attack_range + 40
+                aggro_range = self.attack_range + STANCE_GUARD_AGGRO_BONUS
             elif self.stance == STANCE_HUNT:
                 aggro_range = (self.attack_range + IDLE_AGGRO_RANGE) * 1.5
             else:  # AGGRESSIVE (default)
@@ -699,9 +974,12 @@ class Unit(Entity):
                     self.state = "gathering"
                     self.gather_timer = 0.0
                 else:
-                    # tile depleted while walking -- find nearest of same type
+                    # tile depleted while walking — find nearest of same type, then any
                     rtype = self.carry_type or self._last_gather_type
                     if self._auto_resume_gather(rtype, game):
+                        return
+                    # v10_beta: fallback — try any gatherable resource
+                    if self._auto_resume_gather(None, game):
                         return
                     self.state = "idle"
                     self.gather_tile = None
@@ -729,8 +1007,6 @@ class Unit(Entity):
                 bld = self.station_target
                 pconfig = PRODUCTION_RATES.get(bld.building_type, {})
                 max_w = pconfig.get("max_workers", 3)
-                if bld.building_type == "forge":
-                    max_w = 3
                 if len(bld.stationed_workers) < max_w:
                     # auto-deposit carried resources
                     if self.carry_amount > 0 and self.carry_type:
@@ -746,39 +1022,12 @@ class Unit(Entity):
                 self.state = "idle"
             return
 
+        # v10_delta: physics-based waypoint following
         tc, tr = self.path[self.path_index]
         tx, ty = tile_center(tc, tr)
-        dx, dy = tx - self.x, ty - self.y
-        d = math.hypot(dx, dy)
-        if d < PATH_ARRIVAL_THRESHOLD:
+        arrived = self._physics_step(tx, ty, dt, game, arrival_dist=PHYSICS_ARRIVAL_DIST)
+        if arrived:
             self.path_index += 1
-            return
-        # v10_6: update facing angle for frontal armor
-        self.facing_angle = math.atan2(dy, dx)
-        # terrain slows movement (trees 2×, resources 1.8×)
-        cur_tile = game.game_map.get_tile(*pos_to_tile(self.x, self.y))
-        move_cost = TERRAIN_MOVE_COST.get(cur_tile, 1.0)
-        # v10_1: nimble trait reduces difficult terrain penalty
-        if move_cost > 1.0:
-            nimble_bonus = self.trait_modifiers.get("terrain_speed_bonus", 0)
-            if nimble_bonus > 0:
-                move_cost = max(1.0, move_cost * (1.0 - nimble_bonus))
-        step = (self.speed / move_cost) * dt
-        if step >= d:
-            # snap to waypoint — but only if it's passable
-            wc, wr = pos_to_tile(tx, ty)
-            if game.game_map.is_passable(wc, wr):
-                self.x, self.y = tx, ty
-            self.path_index += 1
-        else:
-            nx = self.x + (dx / d) * step
-            ny = self.y + (dy / d) * step
-            nc, nr = pos_to_tile(nx, ny)
-            if game.game_map.is_passable(nc, nr):
-                self.x, self.y = nx, ny
-            else:
-                # blocked mid-step — skip this waypoint to avoid getting stuck
-                self.path_index += 1
 
     def _gather(self, dt, game):
         if not self.gather_tile:
@@ -1042,6 +1291,9 @@ class Unit(Entity):
 
     def _check_flee(self, dt, game):
         """Check for nearby enemies and start fleeing if found."""
+        # v10_8: cooldown between flee->resume cycles to stop ping-ponging
+        if game.game_time - self._flee_resume_time < WORKER_FLEE_COOLDOWN:
+            return
         nearest_enemy = None
         nearest_d = WORKER_FLEE_RADIUS
         # v10_4: spatial grid lookup instead of scanning all enemies
@@ -1093,10 +1345,10 @@ class Unit(Entity):
 
     def _do_flee(self, dt, game):
         """Flee state: run away, check if safe to resume work."""
-        # move along flee path
+        # move along flee path (preserve fleeing state — _move_along_path sets idle on arrival)
+        saved_state = self.state
         self._move_along_path(dt, game)
-        if self.state != "fleeing":
-            # _move_along_path changed state to idle on arrival; override back
+        if saved_state == "fleeing" and self.state == "idle":
             self.state = "fleeing"
 
         # check if enemies still nearby (v10_4: spatial grid)
@@ -1140,6 +1392,7 @@ class Unit(Entity):
 
     def _resume_saved_task(self, game):
         """Restore the worker's previous task after fleeing."""
+        self._flee_resume_time = game.game_time  # v10_8: start cooldown
         task = self._saved_task
         self._saved_task = None
         self._flee_timer = 0.0
@@ -1265,10 +1518,8 @@ class Unit(Entity):
             d = dist(self.x, self.y, u.x, u.y)
             if d < scan or d > scan * 3:
                 continue  # skip nearby (also outnumbered) and too far
-            # Score: cluster size + leader bonus
-            cluster = sum(1 for o in game.enemy_units
-                          if o.alive and o is not self
-                          and dist(u.x, u.y, o.x, o.y) < 200)
+            # v10_beta: use spatial grid instead of O(n) scan for cluster
+            cluster = len(game.enemy_grid.query_radius(u.x, u.y, MORALE_CLUSTER_RADIUS))
             score = cluster + (3 if u.rank >= MORALE_LEADER_MIN_RANK else 0)
             if score > best_score and cluster >= 2:
                 best_score = score
@@ -1331,11 +1582,11 @@ class Unit(Entity):
         ]
         return min(candidates, key=lambda c: c[0])[1]
 
-    # -- Unit separation -------------------------------------------------------
+    # -- Formation Lattice (v10_beta) ------------------------------------------
 
     def _get_front_direction(self, game):
-        """v9.2: compute 'front' direction for formation — toward threat."""
-        squad_mgr = game.player_squad_mgr
+        """Compute 'front' direction for formation — toward nearest threat."""
+        squad_mgr = game.player_squad_mgr if self.owner == "player" else game.enemy_squad_mgr
         leader = squad_mgr.get_leader(self)
         ref = leader if leader and leader.alive else self
         # If ref is attacking, front = toward that target
@@ -1345,10 +1596,11 @@ class Unit(Entity):
             d = math.hypot(dx, dy)
             if d > 1:
                 return dx / d, dy / d
-        # Otherwise, toward nearest enemy
+        # Otherwise, toward nearest threat
         best_d = 1e9
         bx, by = 0.0, -1.0
-        for e in game.enemy_units:
+        threats = game.enemy_units if self.owner == "player" else game.player_units
+        for e in threats:
             if not e.alive:
                 continue
             d = dist(ref.x, ref.y, e.x, e.y)
@@ -1358,82 +1610,80 @@ class Unit(Entity):
         d = math.hypot(bx, by)
         return (bx / d, by / d) if d > 1 else (0.0, -1.0)
 
-    def _apply_separation(self, dt, game):
-        """Gently push apart overlapping friendly units when stationary."""
-        # v10_4: use spatial grid for O(k) neighbor lookup instead of O(n)
-        grid = game.player_grid if self.owner == "player" else game.enemy_grid
-        nearby = grid.query_nearby(self.x, self.y)
-        push_x, push_y = 0.0, 0.0
-        for other in nearby:
-            if other is self:
-                continue
-            dx = self.x - other.x
-            dy = self.y - other.y
-            d = math.hypot(dx, dy)
-            if 0 < d < UNIT_SEPARATION_DIST:
-                strength = (UNIT_SEPARATION_DIST - d) / UNIT_SEPARATION_DIST
-                push_x += (dx / d) * strength
-                push_y += (dy / d) * strength
-            elif d == 0:
-                push_x += (hash(id(self)) % 3 - 1) * 0.5
-                push_y += (hash(id(self)) % 5 - 2) * 0.5
-        if push_x != 0 or push_y != 0:
-            mag = math.hypot(push_x, push_y)
-            if mag > 1:
-                push_x /= mag
-                push_y /= mag
-            nx = self.x + push_x * UNIT_SEPARATION_FORCE * dt
-            ny = self.y + push_y * UNIT_SEPARATION_FORCE * dt
-            # v10 fix: clamp to passable tiles
-            nc, nr = pos_to_tile(nx, ny)
-            if game.game_map.is_passable(nc, nr):
-                self.x, self.y = nx, ny
+    def _formation_tick(self, dt, game):
+        """v10_delta: Spring-based formation gravitation.
 
-        # v10_6: slot-based fractal formation positioning
-        if self.unit_type != "worker":
-            squad_mgr = game.player_squad_mgr if self.owner == "player" else game.enemy_squad_mgr
-            squad = squad_mgr.get_squad(self)
-            if squad and squad.leader and squad.leader.alive and squad.leader is not self:
-                leader = squad.leader
-                slot_idx = squad.get_slot_index(self)
-                if slot_idx > 0:
-                    # Track out-of-combat time for regroup delay
-                    if self.state == "attacking":
-                        self._out_of_combat_timer = 0.0
-                    else:
-                        self._out_of_combat_timer += dt
-                    # Only pull toward slot after regroup delay
-                    if self._out_of_combat_timer >= FORMATION_REGROUP_DELAY:
-                        front_x, front_y = self._get_front_direction(game)
-                        ox, oy = formation_slot(
-                            squad.formation, squad.alive_count,
-                            slot_idx, front_x, front_y)
-                        tx = leader.x + ox
-                        ty = leader.y + oy
-                        fx = tx - self.x
-                        fy = ty - self.y
-                        fd = math.hypot(fx, fy)
-                        if fd > FORMATION_SLOT_ARRIVAL:
-                            pull = min(1.0, fd / SQUAD_FOLLOW_DIST)
-                            cohesion = SQUAD_COHESION_FORCE * self.trait_modifiers.get("cohesion_mult", 1.0)
-                            nx = self.x + (fx / fd) * cohesion * pull * dt
-                            ny = self.y + (fy / fd) * cohesion * pull * dt
-                            nc, nr = pos_to_tile(nx, ny)
-                            if game.game_map.is_passable(nc, nr):
-                                self.x, self.y = nx, ny
-                elif slot_idx < 0:
-                    # Not assigned a slot yet — basic cohesion pull toward leader
-                    lx = leader.x - self.x
-                    ly = leader.y - self.y
-                    ld = math.hypot(lx, ly)
-                    if ld > SQUAD_FOLLOW_DIST * 0.5:
-                        pull = min(1.0, (ld - SQUAD_FOLLOW_DIST * 0.5) / SQUAD_FOLLOW_DIST)
-                        cohesion = SQUAD_COHESION_FORCE * self.trait_modifiers.get("cohesion_mult", 1.0)
-                        nx = self.x + (lx / ld) * cohesion * pull * dt
-                        ny = self.y + (ly / ld) * cohesion * pull * dt
-                        nc, nr = pos_to_tile(nx, ny)
-                        if game.game_map.is_passable(nc, nr):
-                            self.x, self.y = nx, ny
+        Units feel a critically-damped spring pull toward their formation slot.
+        In combat, spring is weaker; beyond leash, spring triples.
+        Repulsion is handled separately by _apply_repulsion.
+        """
+        if self.unit_type == "worker":
+            return
+
+        squad_mgr = game.player_squad_mgr if self.owner == "player" else game.enemy_squad_mgr
+        squad = squad_mgr.get_squad(self)
+        if not squad or not squad.leader or not squad.leader.alive:
+            return
+        if squad.leader is self:
+            return  # leader is the anchor
+
+        slot_idx = squad.get_slot_index(self)
+        if slot_idx <= 0:
+            return
+
+        # Track out-of-combat timer
+        if self.state == "attacking":
+            self._out_of_combat_timer = 0.0
+        else:
+            self._out_of_combat_timer += dt
+
+        # Compute slot world position
+        leader = squad.leader
+        front_x, front_y = self._get_front_direction(game)
+        rotation = getattr(squad, 'rotation_angle', 0.0)
+        ox, oy = formation_slot(
+            squad.formation, squad.alive_count,
+            slot_idx, front_x, front_y)
+        # Apply squad rotation
+        if rotation != 0.0:
+            cos_r = math.cos(rotation)
+            sin_r = math.sin(rotation)
+            ox, oy = ox * cos_r - oy * sin_r, ox * sin_r + oy * cos_r
+        slot_x = leader.x + ox
+        slot_y = leader.y + oy
+
+        dx = slot_x - self.x
+        dy = slot_y - self.y
+        d = math.hypot(dx, dy)
+
+        if d < FORMATION_SLOT_ARRIVAL:
+            return  # close enough
+
+        # Determine spring strength
+        k = FORMATION_SPRING_K
+        # In combat with target in range — weaken spring (let them fight)
+        if (self.state == "attacking" and self.target_entity
+                and self.target_entity.alive and d <= FORMATION_COMBAT_LEASH):
+            k *= 0.3  # gentle pull during combat
+        elif d > FORMATION_COMBAT_LEASH:
+            k *= 3.0  # strong rubber-band beyond leash
+        elif self._out_of_combat_timer < FORMATION_REGROUP_DELAY:
+            return  # brief grace period after combat
+
+        # Spring force: F = k * displacement - damping * velocity
+        fx = k * dx - FORMATION_SPRING_DAMP * self.vx
+        fy = k * dy - FORMATION_SPRING_DAMP * self.vy
+
+        # Clamp spring force magnitude
+        f_mag = math.hypot(fx, fy)
+        if f_mag > FORMATION_SPRING_MAX:
+            scale = FORMATION_SPRING_MAX / f_mag
+            fx *= scale
+            fy *= scale
+
+        # Apply as velocity impulse
+        self.vx += fx * dt
+        self.vy += fy * dt
 
     # -- Combat ----------------------------------------------------------------
 
@@ -1465,7 +1715,7 @@ class Unit(Entity):
             econ_targets = [c for c in candidates
                             if (hasattr(c, 'unit_type') and c.unit_type == 'worker')
                             or (isinstance(c, Building) and getattr(c, 'building_type', '')
-                                in ('refinery', 'town_hall', 'smelter'))]
+                                in ('refinery', 'town_hall', 'forge'))]
             if econ_targets:
                 candidates = econ_targets
         # siege units: strongly prefer non-ruined buildings
@@ -1505,25 +1755,38 @@ class Unit(Entity):
         d = dist(self.x, self.y, t.x, t.y)
         if d <= self.attack_range:
             if self.attack_timer <= 0:
+                # v10_delta: drain energy on attack
+                self._drain_energy(self.energy_attack_cost)
+                # v10_delta: exhaustion slows attack speed
+                cd = self.attack_cd
+                if self.energy < self.max_energy * ENERGY_EXHAUSTED_THRESHOLD:
+                    cd *= ENERGY_TIRED_COOLDOWN_MULT
                 # v10_6: Warlock AOE attack
                 if self.aoe_radius > 0:
                     self._warlock_aoe(t, game)
-                    self.attack_timer = self.attack_cd
+                    self.attack_timer = cd
                 elif self.attack_range > 60:
                     # --- ranged: fire ballistic arrow ---
                     self._fire_arrow(t, game)
                 else:
                     # --- melee: instant damage ---
                     dmg = self.attack_power
+                    # v10_8: Polar Rose resonance damage bonus
+                    if self._resonance_visual == 0 and not self._dissonance_nullified:
+                        sq = game.player_squad_mgr.get_squad(self)
+                        if sq:
+                            rc = game.player_squad_mgr._resonance_cache.get(sq.squad_id)
+                            if rc:
+                                dmg = int(dmg * (1.0 + rc[1]))
                     # v10_1: berserker bonus below 50% HP
                     if "berserker" in self.traits and self.hp < self.max_hp * 0.5:
                         dmg = int(dmg * (1.0 + self.trait_modifiers.get("berserk_atk_bonus", 0)))
-                    # v10_1: lone wolf bonus when no allies within 80px
+                    # v10_beta: lone wolf bonus — spatial grid instead of O(n) scan
                     if "lone_wolf" in self.traits:
-                        allies = game.player_units if self.owner == "player" else game.enemy_units
-                        alone = all(o is self or not o.alive or dist(self.x, self.y, o.x, o.y) > 80
-                                    for o in allies)
-                        if alone:
+                        ally_grid = game.player_grid if self.owner == "player" else game.enemy_grid
+                        nearby_allies = [o for o in ally_grid.query_radius(
+                            self.x, self.y, LONE_WOLF_ISOLATION_DIST) if o is not self and o.alive]
+                        if not nearby_allies:
                             dmg = int(dmg * (1.0 + self.trait_modifiers.get("lone_atk_bonus", 0)))
                     if isinstance(t, _get_building_class()):
                         dmg = int(dmg * self.building_mult)
@@ -1539,57 +1802,33 @@ class Unit(Entity):
                                 if bd <= SAPPER_BLAST_RADIUS:
                                     falloff = 1.0 - bd / SAPPER_BLAST_RADIUS
                                     aoe_dmg = max(1, int(self.attack_power * falloff))
+                                    # v10_8: Sierpinski dampening
+                                    sf = getattr(bt, '_sierpinski_aoe_factor', 1.0)
+                                    if sf < 1.0 and not getattr(bt, '_dissonance_nullified', False):
+                                        aoe_dmg = max(1, int(aoe_dmg * sf))
                                     bt.take_damage(aoe_dmg, self)
                         self.hp = 0
                         self.alive = False
                         return
-                self.attack_timer = self.attack_cd
+                self.attack_timer = cd
         else:
             # v10_6: defensive/guard stance — don't chase, drop target and idle
             if self.stance in (STANCE_DEFENSIVE, STANCE_GUARD):
                 self.target_entity = None
                 self.state = "idle"
                 return
-            # move towards target (terrain-slowed)
+            # v10_delta: physics-based chase (acceleration/deceleration)
             self._repath_cooldown = max(0, self._repath_cooldown - dt)
-            dx, dy = t.x - self.x, t.y - self.y
-            # v10_6: update facing angle during chase
-            self.facing_angle = math.atan2(dy, dx)
-            nd = math.hypot(dx, dy)
-            if nd > 0:
-                cur_tile = game.game_map.get_tile(*pos_to_tile(self.x, self.y))
-                move_cost = TERRAIN_MOVE_COST.get(cur_tile, 1.0)
-                # v10_1 fix: nimble trait reduces difficult terrain penalty during chase
-                if move_cost > 1.0:
-                    nimble_bonus = self.trait_modifiers.get("terrain_speed_bonus", 0)
-                    if nimble_bonus > 0:
-                        move_cost = max(1.0, move_cost * (1.0 - nimble_bonus))
-                step = (self.speed / move_cost) * dt
-                nx = self.x + (dx / nd) * step
-                ny = self.y + (dy / nd) * step
-                # clamp to passable tiles (prevent walking off map edge)
-                nc, nr = pos_to_tile(nx, ny)
-                if game.game_map.is_passable(nc, nr):
-                    self.x, self.y = nx, ny
-                elif self._repath_cooldown <= 0:
-                    # direct path blocked — use A* to path around obstacle
-                    tc, tr = pos_to_tile(t.x, t.y)
-                    self._path_to(tc, tr, game)
-                    if self.path:
-                        self.state = "moving"
-                        self.target_entity = t
-                    else:
-                        # v10f: A* also failed — try lateral slide along obstacle
-                        perp_x = -dy / nd * step
-                        perp_y = dx / nd * step
-                        for sign in [1, -1]:
-                            lx = self.x + perp_x * sign
-                            ly = self.y + perp_y * sign
-                            lc, lr = pos_to_tile(lx, ly)
-                            if game.game_map.is_passable(lc, lr):
-                                self.x, self.y = lx, ly
-                                break
-                    self._repath_cooldown = 1.5  # prevent spam
+            self._physics_step(t.x, t.y, dt, game,
+                               arrival_dist=self.attack_range * 0.8)
+            # If blocked (no velocity change + not arriving), try A* repath
+            if self.current_speed < 2.0 and self._repath_cooldown <= 0:
+                tc, tr = pos_to_tile(t.x, t.y)
+                self._path_to(tc, tr, game)
+                if self.path:
+                    self.state = "moving"
+                    self.target_entity = t
+                self._repath_cooldown = REPATH_COOLDOWN
 
     def _fire_arrow(self, target, game):
         """Fire a parabolic arrow toward target. Advanced archers lead moving targets."""
@@ -1612,7 +1851,7 @@ class Unit(Entity):
                     tvy = (tdy / td) * tspeed
                     # Predict where target will be after flight time
                     d = math.hypot(target.x - self.x, target.y - self.y)
-                    flight_t = max(0.3, ARROW_FLIGHT_TIME * (d / 180.0))
+                    flight_t = max(0.3, ARROW_FLIGHT_TIME * (d / ARROW_FLIGHT_DISTANCE_NORM))
                     lead_factor = min(1.0,
                         (self.rank - ARROW_LEAD_MIN_RANK + 1) * ARROW_LEAD_FACTOR_PER_RANK)
                     # Sharpshooter trait boosts lead accuracy
@@ -1630,6 +1869,13 @@ class Unit(Entity):
 
         # Damage
         dmg = self.attack_power
+        # v10_8: Polar Rose resonance damage bonus for arrows
+        if self._resonance_visual == 0 and not self._dissonance_nullified:
+            sq = game.player_squad_mgr.get_squad(self)
+            if sq:
+                rc = game.player_squad_mgr._resonance_cache.get(sq.squad_id)
+                if rc:
+                    dmg = int(dmg * (1.0 + rc[1]))
         if isinstance(target, _get_building_class()):
             dmg = int(dmg * self.building_mult)
 
@@ -1647,18 +1893,22 @@ class Unit(Entity):
                 continue
             d = dist(center_x, center_y, e.x, e.y)
             if d <= r:
-                falloff = 1.0 - 0.5 * (d / max(1, r))  # 100% center, 50% edge
+                falloff = 1.0 - WARLOCK_AOE_EDGE_FACTOR * (d / max(1, r))
                 dmg = int(self.attack_power * falloff)
+                # v10_8: Sierpinski resonance AOE dampening
+                aoe_factor = getattr(e, '_sierpinski_aoe_factor', 1.0)
+                if aoe_factor < 1.0 and not getattr(e, '_dissonance_nullified', False):
+                    dmg = max(1, int(dmg * aoe_factor))
                 e.take_damage(max(1, dmg), self)
 
     def _healer_tick(self, dt, game):
         """Healer: find and heal nearest wounded ally. Called from _idle_behavior."""
         if self.heal_rate <= 0:
             return False
-        # find nearest wounded ally within range
+        # v10_beta: spatial grid instead of O(n) scan
         best = None
         best_d = self.attack_range + 1
-        for e in game.enemy_units:
+        for e in game.enemy_grid.query_radius(self.x, self.y, self.attack_range + 1):
             if e is self or not e.alive or e.hp >= e.max_hp:
                 continue
             d = dist(self.x, self.y, e.x, e.y)
@@ -1666,9 +1916,9 @@ class Unit(Entity):
                 best_d = d
                 best = e
         if best:
-            best.hp = min(best.max_hp, best.hp + self.heal_rate * dt)
+            best.hp = min(best.max_hp, int(best.hp + self.heal_rate * dt))
             # follow healing target to stay in range
-            if best_d > self.attack_range * 0.7:
+            if best_d > self.attack_range * HEALER_FOLLOW_RANGE_MULT:
                 tc, tr = best.get_tile()
                 self._path_to(tc, tr, game)
                 self.state = "moving"
@@ -1984,6 +2234,28 @@ class Unit(Entity):
             aura_alpha = 60 + int(40 * abs(math.sin(pygame.time.get_ticks() * 0.003)))
             aura_surf = pygame.Surface((aura_r * 2, aura_r * 2), pygame.SRCALPHA)
             pygame.draw.circle(aura_surf, (180, 30, 30, aura_alpha), (aura_r, aura_r), aura_r)
+            surf.blit(aura_surf, (sx - aura_r, sy - aura_r))
+
+        # v10_8: Resonance aura (player units in formation)
+        if getattr(self, '_resonance_visual', -1) >= 0 and not getattr(self, '_dissonance_nullified', False) and r >= 3:
+            from constants import RESONANCE_COLORS
+            res_col = RESONANCE_COLORS.get(self._resonance_visual, (200, 200, 200))
+            aura_r = int(r * 1.3)
+            ticks = pygame.time.get_ticks()
+            aura_alpha = 30 + int(35 * abs(math.sin(ticks * 0.002 + self.eid * 0.5)))
+            aura_surf = pygame.Surface((aura_r * 2, aura_r * 2), pygame.SRCALPHA)
+            pygame.draw.circle(aura_surf, (*res_col, aura_alpha), (aura_r, aura_r), aura_r)
+            surf.blit(aura_surf, (sx - aura_r, sy - aura_r))
+
+        # v10_8: Dissonant enemy glow (dark inverse aura)
+        if getattr(self, 'dissonant_formation', -1) >= 0 and r >= 3:
+            from constants import RESONANCE_DISSONANCE_COLORS
+            dis_col = RESONANCE_DISSONANCE_COLORS.get(self.dissonant_formation, (100, 100, 100))
+            aura_r = int(r * 1.4)
+            ticks = pygame.time.get_ticks()
+            aura_alpha = 40 + int(30 * abs(math.sin(ticks * 0.004 + self.eid * 0.3)))
+            aura_surf = pygame.Surface((aura_r * 2, aura_r * 2), pygame.SRCALPHA)
+            pygame.draw.circle(aura_surf, (*dis_col, aura_alpha), (aura_r, aura_r), aura_r)
             surf.blit(aura_surf, (sx - aura_r, sy - aura_r))
 
         # v10_7: Sentinel Cry highlighted enemy — blue-white outline

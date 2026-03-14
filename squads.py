@@ -16,6 +16,10 @@ from constants import (
     FORMATION_SIERPINSKI, FORMATION_KOCH,
     FORMATION_ROSE_SPACING, FORMATION_SPIRAL_C,
     FORMATION_SIERPINSKI_SPACING, FORMATION_KOCH_RADIUS,
+    RESONANCE_ROSE_DMG_PER_PETAL, RESONANCE_KOCH_SLOW_PER_DEPTH,
+    RESONANCE_MULTI_SQUAD_PENALTY,
+    HARMONY_IDEAL_RATIOS,
+    FORMATION_MIN_VIABLE,
 )
 from utils import dist
 
@@ -192,6 +196,74 @@ def formation_slot(formation_type, squad_size, slot_index, front_dx, front_dy):
 
 
 # ---------------------------------------------------------------------------
+# v10_8: Resonance Field Calculations (pure math)
+# ---------------------------------------------------------------------------
+
+def resonance_polar_rose_bonus(n):
+    """Rose resonance: +3% damage per petal. Petals scale with squad size."""
+    if n < 2:
+        return 0.0
+    petals = max(1, int(0.5 + n / 4))
+    return petals * RESONANCE_ROSE_DMG_PER_PETAL
+
+def resonance_golden_spiral_miss(n):
+    """Spiral resonance: evasion = 1/phi^depth. Depth from Fibonacci thresholds."""
+    if n < 2:
+        return 0.0
+    depth = max(1, int(math.log(max(1, n)) / math.log(_PHI)))
+    return 1.0 / (_PHI ** depth)
+
+def resonance_sierpinski_aoe_factor(n):
+    """Sierpinski resonance: AOE factor = 1/3^depth. Lower = more reduction."""
+    if n < 2:
+        return 1.0
+    depth = max(1, int(math.log(max(1, n)) / math.log(3)))
+    return (1.0 / 3.0) ** depth
+
+def resonance_koch_slow(n):
+    """Koch resonance: slow = depth * 15%. Depth from size thresholds."""
+    if n < 2:
+        return 0.0
+    if n <= 3:
+        depth = 1
+    elif n <= 5:
+        depth = 2
+    else:
+        depth = 3
+    return depth * RESONANCE_KOCH_SLOW_PER_DEPTH
+
+
+
+# ---------------------------------------------------------------------------
+# v10_alpha: Harmonic Resonance — composition quality multiplier
+# ---------------------------------------------------------------------------
+
+def get_squad_composition(squad):
+    """Return (soldiers, archers) count from alive squad members."""
+    soldiers = sum(1 for m in squad.members if m.alive and m.unit_type == "soldier")
+    archers = sum(1 for m in squad.members if m.alive and m.unit_type == "archer")
+    return soldiers, archers
+
+
+def compute_harmony(formation, soldiers, archers):
+    """Harmony quality (0.3-1.0) from unit composition vs formation's ideal ratio.
+
+    Musical metaphor: two unit types as two tones.
+    Monotone (all same) = weak. Matching the fractal's ideal ratio = perfect harmony.
+    """
+    majority = max(soldiers, archers)
+    minority = min(soldiers, archers)
+    if majority == 0:
+        return 0.3  # empty squad
+    if minority == 0:
+        return 0.5  # monotone — single note, half power
+    actual_ratio = majority / minority
+    ideal = HARMONY_IDEAL_RATIOS.get(formation, 1.0)
+    deviation = abs(actual_ratio - ideal) / max(ideal, 0.01)
+    return max(0.3, 1.0 - deviation * 0.7)
+
+
+# ---------------------------------------------------------------------------
 # Squad Class — persistent squad with formation and stance state
 # ---------------------------------------------------------------------------
 
@@ -209,6 +281,11 @@ class Squad:
         self.guard_position = None  # (x, y) for Guard stance
         self.guard_entity = None    # Building reference for Guard stance
         self._slot_cache = {}       # member_eid -> slot_index
+        # v10_delta: rotation state
+        self.rotation_angle = 0.0
+        self.rotation_speed = 0.0
+        self.is_rotating = False
+        self.sweep_timer = 0.0
 
     def add_member(self, unit):
         if unit not in self.members and len(self.members) < SQUAD_MAX_SIZE:
@@ -218,6 +295,7 @@ class Squad:
         return False
 
     def remove_member(self, unit):
+        """v10_delta: Remove a living unit from the squad (player-initiated)."""
         if unit in self.members:
             self.members.remove(unit)
             if unit is self.leader:
@@ -243,7 +321,6 @@ class Squad:
         alive = [m for m in self.members if m.alive]
         for i, m in enumerate(alive):
             self._slot_cache[m.eid] = i
-            m._formation_slot_index = i
 
     def get_slot_index(self, unit):
         return self._slot_cache.get(unit.eid, -1)
@@ -265,6 +342,14 @@ class Squad:
             self._rebuild_slots()
         return self.leader is None
 
+    def resonance_effectiveness(self, all_squads):
+        """Returns 1.0 - (duplicate_count * 0.30), min 0.1.
+        Penalizes having multiple squads with the same formation."""
+        duplicates = sum(1 for s in all_squads
+                         if s is not self and s.formation == self.formation
+                         and s.alive_count > 0)
+        return max(0.1, 1.0 - duplicates * RESONANCE_MULTI_SQUAD_PENALTY)
+
 
 # ---------------------------------------------------------------------------
 # SquadManager — manages persistent squads
@@ -275,53 +360,95 @@ class SquadManager:
         self.squad_list = []        # list of Squad objects
         self._unit_to_squad = {}    # unit_eid -> Squad
         self._maintenance_timer = 0.0
+        self._resonance_cache = {}  # v10_delta1: init to avoid getattr fallback
 
     def update(self, dt, units):
-        """Maintenance pass: prune dead, promote leaders, assign orphans."""
+        """v10_delta: Player-driven squads — no auto-grouping.
+
+        Only prune dead + dissolve squads below minimum viable count.
+        All squad creation/joining is player-initiated.
+        """
         self._maintenance_timer += dt
-        if self._maintenance_timer < 1.0:  # check every 1s (was 2s rebuild)
-            return
+        if self._maintenance_timer < 1.0:
+            return []
         self._maintenance_timer = 0.0
 
-        # Prune dead members, dissolve empty squads
-        dissolved = []
+        dissolved_notifications = []
+
+        # Prune dead members, dissolve empty/tiny squads
+        to_remove = []
         for squad in self.squad_list:
             if squad.prune_dead():
-                dissolved.append(squad)
-        for squad in dissolved:
-            self.squad_list.remove(squad)
-            # Clean up mapping
-            for eid in list(self._unit_to_squad):
-                if self._unit_to_squad[eid] is squad:
-                    del self._unit_to_squad[eid]
+                to_remove.append(squad)
+            elif squad.alive_count < FORMATION_MIN_VIABLE:
+                to_remove.append(squad)
+                dissolved_notifications.append(
+                    f"Squad dissolved — only {squad.alive_count} member(s) remain")
+        for squad in to_remove:
+            self._dissolve_internal(squad)
 
-        # Promote new leaders: military units reaching rank 1 without a squad
-        military = [u for u in units if u.alive and u.unit_type != "worker"
-                    and not u.unit_type.startswith("enemy_")]
-        for u in military:
-            if u.rank >= 1 and u.eid not in self._unit_to_squad:
-                # Create new squad with this unit as leader
-                squad = Squad(u)
-                self.squad_list.append(squad)
+        return dissolved_notifications
+
+    def is_free(self, unit):
+        """Returns True if unit is not in any squad."""
+        return unit.eid not in self._unit_to_squad
+
+    def create_squad(self, units, formation=None):
+        """Player-initiated: create a new squad from a list of free units.
+        Returns the new Squad, or None if invalid."""
+        if len(units) < FORMATION_MIN_VIABLE:
+            return None
+        # Pick highest-rank as leader
+        leader = max(units, key=lambda u: (u.rank, -u.eid))
+        squad = Squad(leader)
+        if formation is not None:
+            squad.formation = formation
+        self.squad_list.append(squad)
+        self._unit_to_squad[leader.eid] = squad
+        for u in units:
+            if u is not leader:
+                squad.add_member(u)
                 self._unit_to_squad[u.eid] = squad
+        return squad
 
-        # Assign orphan military units to nearest squad with room
-        orphans = [u for u in military if u.eid not in self._unit_to_squad]
-        for u in orphans:
-            best_squad = None
-            best_d = 1e9
-            for squad in self.squad_list:
-                if squad.alive_count >= SQUAD_MAX_SIZE:
+    def dissolve_squad(self, squad):
+        """Player-initiated: dissolve a squad, freeing all members."""
+        freed = [m for m in squad.members if m.alive]
+        self._dissolve_internal(squad)
+        return freed
+
+    def _dissolve_internal(self, squad):
+        """Remove squad and clean up mappings."""
+        if squad in self.squad_list:
+            self.squad_list.remove(squad)
+        for eid in list(self._unit_to_squad):
+            if self._unit_to_squad[eid] is squad:
+                del self._unit_to_squad[eid]
+
+    def reinforce_squad(self, squad, units, force=False):
+        """Add units to an existing squad.
+        force=True pulls units from other squads first."""
+        added = 0
+        for u in units:
+            if squad.alive_count >= SQUAD_MAX_SIZE:
+                break
+            if not u.alive or u.unit_type == "worker":
+                continue
+            if u.eid in self._unit_to_squad:
+                if not force:
+                    continue  # skip units already in squads
+                # Pull from old squad
+                old_sq = self._unit_to_squad[u.eid]
+                if old_sq is squad:
                     continue
-                if not squad.leader or not squad.leader.alive:
-                    continue
-                d = dist(u.x, u.y, squad.leader.x, squad.leader.y)
-                if d < best_d:
-                    best_d = d
-                    best_squad = squad
-            if best_squad and best_d < SQUAD_FOLLOW_DIST * 4:
-                best_squad.add_member(u)
-                self._unit_to_squad[u.eid] = best_squad
+                old_sq.remove_member(u)
+                if old_sq.alive_count < FORMATION_MIN_VIABLE:
+                    self._dissolve_internal(old_sq)
+            squad.add_member(u)
+            self._unit_to_squad[u.eid] = squad
+            u.stance = squad.stance
+            added += 1
+        return added
 
     def get_squad(self, unit):
         """Return the Squad object for this unit, or None."""
@@ -363,25 +490,65 @@ class SquadManager:
             squad.guard_position = (x, y)
             squad.guard_entity = entity
 
-    def create_squad(self, leader, members=None):
-        """Explicitly create a squad (e.g., from control group assignment)."""
-        # Remove from existing squads first
-        all_units = [leader] + (members or [])
-        for u in all_units:
-            old_squad = self._unit_to_squad.get(u.eid)
-            if old_squad:
-                old_squad.remove_member(u)
-                if old_squad.leader is None:
-                    if old_squad in self.squad_list:
-                        self.squad_list.remove(old_squad)
+    def compute_resonance_cache(self):
+        """Pre-compute per-squad resonance (formation_type, effective_value).
+        Called once per frame by game._update_resonance().
+        v10_alpha: value now includes harmony quality multiplier."""
+        _FUNCS = {
+            FORMATION_POLAR_ROSE: resonance_polar_rose_bonus,
+            FORMATION_GOLDEN_SPIRAL: resonance_golden_spiral_miss,
+            FORMATION_SIERPINSKI: resonance_sierpinski_aoe_factor,
+            FORMATION_KOCH: resonance_koch_slow,
+        }
+        cache = {}
+        active = [s for s in self.squad_list if s.alive_count > 0]
+        for squad in active:
+            fn = _FUNCS.get(squad.formation)
+            if fn is None:
+                continue
+            raw = fn(squad.alive_count)
+            eff = squad.resonance_effectiveness(active)
+            # v10_alpha: harmony quality scales resonance by composition match
+            s, a = get_squad_composition(squad)
+            harmony = compute_harmony(squad.formation, s, a)
+            cache[squad.squad_id] = (squad.formation, raw * eff * harmony, harmony)
+        self._resonance_cache = cache
+        return cache
 
-        squad = Squad(leader)
-        for m in (members or []):
-            squad.add_member(m)
-        self.squad_list.append(squad)
-        for u in all_units:
-            self._unit_to_squad[u.eid] = squad
-        return squad
+    def formation_move(self, squad, wx, wy, game):
+        """v10_beta: Move entire squad in formation to destination.
+
+        Leader pathfinds to (wx, wy). Each follower pathfinds to their
+        formation-offset slot position around the destination.
+        The squad arrives already in formation — no regrouping needed.
+        """
+        if not squad.leader or not squad.leader.alive:
+            return
+
+        # Compute facing direction: from leader's current pos toward destination
+        ddx = wx - squad.leader.x
+        ddy = wy - squad.leader.y
+        dd = math.hypot(ddx, ddy)
+        if dd > 1:
+            front_x, front_y = ddx / dd, ddy / dd
+        else:
+            front_x, front_y = 0.0, -1.0
+
+        # Leader moves to the click point
+        squad.leader.command_move(wx, wy, game)
+
+        # Each follower moves to their slot position around the destination
+        for m in squad.members:
+            if m is squad.leader or not m.alive:
+                continue
+            slot_idx = squad.get_slot_index(m)
+            if slot_idx > 0:
+                ox, oy = formation_slot(
+                    squad.formation, squad.alive_count,
+                    slot_idx, front_x, front_y)
+                m.command_move(wx + ox, wy + oy, game)
+            else:
+                m.command_move(wx, wy, game)
 
     def remove_unit(self, unit):
         """Remove a unit from its squad entirely."""

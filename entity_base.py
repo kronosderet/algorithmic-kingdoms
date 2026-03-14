@@ -1,4 +1,5 @@
 import math
+import random
 import pygame
 from constants import (COL_HEALTH_BG, COL_HEALTH, COL_ENEMY_HEALTH,
                        XP_PER_HIT, XP_KILL_BONUS,
@@ -79,11 +80,20 @@ class Entity:
         self.selected = False
         self.alive = True
         self.last_attacker = None  # v9.3: who last hit us
+        # v10_delta: physics velocity
+        self.vx = 0.0
+        self.vy = 0.0
+        self.facing_angle = 0.0
 
     def get_tile(self):
         return pos_to_tile(self.x, self.y)
 
     def take_damage(self, dmg, attacker=None):
+        # v10_8: Golden Spiral resonance evasion
+        miss = getattr(self, '_spiral_miss_chance', 0.0)
+        if miss > 0 and not getattr(self, '_dissonance_nullified', False):
+            if random.random() < miss:
+                return  # evaded
         # v10_6: frontal armor (Shieldbearer) — reduce damage from the front
         armor = getattr(self, 'frontal_armor', 0.0)
         if armor > 0 and attacker is not None:

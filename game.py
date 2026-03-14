@@ -13,7 +13,7 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE,
                        SELECT_RADIUS, DRAG_THRESHOLD,
                        TOWER_UPGRADE_COST, TOWER_CANNON_DAMAGE,
                        TOWER_CANNON_CD, TOWER_EXPLOSIVE_DIRECT,
-                       MAX_CONTROL_GROUPS, RALLY_POINT_COLOR,
+                       RALLY_POINT_COLOR,
                        GARRISON_COST,
                        DROPOFF_BUILDING_TYPES, PRODUCTION_RATES,
                        UPGRADE_PATH,
@@ -21,6 +21,15 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE,
                        STANCE_HUNT, STANCE_NAMES, STANCE_COLORS,
                        FORMATION_POLAR_ROSE, FORMATION_GOLDEN_SPIRAL,
                        FORMATION_SIERPINSKI, FORMATION_KOCH, FORMATION_NAMES,
+                       RESONANCE_KOCH_RADIUS_MULT, FORMATION_KOCH_RADIUS,
+                       RESONANCE_DISSONANCE_RADIUS, RESONANCE_COLORS,
+                       FORMATION_DISCOVERY, HARMONY_IDEAL_RATIOS,
+                       DISCOVERY_RATIO_TOLERANCE, DISCOVERY_NOTIFICATIONS,
+                       DOUBLE_CLICK_THRESHOLD, COMBAT_HEAT_DURATION,
+                       WORKER_SPAWN_OFFSET, WORKER_SPAWN_SPACING,
+                       ENTITY_TOOLTIP_RADIUS,
+                       ARRIVAL_CHECK_RADIUS, ARRIVAL_CHECK_TIMEOUT,
+                       PENDING_GROUP_MIN, FORMATION_MIN_VIABLE,
                        display_name)
 from utils import dist, pos_to_tile, draw_text, ruin_rebuild_cost
 from game_map import GameMap
@@ -46,6 +55,8 @@ class Game:
         self.game_over = False
         self.game_won = False
         self.game_surrendered = False
+        self.paused = False
+        self.pause_menu_selection = 0  # v10_8d: highlighted menu item
 
         # difficulty
         self.difficulty = difficulty
@@ -89,6 +100,7 @@ class Game:
         # font cache
         self.font = pygame.font.SysFont(None, 22)
         self.font_sm = pygame.font.SysFont(None, 18)
+        self.font_xs = pygame.font.SysFont(None, 15)
         self.font_lg = pygame.font.SysFont(None, 48)
         self.font_notif = pygame.font.SysFont(None, 26)
 
@@ -101,11 +113,11 @@ class Game:
         # wave clear tracking
         self._had_enemies = False
 
-        # v10_1: control groups (Ctrl+0-9 to assign, 0-9 to recall)
-        self.control_groups = [[] for _ in range(MAX_CONTROL_GROUPS)]
-
         # v10_1: attack-move mode (A key, then click)
         self.attack_move_mode = False
+
+        # v10_delta: pending group formation checks
+        self._pending_groups = []  # list of {units, dest, timestamp}
 
         # v10_2: inspected enemy (left-click enemy to view stats, no commands)
         self.inspected_enemy = None
@@ -127,6 +139,22 @@ class Game:
         # v10_4: pre-sorted unit list (maintained via insertion sort)
         self._sorted_units = []
 
+        # v10_8d: progressive UI unlock tracker
+        self.unlocks = {
+            "has_barracks": False,       # built a barracks
+            "has_refinery": False,       # built a refinery
+            "has_tower": False,          # built a tower
+            "has_squad": False,          # any squad formed (rank 1+ unit)
+            "has_iron": False,           # mined iron at least once
+            "has_stone": False,          # mined stone at least once
+            "has_steel": False,          # refined steel at least once
+            "first_wave_cleared": False, # cleared wave 1
+            "max_rank_seen": 0,          # highest unit rank achieved
+            "formations_used": set(),    # which formations player has tried
+        }
+        # v10_alpha: formation discovery — starts empty, discovered through composition
+        self.discovered_formations = set()
+
         self._setup_start()
 
     def _setup_start(self):
@@ -143,8 +171,8 @@ class Game:
         # starting workers (from difficulty profile)
         num_workers = profile.get("start_workers", 3)
         for i in range(num_workers):
-            wx = th.x + 50 + i * 25
-            wy = th.y + 50
+            wx = th.x + WORKER_SPAWN_OFFSET + i * WORKER_SPAWN_SPACING
+            wy = th.y + WORKER_SPAWN_OFFSET
             w = Unit(wx, wy, "worker", "player")
             self.player_units.append(w)
 
@@ -156,10 +184,12 @@ class Game:
         while self.running:
             dt = self.clock.tick(FPS) / 1000.0
             dt = min(dt, 0.05)
-            self.game_time += dt
             self.handle_events()
-            if not self.game_over and not self.game_won:
+            if not self.paused:
+                self.game_time += dt
+            if not self.game_over and not self.game_won and not self.paused:
                 self.update(dt)
+            self.gui.update_tooltip(dt)
             self.render()
         self.logger.close(self)
 
@@ -177,6 +207,22 @@ class Game:
                     return
                 continue
 
+            # v10_8d: pause toggle
+            if event.type == pygame.KEYDOWN and event.key in (pygame.K_p, pygame.K_PAUSE):
+                self.paused = not self.paused
+                self.pause_menu_selection = 0
+                continue
+
+            # v10_8d: pause menu navigation
+            if self.paused and event.type == pygame.KEYDOWN:
+                self._handle_pause_key(event.key)
+                continue
+            if self.paused and event.type == pygame.MOUSEBUTTONDOWN:
+                self._handle_pause_click(event.pos)
+                continue
+            if self.paused:
+                continue  # swallow all other input while paused
+
             if event.type == pygame.KEYDOWN:
                 self._handle_key(event.key)
 
@@ -189,7 +235,8 @@ class Game:
                 if event.button == 1:
                     self._handle_left_down(event.pos)
                 elif event.button == 3:
-                    self._handle_right_click(event.pos)
+                    shift = pygame.key.get_mods() & pygame.KMOD_SHIFT
+                    self._handle_right_click(event.pos, queued=bool(shift))
 
             elif event.type == pygame.MOUSEBUTTONUP:
                 if event.button == 1:
@@ -217,50 +264,57 @@ class Game:
                 self.selected.clear()
                 self.inspected_enemy = None
 
-        # cache worker selection (used by both control groups and build hotkeys)
+        # cache worker selection (used by build hotkeys)
         workers_selected = [u for u in self.selected if isinstance(u, Unit) and u.unit_type == "worker"]
 
-        # v10_1: control groups — Ctrl+0-9 assigns, 0-9 recalls
+        # v10_beta: X key = attack-move mode (WASD reserved for camera)
+        if key == pygame.K_x:
+            combat_sel = [e for e in self.selected
+                          if isinstance(e, Unit) and e.unit_type in ("soldier", "archer")]
+            if combat_sel:
+                self.attack_move_mode = True
+                return
+
+        # v10_8: Tab / Shift+Tab = cycle through squads
+        if key == pygame.K_TAB:
+            mods = pygame.key.get_mods()
+            squads = self.player_squad_mgr.squad_list
+            active = [s for s in squads if s.alive_count > 0]
+            if active:
+                direction = -1 if (mods & pygame.KMOD_SHIFT) else 1
+                self._select_squad_cycle(active, direction)
+            return
+
+        # v10_8: 1-9 = squad selection (replaces Ctrl+0-9 groups)
+        # When workers selected, 1-4 fall through to build hotkeys
         mods = pygame.key.get_mods()
-        num_keys = {pygame.K_0: 0, pygame.K_1: 1, pygame.K_2: 2, pygame.K_3: 3,
-                    pygame.K_4: 4, pygame.K_5: 5, pygame.K_6: 6, pygame.K_7: 7,
-                    pygame.K_8: 8, pygame.K_9: 9}
-        if key in num_keys:
-            group_idx = num_keys[key]
-            if mods & pygame.KMOD_CTRL:
-                # assign current selection to control group
-                units_sel = [e for e in self.selected if isinstance(e, Unit)]
-                if units_sel:
-                    self.control_groups[group_idx] = [u.eid for u in units_sel]
-                    self.add_notification(f"Group {group_idx}: {len(units_sel)} units", 1.5, (180, 220, 255))
-                    return
+        num_keys = {pygame.K_1: 1, pygame.K_2: 2, pygame.K_3: 3, pygame.K_4: 4,
+                    pygame.K_5: 5, pygame.K_6: 6, pygame.K_7: 7, pygame.K_8: 8,
+                    pygame.K_9: 9}
+        if key in num_keys and not (mods & pygame.KMOD_CTRL):
+            squad_idx = num_keys[key] - 1  # 0-based
+            # workers + keys 1-4: fall through to build hotkeys
+            if workers_selected and squad_idx < 4:
+                pass  # fall through
             else:
-                # recall control group — check if workers selected first (build hotkeys 1-4)
-                if workers_selected and group_idx in (1, 2, 3, 4):
-                    # fall through to build hotkeys below
-                    pass
-                elif self.control_groups[group_idx]:
-                    # recall: select units in this group
-                    for e in self.selected:
-                        e.selected = False
-                    self.selected.clear()
-                    eids = set(self.control_groups[group_idx])
-                    for u in self.player_units:
-                        if u.alive and u.eid in eids:
-                            u.selected = True
-                            self.selected.append(u)
-                    # clean dead units from group
-                    alive_eids = {u.eid for u in self.player_units if u.alive}
-                    self.control_groups[group_idx] = [eid for eid in self.control_groups[group_idx] if eid in alive_eids]
-                    if self.selected:
-                        # center camera on first unit
-                        e = self.selected[0]
-                        z = self.camera.zoom
-                        self.camera.x = e.x - SCREEN_WIDTH / (2 * z)
-                        self.camera.y = e.y - GAME_AREA_H / (2 * z)
+                active = [s for s in self.player_squad_mgr.squad_list if s.alive_count > 0]
+                if squad_idx < len(active):
+                    self._select_squad(active[squad_idx])
+                    # v10_8: double-tap = center camera on squad leader
+                    now = pygame.time.get_ticks()
+                    if (hasattr(self, '_last_squad_tap_idx')
+                            and self._last_squad_tap_idx == squad_idx
+                            and now - self._last_squad_tap_time < DOUBLE_CLICK_THRESHOLD):
+                        leader = active[squad_idx].leader
+                        if leader and leader.alive:
+                            z = self.camera.zoom
+                            self.camera.x = leader.x - SCREEN_WIDTH / (2 * z)
+                            self.camera.y = leader.y - GAME_AREA_H / (2 * z)
+                    self._last_squad_tap_idx = squad_idx
+                    self._last_squad_tap_time = now
                     return
 
-        # v10_6: Formation hotkeys F1-F4, Stance hotkeys F5-F8
+        # v10_6: Formation hotkeys F1-F4 — apply to selected squads
         combat_sel = [e for e in self.selected
                       if isinstance(e, Unit) and e.unit_type in ("soldier", "archer")]
         if combat_sel:
@@ -278,20 +332,89 @@ class Game:
             }
             if key in formation_keys:
                 fmt = formation_keys[key]
-                for u in combat_sel:
-                    self.player_squad_mgr.set_formation(u, fmt)
-                self.add_notification(f"Formation: {FORMATION_NAMES[fmt]}", 1.5, (180, 220, 255))
-                return
+                shift = pygame.key.get_mods() & pygame.KMOD_SHIFT
+
+                # v10_delta: check if selected units are free → create squad
+                free_units = [u for u in combat_sel if self.player_squad_mgr.is_free(u)]
+                squadded_units = [u for u in combat_sel if not self.player_squad_mgr.is_free(u)]
+
+                if shift and len(combat_sel) >= FORMATION_MIN_VIABLE:
+                    # Priority mode: pull ALL selected into new squad
+                    if fmt not in self.discovered_formations:
+                        self.add_notification("Formation not yet discovered", 1.5, (180, 100, 100))
+                        return
+                    sq = self.player_squad_mgr.create_squad(free_units, formation=fmt)
+                    if sq:
+                        for u in squadded_units:
+                            self.player_squad_mgr.reinforce_squad(sq, [u], force=True)
+                        self.add_notification(
+                            f"Priority: {FORMATION_NAMES[fmt]} ({sq.alive_count} units)",
+                            2.0, (255, 180, 40))
+                    return
+                elif free_units and len(free_units) >= FORMATION_MIN_VIABLE:
+                    # Create new squad from free units
+                    if fmt not in self.discovered_formations:
+                        self.add_notification("Formation not yet discovered", 1.5, (180, 100, 100))
+                        return
+                    sq = self.player_squad_mgr.create_squad(free_units, formation=fmt)
+                    if sq:
+                        self.add_notification(
+                            f"Squad formed: {FORMATION_NAMES[fmt]} ({sq.alive_count} units)",
+                            2.0, (100, 255, 100))
+                    return
+                else:
+                    # Change formation of existing squads
+                    seen_squads = set()
+                    for u in combat_sel:
+                        sq = self.player_squad_mgr.get_squad(u)
+                        if sq and sq.squad_id not in seen_squads:
+                            seen_squads.add(sq.squad_id)
+                            sq.formation = fmt
+                    if seen_squads:
+                        self.add_notification(
+                            f"Formation: {FORMATION_NAMES[fmt]}", 1.5, (180, 220, 255))
+                    return
             if key in stance_keys:
                 st = stance_keys[key]
+                seen_squads = set()
                 for u in combat_sel:
-                    u.command_set_stance(st)
-                    self.player_squad_mgr.set_stance(u, st)
-                    if st == STANCE_GUARD:
-                        self.player_squad_mgr.set_guard_position(u, u.x, u.y)
+                    sq = self.player_squad_mgr.get_squad(u)
+                    if sq and sq.squad_id not in seen_squads:
+                        seen_squads.add(sq.squad_id)
+                        sq.stance = st
+                        for m in sq.members:
+                            if m.alive:
+                                m.command_set_stance(st)
+                                m.stance = st
+                        if st == STANCE_GUARD:
+                            sq.guard_position = (sq.leader.x, sq.leader.y) if sq.leader else None
                 color = STANCE_COLORS.get(st, (180, 220, 255))
                 self.add_notification(f"Stance: {STANCE_NAMES[st]}", 1.5, color)
                 return
+
+        # v10_delta: Delete key — dissolve selected squad
+        if key == pygame.K_DELETE and combat_sel:
+            seen = set()
+            for u in combat_sel:
+                sq = self.player_squad_mgr.get_squad(u)
+                if sq and sq.squad_id not in seen:
+                    seen.add(sq.squad_id)
+                    freed = self.player_squad_mgr.dissolve_squad(sq)
+                    self.add_notification(
+                        f"Squad dissolved — {len(freed)} units freed", 2.5, (255, 180, 40))
+
+        # v10_delta: R key — toggle formation rotation for selected squad
+        if key == pygame.K_r and combat_sel:
+            from constants import FORMATION_ROTATION_SPEED
+            seen = set()
+            for u in combat_sel:
+                sq = self.player_squad_mgr.get_squad(u)
+                if sq and sq.squad_id not in seen:
+                    seen.add(sq.squad_id)
+                    sq.is_rotating = not sq.is_rotating
+                    sq.rotation_speed = FORMATION_ROTATION_SPEED if sq.is_rotating else 0.0
+                    label = "activated" if sq.is_rotating else "stopped"
+                    self.add_notification(f"Formation rotation {label}", 1.5, (200, 180, 255))
 
         # build hotkeys (need worker selected)
         if workers_selected:
@@ -303,13 +426,17 @@ class Game:
                 self.start_placement("refinery")
             elif key == pygame.K_4:
                 self.start_placement("tower")
+            # v10_8c: G = mine nearest resource
+            elif key == pygame.K_g:
+                self.command_gather_nearest_selected()
+                return
 
         # train hotkeys (need building selected)
         buildings_selected = [e for e in self.selected if isinstance(e, Building) and e.built]
         for b in buildings_selected:
             if key == pygame.K_q and b.building_type == "town_hall":
                 b.start_train("worker", self)
-            elif key == pygame.K_w and b.building_type == "barracks":
+            elif key == pygame.K_t and b.building_type == "barracks":
                 b.start_train("soldier", self)
             elif key == pygame.K_e and b.building_type == "barracks":
                 b.start_train("archer", self)
@@ -378,12 +505,14 @@ class Game:
     def _single_select(self, pos):
         sx, sy = pos
         wx, wy = self.camera.screen_to_world(sx, sy)
+        shift = pygame.key.get_mods() & pygame.KMOD_SHIFT
 
-        # deselect all
-        for e in self.selected:
-            e.selected = False
-        self.selected.clear()
-        self.inspected_enemy = None
+        # v10_8: shift+click = additive, otherwise deselect all
+        if not shift:
+            for e in self.selected:
+                e.selected = False
+            self.selected.clear()
+            self.inspected_enemy = None
 
         # check player units first
         best = None
@@ -401,26 +530,57 @@ class Game:
             best = self._find_building_at(wx, wy)
 
         if best:
-            best.selected = True
-            self.selected.append(best)
+            if shift and best in self.selected:
+                # shift+click on already-selected: deselect it
+                best.selected = False
+                self.selected.remove(best)
+            elif best not in self.selected:
+                best.selected = True
+                self.selected.append(best)
+                # v10_8: double-click = select all same type on screen
+                now = pygame.time.get_ticks()
+                if (isinstance(best, Unit)
+                        and hasattr(self, '_last_click_time')
+                        and now - self._last_click_time < 400
+                        and hasattr(self, '_last_click_unit')
+                        and self._last_click_unit is best):
+                    self._select_all_same_type(best)
+                self._last_click_time = now
+                self._last_click_unit = best
         else:
-            # v10_2: check enemy units for inspection (info only, no commands)
-            best_enemy = None
-            best_ed = SELECT_RADIUS
-            for e in self.enemy_units:
-                if not e.alive:
-                    continue
-                d = dist(wx, wy, e.x, e.y)
-                if d < best_ed:
-                    best_ed = d
-                    best_enemy = e
-            if best_enemy:
-                self.inspected_enemy = best_enemy
+            if not shift:
+                # v10_2: check enemy units for inspection (info only, no commands)
+                best_enemy = None
+                best_ed = SELECT_RADIUS
+                for e in self.enemy_units:
+                    if not e.alive:
+                        continue
+                    d = dist(wx, wy, e.x, e.y)
+                    if d < best_ed:
+                        best_ed = d
+                        best_enemy = e
+                if best_enemy:
+                    self.inspected_enemy = best_enemy
+
+    def _select_all_same_type(self, unit):
+        """Double-click: select all visible units of same type."""
+        utype = unit.unit_type
+        for u in self.player_units:
+            if not u.alive or u.state in ("garrisoned", "stationed"):
+                continue
+            if u.unit_type != utype or u in self.selected:
+                continue
+            sx, sy = self.camera.world_to_screen(u.x, u.y)
+            if 0 <= sx <= SCREEN_WIDTH and GAME_AREA_Y <= sy <= GAME_AREA_Y + GAME_AREA_H:
+                u.selected = True
+                self.selected.append(u)
 
     def _box_select(self, start, end):
-        for e in self.selected:
-            e.selected = False
-        self.selected.clear()
+        shift = pygame.key.get_mods() & pygame.KMOD_SHIFT
+        if not shift:
+            for e in self.selected:
+                e.selected = False
+            self.selected.clear()
 
         x1 = min(start[0], end[0])
         y1 = min(start[1], end[1])
@@ -430,12 +590,41 @@ class Game:
         for u in self.player_units:
             if not u.alive or u.state in ("garrisoned", "stationed"):
                 continue
+            if u in self.selected:
+                continue
             sx, sy = self.camera.world_to_screen(u.x, u.y)
             if x1 <= sx <= x2 and y1 <= sy <= y2:
                 u.selected = True
                 self.selected.append(u)
 
-    def _handle_right_click(self, pos):
+    def _select_squad(self, squad):
+        """Select all alive members of a squad."""
+        for e in self.selected:
+            e.selected = False
+        self.selected.clear()
+        self.inspected_enemy = None
+        for m in squad.members:
+            if m.alive:
+                m.selected = True
+                self.selected.append(m)
+
+    def _select_squad_cycle(self, active_squads, direction=1):
+        """Cycle through squads with Tab/Shift+Tab."""
+        # Find which squad is currently selected (if any)
+        current_idx = -1
+        if self.selected:
+            first = self.selected[0]
+            if isinstance(first, Unit):
+                sq = self.player_squad_mgr.get_squad(first)
+                if sq:
+                    for i, s in enumerate(active_squads):
+                        if s is sq:
+                            current_idx = i
+                            break
+        next_idx = (current_idx + direction) % len(active_squads)
+        self._select_squad(active_squads[next_idx])
+
+    def _handle_right_click(self, pos, queued=False):
         sx, sy = pos
         if sy < GAME_AREA_Y or sy >= GAME_AREA_Y + GAME_AREA_H:
             return
@@ -539,9 +728,112 @@ class Game:
                     u.command_move(wx, wy, self)
                 return
 
-        # move command
-        for u in units_sel:
-            u.command_move(wx, wy, self)
+        # v10_beta: formation-aware move — squads arrive in formation
+        self._formation_move_selected(units_sel, wx, wy, queued=queued)
+
+    def _formation_move_selected(self, units, wx, wy, queued=False):
+        """v10_beta: Move selected units. Squads move in formation;
+        solo units move individually to the destination."""
+        seen_squads = {}
+        solo = []
+        for u in units:
+            sq = self.player_squad_mgr.get_squad(u)
+            if sq:
+                if sq.squad_id not in seen_squads:
+                    seen_squads[sq.squad_id] = (sq, [])
+                seen_squads[sq.squad_id][1].append(u)
+            else:
+                solo.append(u)
+
+        for sq_id, (sq, members) in seen_squads.items():
+            if sq.leader in members:
+                if queued:
+                    # Shift-queue: each unit queues their slot position
+                    for u in members:
+                        u.command_move(wx, wy, self, queued=True)
+                else:
+                    self.player_squad_mgr.formation_move(sq, wx, wy, self)
+            else:
+                for u in members:
+                    u.command_move(wx, wy, self, queued=queued)
+
+        for u in solo:
+            u.command_move(wx, wy, self, queued=queued)
+
+        # v10_delta: track free military units for group discovery
+        free_military = [u for u in solo
+                         if u.unit_type in ("soldier", "archer") and u.alive]
+        if len(free_military) >= PENDING_GROUP_MIN and not queued:
+            self._pending_groups.append({
+                "units": free_military,
+                "dest": (wx, wy),
+                "timestamp": self.game_time,
+            })
+
+    def _update_pending_groups(self, dt):
+        """v10_delta: Check if pending free-unit groups have arrived at destination."""
+        still_pending = []
+        for pg in self._pending_groups:
+            # Timeout
+            if self.game_time - pg["timestamp"] > ARRIVAL_CHECK_TIMEOUT:
+                continue
+            # Remove dead units
+            pg["units"] = [u for u in pg["units"] if u.alive]
+            if len(pg["units"]) < PENDING_GROUP_MIN:
+                continue
+            # Check if all arrived
+            dx, dy = pg["dest"]
+            all_arrived = all(
+                u.state == "idle" and
+                math.hypot(u.x - dx, u.y - dy) < ARRIVAL_CHECK_RADIUS * 3
+                for u in pg["units"]
+            )
+            if all_arrived:
+                self._check_group_discovery(pg["units"])
+            else:
+                still_pending.append(pg)
+        self._pending_groups = still_pending
+
+    def _check_group_discovery(self, units):
+        """v10_delta: Check if a group of free units matches a formation recipe."""
+        soldiers = sum(1 for u in units if u.unit_type == "soldier")
+        archers = sum(1 for u in units if u.unit_type == "archer")
+        total = soldiers + archers
+        if total < PENDING_GROUP_MIN:
+            return
+        ratio = soldiers / max(1, archers) if archers > 0 else float(soldiers)
+
+        from constants import (FORMATION_DISCOVERY, DISCOVERY_RATIO_TOLERANCE,
+                               DISCOVERY_NOTIFICATIONS)
+
+        discovered_any = False
+        best_formation = None
+        for fmt_idx, recipe in FORMATION_DISCOVERY.items():
+            if fmt_idx in self.discovered_formations:
+                continue
+            if total < recipe["min_units"]:
+                continue
+            ideal = recipe["ratio"]
+            if abs(ratio - ideal) <= DISCOVERY_RATIO_TOLERANCE or (ideal > 10 and archers == 0):
+                self.discovered_formations.add(fmt_idx)
+                note = DISCOVERY_NOTIFICATIONS.get(fmt_idx, "New formation discovered!")
+                self.add_notification(note, 4.0, (255, 220, 80))
+                discovered_any = True
+                best_formation = fmt_idx
+
+        if not discovered_any:
+            # Subtle hint
+            if total >= 3:
+                self.add_notification("Units grouped... no resonance detected", 2.0, (120, 120, 140))
+            return
+
+        # Auto-create squad from these units with the discovered formation
+        # Only use free units
+        free_units = [u for u in units if self.player_squad_mgr.is_free(u)]
+        if len(free_units) >= FORMATION_MIN_VIABLE:
+            sq = self.player_squad_mgr.create_squad(free_units, formation=best_formation)
+            if sq:
+                self.add_notification(f"Squad formed! ({len(free_units)} units)", 3.0, (100, 255, 100))
 
     def start_placement(self, building_type):
         d = BUILDING_DEFS[building_type]
@@ -705,22 +997,35 @@ class Game:
             def_y = (th.y + nearest_tower.y) / 2
         else:
             def_x, def_y = th.x, th.y
+        # v10_beta: formation-move squads to defense point
+        seen_squads = set()
         for u in self.player_units:
             if u.unit_type in ("soldier", "archer") and u.state != "garrisoned":
-                u.command_move(def_x, def_y, self)
-                u.command_set_stance(STANCE_GUARD)
-                # set guard position for squad
-                self.player_squad_mgr.set_guard_position(u, def_x, def_y)
+                sq = self.player_squad_mgr.get_squad(u)
+                if sq and sq.squad_id not in seen_squads:
+                    seen_squads.add(sq.squad_id)
+                    self.player_squad_mgr.formation_move(sq, def_x, def_y, self)
+                    sq.stance = STANCE_GUARD
+                    for m in sq.members:
+                        if m.alive:
+                            m.command_set_stance(STANCE_GUARD)
+                    self.player_squad_mgr.set_guard_position(u, def_x, def_y)
+                elif not sq:
+                    u.command_move(def_x, def_y, self)
+                    u.command_set_stance(STANCE_GUARD)
 
     def global_attack(self):
-        """All combat units hunt down enemies."""
+        """v10_beta: All combat units hunt down enemies (spatial grid, not O(n²))."""
         for u in self.player_units:
             if u.unit_type not in ("soldier", "archer") or u.state == "garrisoned":
                 continue
-            # find nearest enemy
+            # find nearest enemy via spatial grid expanding search
+            nearby = self.enemy_grid.query_radius(u.x, u.y, 400)
+            if not nearby:
+                nearby = [e for e in self.enemy_units if e.alive]
             best = None
             best_d = 1e9
-            for e in self.enemy_units:
+            for e in nearby:
                 if not e.alive:
                     continue
                 d = dist(u.x, u.y, e.x, e.y)
@@ -769,6 +1074,87 @@ class Game:
                 self.resources.steel += cost["steel"]
                 self.add_notification("No idle workers available for upgrade!", 2.0, (255, 80, 80))
 
+    def _update_resonance(self):
+        """v10_8: Compute resonance fields and stamp per-unit attributes."""
+        cache = self.player_squad_mgr.compute_resonance_cache()
+
+        # Clear per-frame resonance attributes on all player units
+        for u in self.player_units:
+            if not u.alive:
+                continue
+            u._spiral_miss_chance = 0.0
+            u._sierpinski_aoe_factor = 1.0
+            u._dissonance_nullified = False
+            u._resonance_visual = -1
+
+        # Clear Koch slow on all enemies
+        for e in self.enemy_units:
+            if e.alive:
+                e._koch_slow_factor = 0.0
+
+        # Stamp resonance attributes per squad
+        for squad in self.player_squad_mgr.squad_list:
+            if squad.alive_count == 0:
+                continue
+            res = cache.get(squad.squad_id)
+            if not res:
+                continue
+            fmt, value = res[0], res[1]
+
+            if fmt == FORMATION_POLAR_ROSE:
+                # Rose: damage bonus applied at attack time, just stamp visual
+                for m in squad.members:
+                    if m.alive:
+                        m._resonance_visual = 0
+            elif fmt == FORMATION_GOLDEN_SPIRAL:
+                for m in squad.members:
+                    if m.alive:
+                        m._spiral_miss_chance = value
+                        m._resonance_visual = 1
+            elif fmt == FORMATION_SIERPINSKI:
+                for m in squad.members:
+                    if m.alive:
+                        m._sierpinski_aoe_factor = value
+                        m._resonance_visual = 2
+            elif fmt == FORMATION_KOCH:
+                # Stamp visual on members
+                for m in squad.members:
+                    if m.alive:
+                        m._resonance_visual = 3
+                # Slow enemies within Koch radius
+                if squad.leader and squad.leader.alive:
+                    kr = FORMATION_KOCH_RADIUS * RESONANCE_KOCH_RADIUS_MULT
+                    for e in self.enemy_grid.query_radius(
+                            squad.leader.x, squad.leader.y, kr):
+                        if e.alive:
+                            e._koch_slow_factor = max(e._koch_slow_factor, value)
+
+        # Dissonance pass: nullify resonance near dissonant enemies
+        for e in self.enemy_units:
+            if not e.alive or e.dissonant_formation < 0:
+                continue
+            anti_fmt = e.dissonant_formation
+            for u in self.player_grid.query_radius(
+                    e.x, e.y, RESONANCE_DISSONANCE_RADIUS):
+                if u.alive and u._resonance_visual == anti_fmt:
+                    u._dissonance_nullified = True
+                    u._spiral_miss_chance = 0.0
+                    u._sierpinski_aoe_factor = 1.0
+
+    def command_gather_nearest_selected(self, resource_type=None):
+        """v10_8c: Send selected workers to mine nearest resource (optionally specific type)."""
+        workers = [u for u in self.selected if isinstance(u, Unit) and u.unit_type == "worker"]
+        count = 0
+        for w in workers:
+            w.command_gather_nearest(self, resource_type)
+            if w.state == "moving":
+                count += 1
+        rname = resource_type.title() if resource_type else "resource"
+        if count:
+            self.add_notification(f"{count} worker(s) → nearest {rname}", 1.5, (200, 180, 80))
+        elif workers:
+            self.add_notification(f"No {rname} found", 1.5, (200, 80, 80))
+
     def global_resume(self):
         """Ungarrison all workers and resume previous work."""
         for b in self.player_buildings:
@@ -783,9 +1169,8 @@ class Game:
     def update(self, dt):
         mx, my = pygame.mouse.get_pos()
         keys = pygame.key.get_pressed()
-        # suppress WASD only during attack-move targeting click
-        suppress = self.attack_move_mode
-        self.camera.update(keys, dt, mx, my, suppress_wasd=suppress)
+        # v10_beta: WASD always pans camera (no suppression)
+        self.camera.update(keys, dt, mx, my)
 
         self.enemy_ai.update(dt, self)
 
@@ -832,37 +1217,42 @@ class Game:
         # v10_5: update camera shake
         self.camera.update_shake(dt)
 
-        # v9: update squad managers
-        self.player_squad_mgr.update(dt, self.player_units)
+        # v10_delta: squad maintenance (player-driven, no auto-grouping)
+        dissolution_msgs = self.player_squad_mgr.update(dt, self.player_units)
+        for msg in dissolution_msgs:
+            self.add_notification(msg, 3.0, (255, 180, 40))
         self.enemy_squad_mgr.update(dt, self.enemy_units)
 
-        # passive healing near town hall
+        # v10_delta: check pending group arrivals for formation discovery
+        self._update_pending_groups(dt)
+
+        # v10_8: update resonance fields
+        self._update_resonance()
+
+        # v10_beta: passive healing near town hall (spatial grid per TH instead of n×m)
         town_halls = [b for b in self.player_buildings
                       if b.alive and b.built and not b.ruined
                       and b.building_type == "town_hall"]
-        for u in self.player_units:
-            if not u.alive or u.hp >= u.max_hp:
-                continue
-            for th in town_halls:
-                if dist(u.x, u.y, th.x, th.y) <= HEAL_RADIUS_TH:
+        for th in town_halls:
+            for u in self.player_grid.query_radius(th.x, th.y, HEAL_RADIUS_TH):
+                if u.alive and u.hp < u.max_hp:
                     u.hp = min(u.max_hp, u.hp + HEAL_RATE_NEAR_TH * dt)
-                    break
 
         # v10_1: record combat heat for dead units (minimap overlay)
         for u in self.enemy_units:
             if not u.alive:
-                self._combat_heat.append([u.x, u.y, 30.0])  # 30 sec decay
+                self._combat_heat.append([u.x, u.y, COMBAT_HEAT_DURATION])  # 30 sec decay
         for u in self.player_units:
             if not u.alive and u.unit_type != "worker":
-                self._combat_heat.append([u.x, u.y, 30.0])
+                self._combat_heat.append([u.x, u.y, COMBAT_HEAT_DURATION])
         # decay heat
         self._combat_heat = [[x, y, t - dt] for x, y, t in self._combat_heat if t - dt > 0]
 
-        # v10_6: count player losses for adaptive difficulty
+        # v10_9: count player losses for incident outcome classification
         dead_player_units = sum(1 for u in self.player_units if not u.alive and u.unit_type != "worker")
         dead_player_buildings = sum(1 for b in self.player_buildings if not b.alive)
-        self.enemy_ai.units_lost_this_wave += dead_player_units
-        self.enemy_ai.buildings_lost_this_wave += dead_player_buildings
+        self.enemy_ai.units_lost_this_incident += dead_player_units
+        self.enemy_ai.buildings_lost_this_incident += dead_player_buildings
 
         # remove dead
         self.player_units = [u for u in self.player_units if u.alive]
@@ -873,10 +1263,12 @@ class Game:
         if self.inspected_enemy and not self.inspected_enemy.alive:
             self.inspected_enemy = None
 
-        # wave cleared check
-        enemies_now = len(self.enemy_units) > 0
-        if had_enemies and not enemies_now and self.enemy_ai.wave_number > 0:
-            self._on_wave_cleared()
+        # v10_9: wave/incident cleared is now handled internally by EnemyAI FSM
+        # (via _resolve_incident → game._on_attack_resolved callback)
+
+        # v10_8d: update progressive unlocks (every ~0.5s)
+        if int(self.game_time * 2) != int((self.game_time - dt) * 2):
+            self._update_unlocks()
 
         # update notifications (filter uses timer - dt so no negative timers survive)
         self._notifications = [[t, timer - dt, c]
@@ -893,44 +1285,97 @@ class Game:
             self.logger.log(self.game_time, "GAME_OVER",
                             self.enemy_ai.wave_number, "victory", self.difficulty)
 
-    def _on_wave_cleared(self):
-        """Award wave completion bonus and apply veterancy."""
-        wn = self.enemy_ai.wave_number
-        profile = self.difficulty_profile
-
-        # wave completion bonus (scales slightly with wave number)
-        bonus_gold = profile["wave_bonus_gold"] + wn * 2
-        bonus_wood = profile["wave_bonus_wood"] + wn
-        bonus_steel = profile["wave_bonus_steel"] + wn // 3
-        self.resources.gold += bonus_gold
-        self.resources.wood += bonus_wood
-        self.resources.steel += bonus_steel
-
-        self.add_notification(
-            f"Wave {wn} cleared! +{bonus_gold}g +{bonus_wood}w +{bonus_steel}s",
-            3.5, (255, 255, 100))
-
-        # count escaped enemies for notification
+    def _on_attack_resolved(self, incident_number, outcome):
+        """v10_9: Called by EnemyAI FSM when an incident is resolved."""
+        # Count escaped enemies
         esc = len(self.escaped_enemies)
         if esc > 0:
+            self.enemy_ai.incident_enemies_fled = esc
             self.add_notification(
                 f"{esc} {'enemy' if esc == 1 else 'enemies'} escaped — they will return stronger!",
                 3.5, (255, 140, 80))
 
-        self.logger.log(self.game_time, "WAVE_CLEARED", wn,
-                        str(bonus_gold), str(bonus_wood), str(bonus_steel),
-                        esc, f"enemies_escaped:{esc}")
-
-        # v10_6: record wave pressure for adaptive difficulty
-        self.enemy_ai.enemies_escaped_this_wave = esc
-        wave_count = self.enemy_ai.get_wave_count(wn)
-        self.enemy_ai.record_wave_pressure(wave_count)
-
-        # v9: rank-up notifications (XP is granted per-hit during combat, not here)
-        # Clear projectiles between waves for visual cleanliness
+        # Clear projectiles between incidents for visual cleanliness
         self.ground_arrows.clear()
         self.cannonballs.clear()
         self.craters.clear()
+
+    def _update_unlocks(self):
+        """v10_8d: Update progressive UI unlock state from current game state."""
+        u = self.unlocks
+        # buildings
+        for b in self.player_buildings:
+            if b.built and not b.ruined:
+                if b.building_type == "barracks":
+                    u["has_barracks"] = True
+                elif b.building_type == "refinery":
+                    u["has_refinery"] = True
+                elif b.building_type == "tower":
+                    u["has_tower"] = True
+        # resources
+        if self.resources.iron > 0:
+            u["has_iron"] = True
+        if self.resources.stone > 0:
+            u["has_stone"] = True
+        if self.resources.steel > 0:
+            u["has_steel"] = True
+        # squads
+        squads = self.player_squad_mgr.squad_list
+        if any(s.alive_count > 0 for s in squads):
+            u["has_squad"] = True
+        # max rank
+        for unit in self.player_units:
+            if unit.alive and unit.rank > u["max_rank_seen"]:
+                u["max_rank_seen"] = unit.rank
+        # incident (was wave)
+        if self.enemy_ai.incident_number >= 1:
+            u["first_wave_cleared"] = True
+        # v10_alpha: formation discovery
+        self._check_formation_discovery()
+
+    def _check_formation_discovery(self):
+        """v10_alpha: Check if any squad's composition discovers a new formation."""
+        from squads import get_squad_composition
+        for squad in self.player_squad_mgr.squad_list:
+            if squad.alive_count == 0:
+                continue
+            # Count veterans
+            veterans = sum(1 for m in squad.members if m.alive and m.rank >= 1)
+            soldiers, archers = get_squad_composition(squad)
+            total = soldiers + archers
+
+            for fmt_idx, req in FORMATION_DISCOVERY.items():
+                if fmt_idx in self.discovered_formations:
+                    continue  # already discovered
+                if total < req["min_size"]:
+                    continue
+                if veterans < req["min_veterans"]:
+                    continue
+
+                # Check ratio
+                if req.get("any_ratio"):
+                    # Rose: any composition works
+                    pass
+                else:
+                    majority = max(soldiers, archers)
+                    minority = min(soldiers, archers)
+                    if minority == 0:
+                        continue  # monotone can't discover non-Rose
+                    actual_ratio = majority / minority
+                    ideal = HARMONY_IDEAL_RATIOS[fmt_idx]
+                    deviation = abs(actual_ratio - ideal) / max(ideal, 0.01)
+                    if deviation >= DISCOVERY_RATIO_TOLERANCE:
+                        continue  # ratio too far from ideal
+
+                # Discovery!
+                self.discovered_formations.add(fmt_idx)
+                msg = DISCOVERY_NOTIFICATIONS.get(fmt_idx, "Formation Discovered!")
+                self.add_notification(msg, 4.0, (255, 230, 80))
+                self.logger.log(self.game_time, "FORMATION_DISCOVERED",
+                                FORMATION_NAMES[fmt_idx],
+                                f"{soldiers}S:{archers}A", f"squad:{squad.squad_id}")
+                # Auto-switch discovering squad to this formation
+                squad.formation = fmt_idx
 
     def render(self):
         self.screen.fill(COL_BG)
@@ -943,6 +1388,7 @@ class Game:
         self._render_ground_arrows()   # v9: stuck arrows on ground (below units)
         self._render_craters()         # v10_5: cannonball impact craters
         self._render_buildings()
+        self._render_koch_rings()  # v10_8: Koch slow territory rings
         self._render_units()
         self._render_arrows()          # v9: flying arrows (above units)
         self._render_cannonballs()     # v10c: tower cannonballs + explosions
@@ -961,13 +1407,24 @@ class Game:
         # minimap
         self._render_minimap()
 
+        # v10_alpha: Register map entity tooltips for hovered units/buildings
+        mx, my = pygame.mouse.get_pos()
+        if TOP_BAR_H < my < SCREEN_HEIGHT - BOTTOM_PANEL_H:
+            self._register_entity_tooltip(mx, my)
+
         # v10_2: attack-move cursor indicator
         if self.attack_move_mode:
-            mx, my = pygame.mouse.get_pos()
             draw_text(self.screen, "ATTACK MOVE", mx + 12, my - 12, self.font_sm, (255, 80, 80))
 
         # notifications
         self._render_notifications()
+
+        # v10_alpha: Draw tooltip overlay (last, on top of everything)
+        self.gui.draw_tooltip(self.screen)
+
+        # v10_8d: pause menu overlay
+        if self.paused:
+            self._draw_pause_menu()
 
         # game over / win overlay
         if self.game_over:
@@ -991,7 +1448,10 @@ class Game:
     def _render_map(self):
         vr = self.camera.visible_rect()
         z = self.camera.zoom
-        ts = int(TILE_SIZE * z) + 1  # screen-space tile size (+ 1 to avoid gaps)
+        # v10_8c: use exact tile positions to prevent grid drift
+        # Each tile's pixel position is computed from its world coord, not accumulated ts
+        tsf = TILE_SIZE * z  # exact floating-point tile size
+        ts = max(1, int(tsf) + 1)  # padded for fill (no gaps between tiles)
         c_min = max(0, int(vr.x // TILE_SIZE))
         r_min = max(0, int(vr.y // TILE_SIZE))
         c_max = min(MAP_COLS, int((vr.x + vr.width) // TILE_SIZE) + 1)
@@ -1010,43 +1470,45 @@ class Game:
         )
 
         if not cache_valid:
-            w = (c_max - c_min) * ts + ts
-            h = (r_max - r_min) * ts + ts
+            # v10_8c: cache size from exact tile positions (not ts accumulation)
+            w = int((c_max - c_min) * tsf) + ts
+            h = int((r_max - r_min) * tsf) + ts
             cache = pygame.Surface((max(1, w), max(1, h)))
             cache.fill((40, 118, 74))  # grass base
 
             for r in range(r_min, r_max):
                 for c in range(c_min, c_max):
                     t = self.game_map.tiles[r][c]
-                    lx = (c - c_min) * ts
-                    ly = (r - r_min) * ts
+                    # v10_8c: exact position from world coords
+                    lx = int((c - c_min) * tsf)
+                    ly = int((r - r_min) * tsf)
                     if t != TERRAIN_GRASS:
                         color = TERRAIN_COLORS.get(t, (40, 118, 74))
                         pygame.draw.rect(cache, color, (lx, ly, ts, ts))
 
                     # decorations
                     if t == TERRAIN_TREE:
-                        cx = lx + ts // 2
-                        cy = ly + ts // 2
+                        cx = lx + int(tsf * 0.5)
+                        cy = ly + int(tsf * 0.5)
                         r1 = max(2, int(10 * z))
                         r2 = max(2, int(8 * z))
                         pygame.draw.circle(cache, (0, 60, 0), (cx, cy - int(4 * z)), r1)
                         pygame.draw.circle(cache, (10, 80, 10), (cx, cy - int(4 * z)), r2)
                     elif t == TERRAIN_GOLD:
-                        cx = lx + ts // 2
-                        cy = ly + ts // 2
+                        cx = lx + int(tsf * 0.5)
+                        cy = ly + int(tsf * 0.5)
                         pygame.draw.circle(cache, (255, 230, 80), (cx, cy), max(2, int(6 * z)))
                     elif t == TERRAIN_IRON:
-                        cx = lx + ts // 2
-                        cy = ly + ts // 2
+                        cx = lx + int(tsf * 0.5)
+                        cy = ly + int(tsf * 0.5)
                         s = int(7 * z)
                         s2 = int(6 * z)
                         s3 = int(5 * z)
                         pts = [(cx, cy - s), (cx - s2, cy + s3), (cx + s2, cy + s3)]
                         pygame.draw.polygon(cache, (180, 180, 195), pts)
                     elif t == TERRAIN_STONE:
-                        cx = lx + ts // 2
-                        cy = ly + ts // 2
+                        cx = lx + int(tsf * 0.5)
+                        cy = ly + int(tsf * 0.5)
                         s = int(6 * z)
                         pts = [(cx, cy - s), (cx + s, cy), (cx, cy + s), (cx - s, cy)]
                         pygame.draw.polygon(cache, (185, 175, 155), pts)
@@ -1055,10 +1517,10 @@ class Game:
             if z >= 0.7:
                 grid_col = (30, 90, 56)
                 for r in range(r_max - r_min + 1):
-                    y = r * ts
+                    y = int(r * tsf)
                     pygame.draw.line(cache, grid_col, (0, y), (w, y))
                 for c in range(c_max - c_min + 1):
-                    x = c * ts
+                    x = int(c * tsf)
                     pygame.draw.line(cache, grid_col, (x, 0), (x, h))
 
             self._map_cache = cache
@@ -1073,6 +1535,29 @@ class Game:
     def _render_buildings(self):
         for b in self.player_buildings:
             b.draw(self.screen, self.camera)
+
+    def _render_koch_rings(self):
+        """v10_8: Draw Koch slow territory rings around Koch-formation squads."""
+        cache = getattr(self.player_squad_mgr, '_resonance_cache', {})
+        z = self.camera.zoom
+        ticks = pygame.time.get_ticks()
+        alpha = 25 + int(20 * abs(math.sin(ticks * 0.002)))
+        for sid, entry in cache.items():
+            ftype, val = entry[0], entry[1]
+            if ftype != 3:  # Koch = formation index 3
+                continue
+            sq = next((s for s in self.player_squad_mgr.squad_list if s.squad_id == sid), None)
+            if not sq or not sq.leader or not sq.leader.alive:
+                continue
+            radius = FORMATION_KOCH_RADIUS * RESONANCE_KOCH_RADIUS_MULT * z
+            sx, sy = self.camera.world_to_screen(sq.leader.x, sq.leader.y)
+            ring_r = int(radius)
+            if ring_r < 4:
+                continue
+            ring_surf = pygame.Surface((ring_r * 2 + 4, ring_r * 2 + 4), pygame.SRCALPHA)
+            pygame.draw.circle(ring_surf, (50, 200, 80, alpha),
+                               (ring_r + 2, ring_r + 2), ring_r, 2)
+            self.screen.blit(ring_surf, (sx - ring_r - 2, sy - ring_r - 2))
 
     def _render_units(self):
         # v10_4: maintain sorted list with insertion sort (O(n) on nearly-sorted data)
@@ -1212,6 +1697,37 @@ class Game:
                 pygame.draw.rect(surf, color, (px, py, pw, ph))
         return surf
 
+    def _register_entity_tooltip(self, mx, my):
+        """Register tooltip for the entity under the mouse cursor on the map."""
+        wx, wy = self.camera.screen_to_world(mx, my)
+        best = None
+        best_dist = ENTITY_TOOLTIP_RADIUS
+        for u in self.player_units:
+            if not u.alive:
+                continue
+            d = dist(wx, wy, u.x, u.y)
+            if d < best_dist:
+                best_dist = d
+                best = u
+        for e in self.enemy_units:
+            if not e.alive:
+                continue
+            d = dist(wx, wy, e.x, e.y)
+            if d < best_dist:
+                best_dist = d
+                best = e
+        if best is not None:
+            key = f"enemy_{best.unit_type}" if best.owner == "enemy" else f"unit_{best.unit_type}"
+            self.gui._register_tooltip(pygame.Rect(mx - 10, my - 10, 20, 20), key)
+            return
+        # Check buildings
+        for b in self.player_buildings:
+            bx, by = b.x, b.y
+            half = b.size * TILE_SIZE / 2
+            if abs(wx - bx) < half and abs(wy - by) < half:
+                self.gui._register_tooltip(pygame.Rect(mx - 10, my - 10, 20, 20), f"bld_{b.building_type}")
+                return
+
     def _render_minimap(self):
         # v10_4: rebuild base terrain only when tiles change
         if self.minimap_surf is None or self._minimap_dirty:
@@ -1293,6 +1809,119 @@ class Game:
         self.camera.y = wy - GAME_AREA_H / (2 * z)
         self.camera._clamp()
         return True
+
+    # ------------------------------------------------------------------
+    # v10_8d: PAUSE MENU
+    # ------------------------------------------------------------------
+    _PAUSE_ITEMS = [
+        ("Resume", "resume"),
+        ("Save Game (coming soon)", "save"),
+        ("Load Game (coming soon)", "load"),
+        ("Settings (coming soon)", "settings"),
+        ("Restart", "restart"),
+        ("Quit to Menu", "quit"),
+    ]
+
+    def _handle_pause_key(self, key):
+        n = len(self._PAUSE_ITEMS)
+        if key == pygame.K_UP:
+            self.pause_menu_selection = (self.pause_menu_selection - 1) % n
+        elif key == pygame.K_DOWN:
+            self.pause_menu_selection = (self.pause_menu_selection + 1) % n
+        elif key in (pygame.K_RETURN, pygame.K_SPACE):
+            self._activate_pause_item(self.pause_menu_selection)
+        elif key == pygame.K_ESCAPE:
+            self.paused = False
+
+    def _handle_pause_click(self, pos):
+        mx, my = pos
+        menu_x = SCREEN_WIDTH // 2 - 140
+        menu_y_start = SCREEN_HEIGHT // 2 - 80
+        for i in range(len(self._PAUSE_ITEMS)):
+            item_y = menu_y_start + i * 40
+            if menu_x <= mx <= menu_x + 280 and item_y <= my <= item_y + 34:
+                self._activate_pause_item(i)
+                return
+
+    def _activate_pause_item(self, idx):
+        action = self._PAUSE_ITEMS[idx][1]
+        if action == "resume":
+            self.paused = False
+        elif action == "restart":
+            self.paused = False
+            self.__init__(self.screen, self.difficulty)
+        elif action == "quit":
+            self.paused = False
+            self.running = False
+        # save/load/settings: future stubs — no action yet
+
+    def _draw_pause_menu(self):
+        import math as _m
+        ticks = pygame.time.get_ticks()
+
+        # darken background
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 160))
+        self.screen.blit(overlay, (0, 0))
+
+        # title with subtle pulse
+        pulse = 0.85 + 0.15 * _m.sin(ticks * 0.003)
+        title_col = tuple(int(c * pulse) for c in (200, 220, 255))
+        draw_text(self.screen, "PAUSED", SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 130,
+                  self.font_lg, title_col, center=True)
+
+        # menu panel background
+        menu_w, menu_h = 280, len(self._PAUSE_ITEMS) * 40 + 10
+        menu_x = SCREEN_WIDTH // 2 - menu_w // 2
+        menu_y = SCREEN_HEIGHT // 2 - 80
+        panel_surf = pygame.Surface((menu_w, menu_h), pygame.SRCALPHA)
+        panel_surf.fill((20, 20, 35, 200))
+        pygame.draw.rect(panel_surf, (60, 70, 100), (0, 0, menu_w, menu_h), 1, border_radius=6)
+        self.screen.blit(panel_surf, (menu_x, menu_y))
+
+        # menu items
+        mx, my = pygame.mouse.get_pos()
+        for i, (label, action) in enumerate(self._PAUSE_ITEMS):
+            item_y = menu_y + 5 + i * 40
+            is_selected = (i == self.pause_menu_selection)
+            # mouse hover updates selection
+            if menu_x <= mx <= menu_x + menu_w and item_y <= my <= item_y + 34:
+                self.pause_menu_selection = i
+                is_selected = True
+
+            is_stub = action in ("save", "load", "settings")
+
+            # highlight bar
+            if is_selected:
+                bar_col = (40, 50, 80, 180) if not is_stub else (35, 35, 50, 120)
+                bar_surf = pygame.Surface((menu_w - 8, 34), pygame.SRCALPHA)
+                bar_surf.fill(bar_col)
+                self.screen.blit(bar_surf, (menu_x + 4, item_y))
+                # left accent line
+                accent = (100, 180, 255) if not is_stub else (60, 60, 80)
+                pygame.draw.line(self.screen, accent, (menu_x + 4, item_y + 2),
+                                 (menu_x + 4, item_y + 32), 2)
+
+            # text
+            if is_stub:
+                text_col = (80, 80, 100)
+            elif is_selected:
+                text_col = (220, 230, 255)
+            else:
+                text_col = (160, 170, 200)
+            draw_text(self.screen, label, menu_x + 16, item_y + 9, self.font, text_col)
+
+        # footer hint
+        draw_text(self.screen, "P to resume  |  Arrow keys to navigate  |  Enter to select",
+                  SCREEN_WIDTH // 2, menu_y + menu_h + 16, self.font_xs,
+                  (80, 90, 120), center=True)
+
+        # game time display
+        mins = int(self.game_time) // 60
+        secs = int(self.game_time) % 60
+        draw_text(self.screen, f"Time: {mins}:{secs:02d}  |  Incident: {self.enemy_ai.incident_number}/{self.enemy_ai.incidents_required}",
+                  SCREEN_WIDTH // 2, menu_y + menu_h + 34, self.font_xs,
+                  (80, 90, 120), center=True)
 
     def _draw_overlay(self, text, color):
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)

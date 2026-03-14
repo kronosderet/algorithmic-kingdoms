@@ -19,7 +19,7 @@ from constants import (UNIT_DEFS, BUILDING_DEFS, BUILDING_COLORS,
                        UPGRADE_PATH, PRODUCTION_RATES, PRODUCTION_TICK_INTERVAL,
                        FORGE_STONE_COST, FORGE_IRON_COST,
                        FORGE_STEEL_YIELD, FORGE_TIME,
-                       SMELTER_REFINERY_BONUS,
+                       SMELTER_REFINERY_BONUS, FORGE_WORKER_SPEED_BONUS,
                        SENTINEL_CRY_COOLDOWN, SENTINEL_CRY_RADIUS,
                        SENTINEL_CRY_BUFF_DURATION, SENTINEL_CRY_PULSE_DURATION)
 from entity_base import Entity
@@ -325,6 +325,15 @@ class Building(Entity):
                 n_workers = len(self.stationed_workers)
                 pconfig = PRODUCTION_RATES[self.building_type]
                 rate = pconfig["base_rate"] + pconfig["worker_rate"] * n_workers
+                # v10_beta: skilled workers produce faster (worker rank speed bonus)
+                if n_workers > 0:
+                    skill_key = pconfig.get("skill")
+                    if skill_key:
+                        avg_rank = sum(
+                            getattr(w, 'get_skill_rank', lambda s: 0)(skill_key)
+                            for w in self.stationed_workers
+                        ) / n_workers
+                        rate *= (1.0 + avg_rank * 0.10)  # +10% per average skill rank
                 game.resources.add(pconfig["resource"], rate)
                 game.logger.log(
                     game.game_time, "RESOURCE_PRODUCED",
@@ -346,7 +355,7 @@ class Building(Entity):
             if self.refine_active:
                 # stationed workers boost forge speed
                 n_workers = len(self.stationed_workers)
-                speed_mult = 1.0 + 0.3 * n_workers
+                speed_mult = 1.0 + FORGE_WORKER_SPEED_BONUS * n_workers
                 self.refine_progress += dt * speed_mult
                 forge_time = FORGE_TIME
                 if self.refine_progress >= forge_time:
@@ -399,25 +408,16 @@ class Building(Entity):
             pygame.draw.line(surf, trunk_c, (cx, cy), (cx, cy - size // 3), 3)
             return
 
-        # Draw visible root system at base
-        if iters >= 2 and not is_ruin:
-            root_spread = size * 0.35
-            root_depth = size * 0.08
-            for angle_off in (-0.7, -0.35, 0.35, 0.7):
-                rx = cx + root_spread * math.sin(angle_off)
-                ry = cy + root_depth * abs(math.sin(angle_off * 2))
-                rw = max(1, 3 - abs(int(angle_off * 2)))
-                pygame.draw.line(surf, root_c, (int(cx), int(cy)),
-                                 (int(rx), int(ry)), rw)
-
-        # Thick trunk segment before branching
+        # Trunk dimensions (used by cache)
         trunk_h = size * 0.18
         trunk_w = max(2, int(size * 0.06))
-        pygame.draw.line(surf, trunk_c, (cx, int(cy)),
-                         (cx, int(cy - trunk_h)), trunk_w)
 
         # Symmetric rule: dense branching for full crown
-        instructions = _l_system_expand("F", {"F": "FF[+F[-F]F][-F[+F]F]"}, iters)
+        # v10_8b: Cache L-system expansion (deterministic per iters)
+        if not hasattr(self, '_lsys_cache_iters') or self._lsys_cache_iters != iters:
+            self._lsys_cache_iters = iters
+            self._lsys_instructions = _l_system_expand("F", {"F": "FF[+F[-F]F][-F[+F]F]"}, iters)
+        instructions = self._lsys_instructions
         step = size / (4.5 * (1.7 ** iters))
         # garrison furl: animate toward target (smooth lerp)
         furl_target = 1.0 if (self.garrison and not is_ruin) else 0.0
@@ -429,11 +429,39 @@ class Building(Entity):
         elif self._garrison_furl > furl_target:
             self._garrison_furl = max(furl_target,
                                        self._garrison_furl - furl_speed / 60.0)
-        # branch from top of trunk, wider angle for broad crown
-        _l_system_render(surf, cx, cy - trunk_h, instructions, angle_deg=22.0,
-                         step=step, col_trunk=trunk_c, col_tip=tip_c,
-                         line_width=max(1, 5 - iters),
-                         furl=self._garrison_furl)
+        # v10_8b: Cache rendered tree surface — quantize furl to avoid per-frame redraw
+        furl_q = round(self._garrison_furl * 20) / 20.0  # 5% steps
+        lw = max(1, 5 - iters)
+        cache_key = (iters, int(size), is_ruin, furl_q)
+        if not hasattr(self, '_tree_surf_cache_key') or self._tree_surf_cache_key != cache_key:
+            self._tree_surf_cache_key = cache_key
+            # Render tree onto a local surface centered at (margin, margin+trunk_h)
+            margin = int(size * 0.6)
+            tw, th = margin * 2, int(size * 1.2)
+            tree_surf = pygame.Surface((tw, th), pygame.SRCALPHA)
+            # Draw roots on cached surface
+            tcx, tcy = margin, int(th * 0.75)
+            if iters >= 2 and not is_ruin:
+                root_spread = size * 0.35
+                root_depth = size * 0.08
+                for angle_off in (-0.7, -0.35, 0.35, 0.7):
+                    rx = tcx + root_spread * math.sin(angle_off)
+                    ry = tcy + root_depth * abs(math.sin(angle_off * 2))
+                    rw = max(1, 3 - abs(int(angle_off * 2)))
+                    pygame.draw.line(tree_surf, root_c, (int(tcx), int(tcy)),
+                                     (int(rx), int(ry)), rw)
+            # Trunk
+            pygame.draw.line(tree_surf, trunk_c, (tcx, int(tcy)),
+                             (tcx, int(tcy - trunk_h)), trunk_w)
+            # Branches
+            _l_system_render(tree_surf, tcx, tcy - trunk_h, instructions, angle_deg=22.0,
+                             step=step, col_trunk=trunk_c, col_tip=tip_c,
+                             line_width=lw, furl=furl_q)
+            self._tree_surf_cache = tree_surf
+            self._tree_surf_offset = (margin, int(th * 0.75))
+        # Blit cached tree
+        ox, oy = self._tree_surf_offset
+        surf.blit(self._tree_surf_cache, (int(cx - ox), int(cy - oy)))
 
     def _draw_barracks_shape(self, surf, cx, cy, size, build_pct, is_ruin):
         """Sierpinski triangle lattice — military precision."""

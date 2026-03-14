@@ -251,7 +251,12 @@ class Cannonball:
                 if not e.alive:
                     continue
                 if dist(self.x, self.y, e.x, e.y) < TOWER_EXPLOSIVE_RADIUS:
-                    e.take_damage(TOWER_EXPLOSIVE_DAMAGE)
+                    splash_dmg = TOWER_EXPLOSIVE_DAMAGE
+                    # v10_8: Sierpinski resonance AOE dampening
+                    aoe_factor = getattr(e, '_sierpinski_aoe_factor', 1.0)
+                    if aoe_factor < 1.0 and not getattr(e, '_dissonance_nullified', False):
+                        splash_dmg = max(1, int(splash_dmg * aoe_factor))
+                    e.take_damage(splash_dmg)
                     _process_combat_hit(None, e, game, "tower")
                     hit_anyone = True
             # Explosion VFX + crater

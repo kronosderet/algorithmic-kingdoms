@@ -58,46 +58,264 @@ DIFFICULTY_PROFILES = {
     "easy": {
         "start_gold": 300, "start_wood": 150, "start_iron": 0, "start_steel": 0, "start_stone": 0,
         "start_workers": 4,
-        "first_wave_time": 360, "wave_interval": 120, "max_waves": 15,
-        "wave_base": 4, "wave_scale": 3,       # count = base + scale*sqrt(n)
-        "hp_scale": 0.05, "atk_scale": 0.03,
-        "archer_wave": 4, "siege_wave": 8, "elite_wave": 18,
-        "multi_dir_wave": 14, "three_dir_wave": 20,
         "kill_bounty_base": 5,
         "wave_bonus_gold": 30, "wave_bonus_wood": 15, "wave_bonus_steel": 3,
-        "sapper_wave": 7, "raider_wave": 8, "shieldbearer_wave": 10,
-        "healer_wave": 13, "warlock_wave": 17,
         "label": "Easy",
+        # v10_9: Incident Director
+        "incidents_required": 12,
+        "tension_drift": 0.003,
+        "first_incident_time": 300,
+        "min_cooldown": 40,
+        "base_cooldown": 90,
+        "incident_hp_scale": 0.04,
+        "incident_atk_scale": 0.03,
+        "incident_unlock": {
+            "enemy_archer": 2, "enemy_sapper": 5, "enemy_raider": 6,
+            "enemy_siege": 7, "enemy_shieldbearer": 8,
+            "enemy_healer": 10, "enemy_elite": 11, "enemy_warlock": 12,
+        },
     },
     "medium": {
         "start_gold": 200, "start_wood": 100, "start_iron": 0, "start_steel": 0, "start_stone": 0,
         "start_workers": 3,
-        "first_wave_time": 330, "wave_interval": 90, "max_waves": 20,   # v10g: +30s prep
-        "wave_base": 4, "wave_scale": 4,                                # v10g: 5→4 smaller early waves
-        "hp_scale": 0.07, "atk_scale": 0.04,                            # v10g: softer scaling
-        "archer_wave": 3, "siege_wave": 7, "elite_wave": 15,            # v10g: siege 6→7
-        "multi_dir_wave": 12, "three_dir_wave": 18,
-        "kill_bounty_base": 4,                                           # v10g: 3→4 more reward
-        "wave_bonus_gold": 25, "wave_bonus_wood": 15, "wave_bonus_steel": 3,  # v10g: better bonuses
-        "sapper_wave": 5, "raider_wave": 6, "shieldbearer_wave": 8,
-        "healer_wave": 10, "warlock_wave": 14,
+        "kill_bounty_base": 4,
+        "wave_bonus_gold": 25, "wave_bonus_wood": 15, "wave_bonus_steel": 3,
         "label": "Medium",
+        # v10_9: Incident Director
+        "incidents_required": 16,
+        "tension_drift": 0.005,
+        "first_incident_time": 270,
+        "min_cooldown": 25,
+        "base_cooldown": 70,
+        "incident_hp_scale": 0.05,
+        "incident_atk_scale": 0.04,
+        "incident_unlock": {
+            "enemy_archer": 2, "enemy_sapper": 4, "enemy_raider": 5,
+            "enemy_siege": 6, "enemy_shieldbearer": 7,
+            "enemy_healer": 9, "enemy_elite": 10, "enemy_warlock": 13,
+        },
     },
     "hard": {
-        "start_gold": 180, "start_wood": 100, "start_iron": 0, "start_steel": 0, "start_stone": 0,  # v10g: +30g +20w
+        "start_gold": 180, "start_wood": 100, "start_iron": 0, "start_steel": 0, "start_stone": 0,
         "start_workers": 3,
-        "first_wave_time": 300, "wave_interval": 80, "max_waves": 25,   # v10g: 210→300, 75→80
-        "wave_base": 5, "wave_scale": 5,                                # v10g: 8→5 base enemies
-        "hp_scale": 0.08, "atk_scale": 0.05,                            # v10g: 0.10→0.08, 0.07→0.05
-        "archer_wave": 2, "siege_wave": 5, "elite_wave": 12,            # v10g: siege 4→5
-        "multi_dir_wave": 8, "three_dir_wave": 14,
         "kill_bounty_base": 2,
-        "wave_bonus_gold": 15, "wave_bonus_wood": 8, "wave_bonus_steel": 2,  # v10g: better bonuses
-        "sapper_wave": 3, "raider_wave": 4, "shieldbearer_wave": 6,
-        "healer_wave": 8, "warlock_wave": 11,
+        "wave_bonus_gold": 15, "wave_bonus_wood": 8, "wave_bonus_steel": 2,
         "label": "Hard",
+        # v10_9: Incident Director
+        "incidents_required": 22,
+        "tension_drift": 0.007,
+        "first_incident_time": 240,
+        "min_cooldown": 15,
+        "base_cooldown": 50,
+        "incident_hp_scale": 0.06,
+        "incident_atk_scale": 0.05,
+        "incident_unlock": {
+            "enemy_archer": 2, "enemy_sapper": 3, "enemy_raider": 4,
+            "enemy_siege": 5, "enemy_shieldbearer": 6,
+            "enemy_healer": 8, "enemy_elite": 9, "enemy_warlock": 11,
+        },
     },
 }
+
+# ---------------------------------------------------------------------------
+# v10_9: Incident Director — Dramaturgic Threat Engine
+# ---------------------------------------------------------------------------
+
+# Threat tier tension thresholds
+TIER_TENSION_THRESHOLDS = {
+    "light": 0.0,
+    "medium": 0.25,
+    "strong": 0.50,
+    "deadly": 0.75,
+}
+
+# Stat scaling multipliers per tier
+TIER_STAT_SCALING = {
+    "light": 0.7,
+    "medium": 1.0,
+    "strong": 1.2,
+    "deadly": 1.5,
+}
+
+# Tension adjustment after incident outcome
+OUTCOME_TENSION_DELTA = {
+    "dominated": 0.08,    # player too strong → escalate
+    "won": -0.05,         # slight relief
+    "costly": -0.15,      # real relief
+    "devastating": -0.30, # major catharsis
+}
+
+# Outcome cooldown multipliers (how long before next incident)
+OUTCOME_COOLDOWN_MULT = {
+    "dominated": 0.6,
+    "won": 1.0,
+    "costly": 1.5,
+    "devastating": 2.2,
+}
+
+# Pain ratio thresholds for outcome classification
+OUTCOME_PAIN_THRESHOLDS = {
+    "dominated": 0.05,   # pain < 0.05, no escapes, < 30s
+    "won": 0.20,         # pain < 0.2, ≤1 escape
+    "costly": 0.50,      # pain < 0.5
+    # devastating: pain ≥ 0.5
+}
+OUTCOME_DOMINATED_MAX_TIME = 30.0  # seconds — must resolve faster than this
+OUTCOME_WON_MAX_ESCAPES = 1
+
+# FSM state durations
+INCIDENT_FOREBODING_MIN = 10.0
+INCIDENT_FOREBODING_MAX = 30.0
+INCIDENT_IMMINENT_DURATION = 4.0
+INCIDENT_AFTERMATH_MIN = 5.0
+INCIDENT_AFTERMATH_MAX = 15.0
+
+# False calm chance and multiplier
+FALSE_CALM_CHANCE = 0.15
+FALSE_CALM_MULT = 1.8
+
+# Dramatic arc phase boundaries (fraction of incidents_required)
+ARC_OPENING = 0.25       # Light only, long cooldowns
+ARC_RISING = 0.50        # Medium unlocks, counter-pick
+ARC_MIDGAME = 0.75       # Strong appears, economy raids
+ARC_CLIMAX = 0.95        # Deadly possible, short cooldowns
+# Finale = last incident, always deadly
+
+# Incident catalogue: 13 flavours across 4 tiers
+# composition: dict of unit_type → (min, max) count range within tier count budget
+# behaviour: special incident-wide behaviour flag (None, "flee_on_contact", "probe_retreat", "economy_target")
+# directions: number of spawn directions (1, 2, or 3)
+# narrative_foreboding: text shown during FOREBODING state
+# narrative_imminent: text shown during IMMINENT state
+INCIDENT_CATALOGUE = {
+    # --- LIGHT (tension >= 0.0, count 2-5) ---
+    "scout": {
+        "tier": "light", "count_range": (2, 4),
+        "composition": {"enemy_soldier": 1.0},
+        "behaviour": "flee_on_contact",
+        "directions": 1,
+        "narrative_foreboding": "Scouts spotted on the horizon...",
+        "narrative_imminent": "They're watching us!",
+    },
+    "forager_raid": {
+        "tier": "light", "count_range": (3, 5),
+        "composition": {"enemy_raider": 0.6, "enemy_soldier": 0.4},
+        "behaviour": "economy_target",
+        "directions": 1,
+        "narrative_foreboding": "Foragers are approaching our resources...",
+        "narrative_imminent": "Protect the gatherers!",
+    },
+    "probe": {
+        "tier": "light", "count_range": (3, 5),
+        "composition": {"enemy_soldier": 0.5, "enemy_archer": 0.5},
+        "behaviour": "probe_retreat",
+        "directions": 1,
+        "narrative_foreboding": "An enemy patrol is testing our perimeter...",
+        "narrative_imminent": "Skirmishers incoming!",
+    },
+    # --- MEDIUM (tension >= 0.25, count 6-12) ---
+    "assault": {
+        "tier": "medium", "count_range": (6, 10),
+        "composition": {"enemy_soldier": 0.5, "enemy_archer": 0.3, "enemy_siege": 0.2},
+        "behaviour": None,
+        "directions": 1,
+        "narrative_foreboding": "War drums echo in the distance...",
+        "narrative_imminent": "BRACE YOURSELVES!",
+    },
+    "flanking": {
+        "tier": "medium", "count_range": (6, 10),
+        "composition": {"enemy_soldier": 0.4, "enemy_archer": 0.3, "enemy_raider": 0.3},
+        "behaviour": None,
+        "directions": 2,
+        "narrative_foreboding": "Movement detected on multiple fronts...",
+        "narrative_imminent": "They're flanking us!",
+    },
+    "economy_raid": {
+        "tier": "medium", "count_range": (6, 10),
+        "composition": {"enemy_raider": 0.4, "enemy_sapper": 0.3, "enemy_soldier": 0.3},
+        "behaviour": "economy_target",
+        "directions": 1,
+        "narrative_foreboding": "Raiders are eyeing our production...",
+        "narrative_imminent": "Defend the economy!",
+    },
+    # --- STRONG (tension >= 0.50, count 12-20) ---
+    "siege_column": {
+        "tier": "strong", "count_range": (12, 18),
+        "composition": {"enemy_siege": 0.2, "enemy_shieldbearer": 0.2, "enemy_soldier": 0.3, "enemy_healer": 0.1, "enemy_archer": 0.2},
+        "behaviour": None,
+        "directions": 1,
+        "narrative_foreboding": "The ground trembles... siege engines approach.",
+        "narrative_imminent": "SIEGE INCOMING!",
+    },
+    "war_party": {
+        "tier": "strong", "count_range": (12, 18),
+        "composition": {"enemy_elite": 0.15, "enemy_soldier": 0.35, "enemy_archer": 0.25, "enemy_healer": 0.1, "enemy_raider": 0.15},
+        "behaviour": None,
+        "directions": 1,
+        "narrative_foreboding": "A warlord marshals their forces...",
+        "narrative_imminent": "The war party charges!",
+    },
+    "pincer": {
+        "tier": "strong", "count_range": (14, 20),
+        "composition": {"enemy_soldier": 0.3, "enemy_archer": 0.25, "enemy_raider": 0.25, "enemy_elite": 0.2},
+        "behaviour": None,
+        "directions": 3,
+        "narrative_foreboding": "We're being surrounded...",
+        "narrative_imminent": "ENEMIES ON ALL SIDES!",
+    },
+    "healer_push": {
+        "tier": "strong", "count_range": (12, 16),
+        "composition": {"enemy_shieldbearer": 0.25, "enemy_healer": 0.2, "enemy_soldier": 0.35, "enemy_warlock": 0.2},
+        "behaviour": None,
+        "directions": 1,
+        "narrative_foreboding": "Dark mending energy gathers...",
+        "narrative_imminent": "An unkillable wall approaches!",
+    },
+    # --- DEADLY (tension >= 0.75, count 20-35) ---
+    "grand_assault": {
+        "tier": "deadly", "count_range": (22, 32),
+        "composition": {"enemy_soldier": 0.25, "enemy_archer": 0.15, "enemy_siege": 0.1, "enemy_elite": 0.1, "enemy_shieldbearer": 0.1, "enemy_healer": 0.1, "enemy_raider": 0.1, "enemy_warlock": 0.1},
+        "behaviour": None,
+        "directions": 3,
+        "narrative_foreboding": "The sky darkens. This is it.",
+        "narrative_imminent": "THE FINAL STORM!",
+    },
+    "swarm": {
+        "tier": "deadly", "count_range": (28, 35),
+        "composition": {"enemy_soldier": 0.6, "enemy_raider": 0.4},
+        "behaviour": None,
+        "directions": 2,
+        "narrative_foreboding": "An endless tide gathers at the edge...",
+        "narrative_imminent": "THEY'RE EVERYWHERE!",
+    },
+    "dark_resonance": {
+        "tier": "deadly", "count_range": (20, 28),
+        "composition": {"enemy_warlock": 0.3, "enemy_elite": 0.25, "enemy_shieldbearer": 0.25, "enemy_healer": 0.2},
+        "behaviour": None,
+        "directions": 2,
+        "dissonance_override": 0.50,  # 50% of enemies get dissonance regardless of normal chance
+        "narrative_foreboding": "Reality fractures... the resonance fields waver.",
+        "narrative_imminent": "DISSONANCE OVERWHELMING!",
+    },
+}
+
+# Tiers grouped for easy lookup
+INCIDENT_TIERS = {
+    "light": [k for k, v in INCIDENT_CATALOGUE.items() if v["tier"] == "light"],
+    "medium": [k for k, v in INCIDENT_CATALOGUE.items() if v["tier"] == "medium"],
+    "strong": [k for k, v in INCIDENT_CATALOGUE.items() if v["tier"] == "strong"],
+    "deadly": [k for k, v in INCIDENT_CATALOGUE.items() if v["tier"] == "deadly"],
+}
+
+# Incident behaviour constants
+SCOUT_FLEE_CONTACT_TIME = 3.0    # seconds of combat before scouts flee
+PROBE_RETREAT_TIME = 8.0         # seconds from spawn before probes retreat regardless
+
+# Narrative text for FSM states
+NARRATIVE_CALM = "Calm"
+NARRATIVE_CALM_FALSE = "An unsettling silence falls..."
+NARRATIVE_ACTIVE = "Under Attack!"
+NARRATIVE_AFTERMATH = "Catching breath..."
 
 # Building definitions: (gold, wood, iron, steel, hp, build_time, size_tiles)
 BUILDING_DEFS = {
@@ -279,9 +497,106 @@ METAMORPH_HP_MULT = 3.0          # HP multiplier on transformation
 METAMORPH_ATK_MULT = 2.0         # Attack multiplier
 METAMORPH_SPEED_MULT = 0.6       # Slower but mobile again after transform
 
-# Unit collision / separation
-UNIT_SEPARATION_DIST = 20
-UNIT_SEPARATION_FORCE = 50
+# ---------------------------------------------------------------------------
+# v10_delta: Physics Movement Profiles
+# ---------------------------------------------------------------------------
+MOVEMENT_PROFILES = {
+    "soldier":        {"accel": 180, "decel": 250, "max_speed": 70},
+    "archer":         {"accel": 280, "decel": 150, "max_speed": 75},
+    "worker":         {"accel": 120, "decel": 200, "max_speed": 80},
+    "enemy_soldier":  {"accel": 160, "decel": 220, "max_speed": 55},
+    "enemy_archer":   {"accel": 200, "decel": 150, "max_speed": 50},
+    "enemy_siege":    {"accel": 60,  "decel": 400, "max_speed": 35},
+    "enemy_elite":    {"accel": 250, "decel": 200, "max_speed": 60},
+    "enemy_sapper":   {"accel": 300, "decel": 100, "max_speed": 70},
+    "enemy_shieldbearer": {"accel": 80, "decel": 350, "max_speed": 40},
+    "enemy_healer":   {"accel": 150, "decel": 180, "max_speed": 45},
+    "enemy_raider":   {"accel": 400, "decel": 80,  "max_speed": 80},
+    "enemy_warlock":  {"accel": 140, "decel": 200, "max_speed": 45},
+}
+MOVEMENT_PROFILE_DEFAULT = {"accel": 180, "decel": 200, "max_speed": 60}
+
+# Collision avoidance (soft repulsion)
+REPULSION_RADIUS = 20.0          # px — units start pushing apart
+REPULSION_STRENGTH = 200.0       # px/sec² peak force
+REPULSION_FALLOFF = 1.5          # power falloff (1=linear, 2=quadratic)
+
+# Formation gravitation (spring physics)
+FORMATION_SPRING_K = 3.0         # spring constant (higher = snappier)
+FORMATION_SPRING_DAMP = 0.7      # damping ratio (0=bouncy, 1=critical)
+FORMATION_SPRING_MAX = 120       # max spring force px/sec²
+FORMATION_COMBAT_LEASH = 80      # px — max stray before rubber-band
+
+# Formation rotation
+FORMATION_ROTATION_SPEED = 0.3   # rad/sec base rotation
+ROSE_SWEEP_DAMAGE_MULT = 0.15    # bonus damage per sweep tick
+ROSE_SWEEP_INTERVAL = 1.5        # seconds between sweep damage checks
+SPIRAL_TIGHTEN_RATE = 0.5        # radius change rate
+SIERPINSKI_PULSE_RADIUS = 15.0   # vertex outward pulse distance
+KOCH_CONTRACT_RATE = 0.3         # perimeter contraction speed
+
+# Physics arrival (replaces old grid-snap)
+PHYSICS_ARRIVAL_DIST = 12.0      # px — "arrived at waypoint"
+PHYSICS_WORKER_SNAP_DIST = 48.0  # px — workers snap to exact position at tasks
+
+# ---------------------------------------------------------------------------
+# v10_delta: Stamina / Energy System
+# ---------------------------------------------------------------------------
+ENERGY_PROFILES = {
+    "soldier":        {"max": 100, "regen": 8,  "move_cost": 3.0, "sprint_cost": 12.0, "attack_cost": 6.0},
+    "archer":         {"max": 80,  "regen": 10, "move_cost": 2.0, "sprint_cost": 10.0, "attack_cost": 4.0},
+    "worker":         {"max": 120, "regen": 12, "move_cost": 2.0, "sprint_cost": 8.0,  "gather_cost": 3.0, "attack_cost": 0},
+    "enemy_soldier":  {"max": 100, "regen": 7,  "move_cost": 3.0, "sprint_cost": 12.0, "attack_cost": 6.0},
+    "enemy_archer":   {"max": 80,  "regen": 7,  "move_cost": 2.0, "sprint_cost": 10.0, "attack_cost": 4.0},
+    "enemy_siege":    {"max": 150, "regen": 4,  "move_cost": 2.0, "sprint_cost": 6.0,  "attack_cost": 10.0},
+    "enemy_elite":    {"max": 120, "regen": 6,  "move_cost": 3.0, "sprint_cost": 12.0, "attack_cost": 8.0},
+    "enemy_sapper":   {"max": 70,  "regen": 5,  "move_cost": 3.0, "sprint_cost": 15.0, "attack_cost": 8.0},
+    "enemy_shieldbearer": {"max": 130, "regen": 5, "move_cost": 2.0, "sprint_cost": 8.0, "attack_cost": 5.0},
+    "enemy_healer":   {"max": 90,  "regen": 9,  "move_cost": 2.0, "sprint_cost": 8.0,  "attack_cost": 3.0},
+    "enemy_raider":   {"max": 70,  "regen": 5,  "move_cost": 3.0, "sprint_cost": 15.0, "attack_cost": 8.0},
+    "enemy_warlock":  {"max": 100, "regen": 6,  "move_cost": 2.0, "sprint_cost": 10.0, "attack_cost": 7.0},
+}
+ENERGY_PROFILE_DEFAULT = {"max": 100, "regen": 8, "move_cost": 3.0, "sprint_cost": 12.0, "attack_cost": 6.0}
+
+ENERGY_EXHAUSTED_SPEED = 0.4        # 40% speed at zero energy
+ENERGY_EXHAUSTED_THRESHOLD = 0.2    # below 20% → exhausted debuffs
+ENERGY_TIRED_COOLDOWN_MULT = 1.5    # +50% attack cooldown when exhausted
+ENERGY_IDLE_REGEN_MULT = 2.0        # 2× regen when standing still
+ENERGY_FLEE_DRAIN_MULT = 1.5        # fleeing costs 50% more energy
+ENERGY_CARRY_REGEN_MULT = 0.7       # workers regen slower while carrying
+
+# Harmonic energy field
+HARMONY_ENERGY_MULT = 0.8           # harmony bonus to energy regen
+ROSE_ANCHOR_REGEN_MULT = 1.5        # commander energy regen bonus
+ROSE_ANCHOR_SHARE_RATE = 3.0        # energy/sec shared to petal units
+KOCH_ATTACK_ENERGY_DISCOUNT = 0.3   # 30% less attack energy in Koch
+SPIRAL_ENERGY_TRANSFER_RATE = 2.0   # energy/sec from inner to outer
+
+# ---------------------------------------------------------------------------
+# v10_delta: Player-Driven Squad Management
+# ---------------------------------------------------------------------------
+FORMATION_MIN_VIABLE = 2            # below this, squad auto-dissolves
+SQUAD_MAX_SIZE = 12                 # max units per squad
+SQUAD_REINFORCE_RANGE = 120.0       # px — max distance for nearby free units
+ARRIVAL_CHECK_RADIUS = 20.0         # px — "arrived at group destination"
+ARRIVAL_CHECK_TIMEOUT = 10.0        # seconds before pending group expires
+PENDING_GROUP_MIN = 3               # minimum units for group discovery check
+
+# v10_beta: Extracted magic numbers → named constants
+GARRISON_SPAWN_RADIUS = 40          # px — unit exit distance from building center
+STANCE_GUARD_AGGRO_BONUS = 40       # px — extra aggro range in Guard stance
+LONE_WOLF_ISOLATION_DIST = 80       # px — "alone" threshold for lone wolf trait
+MORALE_CLUSTER_RADIUS = 200         # px — enemy cluster detection radius
+ARROW_FLIGHT_DISTANCE_NORM = 180.0  # px — distance normalization for arrow flight time
+WARLOCK_AOE_EDGE_FACTOR = 0.5       # damage falloff at AOE edge (1.0 center, this at edge)
+HEALER_FOLLOW_RANGE_MULT = 0.7      # fraction of attack_range to chase wounded ally
+REPATH_COOLDOWN = 1.5               # seconds — cooldown after A* fail before retrying
+FORGE_WORKER_SPEED_BONUS = 0.3      # +30% forge speed per worker stationed
+DOUBLE_CLICK_THRESHOLD = 400        # ms — max time between clicks for double-click
+COMBAT_HEAT_DURATION = 30.0         # seconds — heat overlay decay time
+WORKER_SPAWN_OFFSET = 50            # px — starting worker offset from town hall
+WORKER_SPAWN_SPACING = 25           # px — spacing between starting workers
+ENTITY_TOOLTIP_RADIUS = 30          # px — max distance to pick up entity tooltip
 
 # Worker flee behavior
 WORKER_FLEE_RADIUS = 160
@@ -359,11 +674,9 @@ ARROW_TRAIL_LENGTH = 4          # afterimage ghost points
 ARROW_LEAD_MIN_RANK = 2         # rank threshold for lead aiming
 ARROW_LEAD_FACTOR_PER_RANK = 0.4  # lead accuracy per rank above threshold
 
-# v9: Squad System
-SQUAD_MAX_SIZE = 6
+# v9: Squad System (SQUAD_MAX_SIZE now in v10_delta block above)
 SQUAD_FOLLOW_DIST = 60          # followers stay within this of leader (px)
 SQUAD_REASSIGN_INTERVAL = 2.0   # seconds between full squad rebuilds
-SQUAD_COHESION_FORCE = 35       # pull strength toward leader
 
 # v9: Enemy XP
 ENEMY_XP_PER_HIT = 1
@@ -421,11 +734,6 @@ MORALE_RANK_RESISTANCE = {         # multiplier on flee ratio (higher = braver)
     0: 1.0, 1: 1.3, 2: 1.6, 3: 999, 4: 999,
 }
 
-# v9.2: Player Formation Hints (soft positional forces — legacy, used as fallback)
-FORMATION_FRONT_OFFSET = 30        # px — soldiers position forward of leader
-FORMATION_REAR_OFFSET = 35         # px — archers position behind leader
-FORMATION_FORCE = 25               # px/sec — gentle positional pull
-FORMATION_RANK_PUSH = 5            # px per rank diff — low rank more forward
 
 # ---------------------------------------------------------------------------
 # v10_6: Stance System (replaces hold_ground boolean)
@@ -446,8 +754,8 @@ FORMATION_SIERPINSKI = 2       # Recursive triangles — spread/anti-AOE
 FORMATION_KOCH = 3             # Koch snowflake perimeter — guard/defensive ring
 FORMATION_NAMES = ["Rose", "Spiral", "Sierpinski", "Koch"]
 FORMATION_SLOT_ARRIVAL = 15        # px — snap threshold for reaching formation slot
-FORMATION_REGROUP_DELAY = 2.0      # seconds after last combat before auto-reform
-FORMATION_MOVE_SPEED_MULT = 0.85   # squads move at 85% speed to stay cohesive
+FORMATION_REGROUP_DELAY = 0.5      # seconds after last combat before returning to slot
+# (FORMATION_MOVE_SPEED_MULT removed in v10_beta — replaced by FORMATION_RETURN_SPEED)
 
 # Formation spacing parameters (tunable)
 FORMATION_ROSE_SPACING = 25.0      # px between polar rose slots
@@ -456,18 +764,84 @@ FORMATION_SIERPINSKI_SPACING = 30.0  # base triangle side length
 FORMATION_KOCH_RADIUS = 40.0      # snowflake perimeter radius
 
 # ---------------------------------------------------------------------------
-# v10_6: Adaptive Difficulty Engine
+# v10_alpha: Formation Discovery & Harmonic Resonance
 # ---------------------------------------------------------------------------
-PRESSURE_ESCALATE_THRESHOLD = 0.1    # pressure below this = player dominating
-PRESSURE_DEESCALATE_THRESHOLD = 0.5  # pressure above this = player struggling
-PRESSURE_ESCALATE_STREAK = 3        # consecutive easy waves to trigger escalation
-PRESSURE_COUNT_BONUS = 0.15         # +15% enemy count on escalation
-PRESSURE_COUNT_PENALTY = 0.10       # -10% enemy count on de-escalation
-PRESSURE_INTERVAL_COMPRESS = 75     # seconds — compressed wave interval when snowballing
-PRESSURE_INTERVAL_EXPAND = 110      # seconds — expanded interval when struggling
-PRESSURE_BUILDING_WEIGHT = 3        # pressure weight for buildings lost
-PRESSURE_UNIT_WEIGHT = 2            # pressure weight for units lost
-PRESSURE_ESCAPE_WEIGHT = 1          # pressure weight for enemies escaped
+# Ideal ratio (majority:minority) for each formation — from fractal geometry
+HARMONY_IDEAL_RATIOS = {
+    FORMATION_POLAR_ROSE: 2.0,          # 2 petals → octave (2:1 frequency)
+    FORMATION_GOLDEN_SPIRAL: 1.618,     # golden ratio φ → perfect fifth (3:2)
+    FORMATION_SIERPINSKI: 3.0,          # 3 triangle vertices → major interval (3:1)
+    FORMATION_KOCH: 1.0,                # 6-fold hexagonal → perfect unison (1:1)
+}
+
+# Discovery requirements per formation
+FORMATION_DISCOVERY = {
+    FORMATION_POLAR_ROSE: {
+        "min_size": 3, "min_veterans": 1,
+        "any_ratio": True,  # Rose always discovered at min size (tutorial)
+    },
+    FORMATION_SIERPINSKI: {
+        "min_size": 4, "min_veterans": 1,
+        "any_ratio": False,
+    },
+    FORMATION_GOLDEN_SPIRAL: {
+        "min_size": 5, "min_veterans": 1,
+        "any_ratio": False,
+    },
+    FORMATION_KOCH: {
+        "min_size": 6, "min_veterans": 1,
+        "any_ratio": False,
+    },
+}
+
+DISCOVERY_RATIO_TOLERANCE = 0.35  # 35% deviation from ideal ratio allowed for discovery
+
+# Discovery notification text
+DISCOVERY_NOTIFICATIONS = {
+    FORMATION_POLAR_ROSE: "Formation Discovered: Rose — The petals bloom with harmonic resonance!",
+    FORMATION_GOLDEN_SPIRAL: "Formation Discovered: Spiral — The golden ratio sings!",
+    FORMATION_SIERPINSKI: "Formation Discovered: Sierpinski — Triangular symmetry resonates!",
+    FORMATION_KOCH: "Formation Discovered: Koch — Hexagonal perfection achieved!",
+}
+
+# GUI hint text for undiscovered formations
+DISCOVERY_HINTS = {
+    FORMATION_POLAR_ROSE: "? · 3+ units",
+    FORMATION_SIERPINSKI: "? · 4 at 3:1",
+    FORMATION_GOLDEN_SPIRAL: "? · 5 at 3:2",
+    FORMATION_KOCH: "? · 6 at 3:3",
+}
+
+# ---------------------------------------------------------------------------
+# v10_8: Resonance Fields
+# ---------------------------------------------------------------------------
+RESONANCE_ROSE_DMG_PER_PETAL = 0.03    # +3% damage per petal
+# (RESONANCE_SPIRAL_BASE_MISS, RESONANCE_SIERPINSKI_BASE removed v10_beta —
+#  computed algorithmically in squads.py from 1/phi^d and (1/3)^d)
+RESONANCE_KOCH_SLOW_PER_DEPTH = 0.15   # 15% slow per Koch depth
+RESONANCE_KOCH_RADIUS_MULT = 1.5       # slow field = formation radius * mult
+RESONANCE_MULTI_SQUAD_PENALTY = 0.30   # -30% per duplicate formation across squads
+RESONANCE_DISSONANCE_RADIUS = 60.0     # px -- enemy anti-resonance nullification
+RESONANCE_DISSONANCE_WAVE = 8          # wave threshold for dissonance spawning
+RESONANCE_DISSONANCE_CHANCE = 0.20     # 20% of enemies after threshold
+RESONANCE_HISTORY_WAVES = 3            # track last N waves for formation usage
+WORKER_FLEE_COOLDOWN = 5.0             # seconds between flee->resume cycles
+
+# Resonance visual colors (RGB)
+RESONANCE_COLORS = {
+    0: (220, 80, 40),     # Rose: red-orange
+    1: (220, 190, 50),    # Spiral: gold-amber
+    2: (40, 180, 220),    # Sierpinski: blue-cyan
+    3: (50, 200, 80),     # Koch: green
+}
+RESONANCE_DISSONANCE_COLORS = {
+    0: (110, 30, 15),     # anti-Rose: dark red
+    1: (110, 95, 20),     # anti-Spiral: dark gold
+    2: (15, 80, 110),     # anti-Sierpinski: dark cyan
+    3: (20, 100, 35),     # anti-Koch: dark green
+}
+
+# (v10_6 Pressure System removed v10_beta — replaced by Incident Director FSM tension)
 
 # Gameplay tuning (extracted from inline magic numbers)
 PATH_ARRIVAL_THRESHOLD = 3            # px distance to snap to next path waypoint
@@ -505,11 +879,11 @@ UPGRADE_PATH = {
 
 # Production building resource generation (per tick)
 PRODUCTION_RATES = {
-    "sawmill":    {"resource": "wood",  "base_rate": 1.5, "worker_rate": 5.0, "max_workers": 3},
-    "goldmine":   {"resource": "gold",  "base_rate": 1.0, "worker_rate": 4.0, "max_workers": 3},
-    "stoneworks": {"resource": "stone", "base_rate": 1.0, "worker_rate": 4.0, "max_workers": 3},
-    "iron_works": {"resource": "iron",  "base_rate": 0.8, "worker_rate": 3.5, "max_workers": 3},
-    "forge":      {"resource": "steel", "base_rate": 0.0, "worker_rate": 0.0, "max_workers": 2},
+    "sawmill":    {"resource": "wood",  "base_rate": 1.5, "worker_rate": 5.0, "max_workers": 3, "skill": "lumberjack"},
+    "goldmine":   {"resource": "gold",  "base_rate": 1.0, "worker_rate": 4.0, "max_workers": 3, "skill": "gold_miner"},
+    "stoneworks": {"resource": "stone", "base_rate": 1.0, "worker_rate": 4.0, "max_workers": 3, "skill": "stone_mason"},
+    "iron_works": {"resource": "iron",  "base_rate": 0.8, "worker_rate": 3.5, "max_workers": 3, "skill": "iron_miner"},
+    "forge":      {"resource": "steel", "base_rate": 0.0, "worker_rate": 0.0, "max_workers": 2, "skill": "smelter"},
 }
 PRODUCTION_TICK_INTERVAL = 5.0  # seconds between ticks
 
@@ -589,8 +963,6 @@ TRAIT_DISPLAY = {
     "nimble":       {"color": (0, 200, 180),   "symbol": "N"},
 }
 
-# Control groups
-MAX_CONTROL_GROUPS = 10  # 0-9
 
 # Rally point
 RALLY_POINT_COLOR = (80, 255, 80)
@@ -615,3 +987,99 @@ COL_BTN_DISABLED = (40, 40, 50)
 COL_BTN_TEXT = (200, 200, 220)
 COL_PLACE_VALID = (0, 200, 0, 80)
 COL_PLACE_INVALID = (200, 0, 0, 80)
+
+# ---------------------------------------------------------------------------
+# v10_alpha: Tooltip / Info Card System
+# ---------------------------------------------------------------------------
+TOOLTIP_HOVER_DELAY = 0.4  # seconds before tooltip appears
+TOOLTIP_MAX_WIDTH = 240    # pixels
+TOOLTIP_BG = (20, 20, 30, 230)
+TOOLTIP_BORDER = (80, 80, 100)
+TOOLTIP_PADDING = 6
+
+# Tooltip text dictionary — keyed by element identifier
+TOOLTIP_DATA = {
+    # --- Resources ---
+    "res_gold": "Gold — Primary currency.\nUsed for buildings, units, and upgrades.",
+    "res_wood": "Wood — Building material.\nGathered from trees. Used for structures.",
+    "res_iron": "Iron — Advanced material.\nMined from ore. Refined into Steel.",
+    "res_steel": "Steel — Refined metal.\nForged from Iron + Stone. Needed for military.",
+    "res_stone": "Stone — Construction material.\nQuarried from deposits. Used for towers & forges.",
+    # --- Population ---
+    "pop": "Population — Total living units.\nIncludes workers and military.",
+    # --- Tension ---
+    "tension_bar": "Tension — Threat level rising over time.\nHigher tension brings stronger incidents.",
+    "incident_counter": "Incidents — Attacks survived / total required.\nSurvive all incidents to win.",
+    # --- Military Ranks ---
+    "rank_0": "Recruit — Fresh conscript.\nNo bonuses. Gains XP from combat.",
+    "rank_1": "Veteran — Seasoned fighter.\n+8% HP, +6% ATK, +5 range.\nUnlocks squad formation.",
+    "rank_2": "Corporal — Proven warrior.\n+16% HP, +12% ATK, +10 range.\nBetter target selection.",
+    "rank_3": "Sergeant — Squad leader.\n+26% HP, +20% ATK, +18 range.\nBoosts nearby morale.",
+    "rank_4": "Captain — Elite commander.\n+40% HP, +30% ATK, +25 range.\nPerfect target priority.",
+    # --- Worker Ranks ---
+    "wrank_Novice": "Novice — Learning the trade.\nNo speed bonus yet.",
+    "wrank_Foreman": "Foreman — Skilled worker.\n+15% gather/build speed.\nUnlocks helper buildings.",
+    "wrank_Master": "Master — Expert craftsman.\n+30% gather/build speed.",
+    # --- Stances ---
+    "stance_Aggressive": "Aggressive — Chase and engage.\nUnits pursue enemies beyond weapon range.\nHigher aggro range, breaks formation.",
+    "stance_Defensive": "Defensive — Hold position.\nOnly attacks within weapon range.\nMaintains formation discipline.",
+    "stance_Guard": "Guard — Protect an area.\nEngages nearby threats, returns to post.\nIdeal for base defense.",
+    "stance_Hunt": "Hunt — Priority targeting.\nFocuses Sappers and Raiders first.\nIgnores frontline soldiers.",
+    # --- Formations ---
+    "fmt_Rose": "Rose Formation (Polar Rose curve)\nIdeal ratio: 2:1 (octave harmony)\nAura: +DMG% per petal depth.\nBest for raw damage output.",
+    "fmt_Spiral": "Spiral Formation (Golden Spiral)\nIdeal ratio: 3:2 (perfect fifth)\nAura: Evasion chance per depth.\nAssault/flanking formation.",
+    "fmt_Sierpinski": "Sierpinski Formation (Recursive triangles)\nIdeal ratio: 3:1 (major interval)\nAura: AOE damage reduction.\nSpread anti-AOE formation.",
+    "fmt_Koch": "Koch Formation (Koch snowflake)\nIdeal ratio: 3:3 (perfect unison)\nAura: Slows nearby enemies.\nDefensive perimeter guard.",
+    # --- Harmony ---
+    "harmony": "Harmony Quality — How well the squad's\nunit mix matches the formation's ideal ratio.\nHigher harmony = stronger resonance aura.",
+    # --- Traits ---
+    "trait_brave": "Brave — 50% harder to rout.\nStands firm under pressure.",
+    "trait_cowardly": "Cowardly — 30% easier to rout.\nFlees sooner when outnumbered.",
+    "trait_aggressive": "Aggressive — +40% aggro range.\nEngages targets more eagerly.\nSlightly less precise targeting.",
+    "trait_cautious": "Cautious — -30% aggro range.\nPrefers wounded targets (+30% low-HP bonus).",
+    "trait_loyal": "Loyal — 2x cohesion force.\nStays close to squad leader.",
+    "trait_lone_wolf": "Lone Wolf — +15% ATK when alone.\nFights better without nearby allies.",
+    "trait_sharpshooter": "Sharpshooter — 40% less arrow spread.\nDeadly accurate at range.",
+    "trait_berserker": "Berserker — +25% ATK below 50% HP.\nGrows stronger when wounded.",
+    "trait_inspiring": "Inspiring — Morale leader aura.\nNearby allies resist fleeing.",
+    "trait_nimble": "Nimble — +15% speed on rough terrain.\nMoves faster through trees and hills.",
+    # --- Buildings ---
+    "bld_town_hall": "Tree of Life — Main structure.\nTrains Gatherers. Heals nearby units.\nGarrison workers for defense.",
+    "bld_barracks": "War Nexus — Military hub.\nTrains Wardens and Rangers.\nUnlocks Sentinel construction.",
+    "bld_refinery": "Crucible — Iron smelter.\nConverts 2 Iron → 1 Steel.\nUpgrades to Fractal Forge.",
+    "bld_tower": "Sentinel — Defensive tower.\nFires cannonballs at enemies.\nUpgrades to explosive AoE.",
+    "bld_goldmine_hut": "Gold Node — Drop-off for gold.\nReduces worker travel time.\nUnlocked by Gold Miner Foreman.",
+    "bld_lumber_camp": "Grove Tap — Drop-off for wood.\nReduces worker travel time.\nUnlocked by Lumberjack Foreman.",
+    "bld_quarry_hut": "Stone Node — Drop-off for stone.\nReduces worker travel time.\nUnlocked by Stone Mason Foreman.",
+    "bld_iron_depot": "Iron Node — Drop-off for iron.\nReduces worker travel time.\nUnlocked by Iron Miner Foreman.",
+    "bld_scaffold": "Lattice — Builder's scaffold.\n+25% build/repair speed nearby.\nUnlocked by Builder Foreman.",
+    "bld_sawmill": "Timber Spire — Wood production.\nPassive wood + worker-boosted output.\nUpgraded from Grove Tap.",
+    "bld_goldmine": "Gold Spire — Gold production.\nPassive gold + worker-boosted output.\nUpgraded from Gold Node.",
+    "bld_stoneworks": "Stone Spire — Stone production.\nPassive stone + worker-boosted output.\nUpgraded from Stone Node.",
+    "bld_iron_works": "Iron Spire — Iron production.\nPassive iron + worker-boosted output.\nUpgraded from Iron Node.",
+    "bld_forge": "Fractal Forge — Advanced smelter.\n2 Stone + 1 Iron → 1 Steel (faster).\nUpgraded from Crucible.",
+    # --- Unit Types ---
+    "unit_worker": "Gatherer — Economic backbone.\nGathers resources, builds, repairs.\nGains skill XP per resource type.",
+    "unit_soldier": "Warden — Melee fighter.\n140 HP, 14 ATK, short range.\nTough frontline with high HP.",
+    "unit_archer": "Ranger — Ranged attacker.\n75 HP, 9 ATK, long range.\nBallistic arrows with rank accuracy.",
+    # --- Enemy Types ---
+    "enemy_enemy_soldier": "Dark Warden — Enemy melee.\nStandard frontline attacker.",
+    "enemy_enemy_archer": "Shadow Ranger — Enemy ranged.\nWeaker arrows but keeps distance.",
+    "enemy_enemy_siege": "Siege Golem — Building destroyer.\n2x damage to buildings. Slow but tough.",
+    "enemy_enemy_elite": "Void Knight — Elite warrior.\nFast, strong, hard to kill.",
+    "enemy_enemy_sapper": "Blight Sapper — Suicide bomber.\n3x building damage. Self-destructs on contact.",
+    "enemy_enemy_shieldbearer": "Iron Bulwark — Armored tank.\n50% frontal armor. Flank to bypass!",
+    "enemy_enemy_healer": "Plague Mender — Enemy healer.\nHeals 5 HP/s to nearby allies.",
+    "enemy_enemy_raider": "Rift Raider — Economy hunter.\nTargets workers and resource buildings.",
+    "enemy_enemy_warlock": "Chaos Warlock — AOE caster.\nSplash damage in 30px radius.",
+    # --- Global Buttons ---
+    "btn_Defend Base": "Rally all military to defend\nthe nearest Town Hall.",
+    "btn_Hunt Enemies": "Send all military to attack-move\ntoward the nearest enemy threat.",
+    "btn_Town Bell": "Ring the bell — all idle workers\ngarrison inside the Town Hall.",
+    "btn_Resume Work": "Ungarrison workers and send them\nback to their previous tasks.",
+    # --- Gather ---
+    "btn_Wood": "Send selected workers to gather\nwood from the nearest trees.",
+    "btn_Gold": "Send selected workers to gather\ngold from the nearest deposit.",
+    "btn_Iron": "Send selected workers to gather\niron from the nearest ore vein.",
+    "btn_Stone": "Send selected workers to gather\nstone from the nearest quarry.",
+}
