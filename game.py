@@ -54,6 +54,8 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE,
                        OVERLAY_ALPHA_DARK, OVERLAY_ALPHA_PAUSE,
                        PAUSE_PULSE_SPEED, PAUSE_PULSE_MIN, PAUSE_TITLE_COLOR,
                        NOTIFY_Y_OFFSET,
+                       TONIC_HEAL_COST, TONIC_HEAL_RATE,
+                       TONIC_HEAL_RADIUS, TONIC_HEAL_INTERVAL,
                        display_name)
 from utils import dist, pos_to_tile, draw_text, ruin_rebuild_cost
 from gui import ftext
@@ -99,7 +101,8 @@ class Game:
             gold=profile["start_gold"],
             wood=profile["start_wood"],
             iron=profile["start_iron"],
-            steel=profile["start_steel"])
+            steel=profile["start_steel"],
+            tonic=profile.get("start_tonic", 0))
         self.gui = GUI()
         self.gui.init_fonts()
         self.enemy_ai = EnemyAI(difficulty)
@@ -194,12 +197,16 @@ class Game:
             "has_iron": False,           # mined iron at least once
             "has_stone": False,          # mined stone at least once
             "has_steel": False,          # refined steel at least once
+            "has_tonic": False,          # Tree of Life generated tonic
             "first_wave_cleared": False, # cleared wave 1
             "max_rank_seen": 0,          # highest unit rank achieved
             "formations_used": set(),    # which formations player has tried
         }
         # v10_alpha: formation discovery — starts empty, discovered through composition
         self.discovered_formations = set()
+
+        # v10_zeta: tonic heal accumulator
+        self._tonic_heal_timer = 0.0
 
         # v10_epsilon: Don't Panic advisor
         self._advisor = Advisor()
@@ -545,8 +552,8 @@ class Game:
                 self._advisor_visible = True
                 self.paused = True
 
-        # Global command hotkeys
-        if key == pygame.K_d:
+        # Global command hotkeys (WASD reserved for camera — never bind here)
+        if key == pygame.K_z:
             self.global_defend()
             self.add_notification("Defend Base — all units rallying", 2.0, (50, 200, 80))
         if key == pygame.K_b and not workers_selected:
@@ -1473,6 +1480,23 @@ class Game:
                 if u.alive and u.hp < u.max_hp:
                     u.hp = min(u.max_hp, u.hp + HEAL_RATE_NEAR_TH * dt)
 
+        # v10_zeta: Tonic healing — spend tonic to heal damaged units near Tree of Life
+        self._tonic_heal_timer += dt
+        if self._tonic_heal_timer >= TONIC_HEAL_INTERVAL and self.resources.tonic >= TONIC_HEAL_COST:
+            self._tonic_heal_timer = 0.0
+            for th in town_halls:
+                healed_any = False
+                for u in self.player_grid.query_radius(th.x, th.y, TONIC_HEAL_RADIUS):
+                    if u.alive and u.hp < u.max_hp:
+                        u.hp = min(u.max_hp, u.hp + TONIC_HEAL_RATE * TONIC_HEAL_INTERVAL)
+                        healed_any = True
+                if healed_any and self.resources.tonic >= TONIC_HEAL_COST:
+                    self.resources.spend(tonic=TONIC_HEAL_COST)
+
+        # v10_zeta: resource ecology — tick regrowth timers
+        if self.game_map.tick_regrowth(dt):
+            self._map_dirty = True
+
         # v10_1: record combat heat for dead units (minimap overlay)
         for u in self.enemy_units:
             if not u.alive:
@@ -1567,6 +1591,8 @@ class Game:
             u["has_stone"] = True
         if self.resources.steel > 0:
             u["has_steel"] = True
+        if self.resources.tonic > 0:
+            u["has_tonic"] = True
         # squads
         squads = self.player_squad_mgr.squad_list
         if any(s.alive_count > 0 for s in squads):
@@ -1983,6 +2009,15 @@ class Game:
                         pts = [(cx, cy - s), (cx + s, cy), (cx, cy + s), (cx - s, cy)]
                         pygame.draw.polygon(cache, (185, 175, 155), pts)
 
+                    # v10_zeta: regrowth preview — faded terrain sprite
+                    if t == TERRAIN_GRASS:
+                        preview_t = self.game_map.get_regrowth_preview(c, r)
+                        if preview_t is not None:
+                            preview_col = TERRAIN_COLORS.get(preview_t, (40, 118, 74))
+                            # 30% alpha blend with grass
+                            blended = tuple(int(40 + (pc - 40) * 0.3) for pc in preview_col[:3])
+                            pygame.draw.rect(cache, blended, (lx, ly, ts, ts))
+
             # grid lines (only at zoom >= 0.7)
             if z >= 0.7:
                 grid_col = (30, 90, 56)
@@ -2393,7 +2428,7 @@ class Game:
                 bar_surf.fill(bar_col)
                 self.screen.blit(bar_surf, (menu_x + 4, item_y))
                 accent = (100, 180, 255) if not is_stub else (60, 60, 80)
-                koch_border(self.screen, (menu_x + 4, item_y, menu_w - 8, 34), 1, accent)
+                koch_border(self.screen, (menu_x + 4, item_y, menu_w - 8, 34), 2, accent)
 
             # text
             if is_stub:

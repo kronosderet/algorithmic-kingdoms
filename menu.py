@@ -430,7 +430,7 @@ class MainMenu:
         fractal_font.draw(self.screen, "Press 1 / 2 / 3 to start  |  ESC to quit",
                           cx, SCREEN_HEIGHT - 50, self._sz_desc, (70, 70, 90), center=True)
 
-        fractal_font.draw(self.screen, "v10_epsilon4",
+        fractal_font.draw(self.screen, "v10_zeta",
                           12, SCREEN_HEIGHT - 20, self._sz_ver, (50, 50, 65))
 
         pygame.display.flip()

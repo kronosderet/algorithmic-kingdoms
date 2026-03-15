@@ -4,7 +4,9 @@ import constants
 from constants import (TERRAIN_GRASS,
                        TERRAIN_TREE, TERRAIN_GOLD, TERRAIN_IRON,
                        TERRAIN_STONE,
-                       TERRAIN_MOVE_COST, RESOURCE_CAPACITY)
+                       TERRAIN_MOVE_COST, RESOURCE_CAPACITY,
+                       REGROWTH_TIME, REGROWTH_CAPACITY_FRACTION,
+                       REGROWTH_PREVIEW_FRACTION)
 from utils import clamp
 
 
@@ -14,6 +16,8 @@ class GameMap:
         self.rows = rows if rows > 0 else constants.MAP_ROWS
         self.tiles = [[TERRAIN_GRASS for _ in range(self.cols)] for _ in range(self.rows)]
         self.resource_remaining = {}  # (col, row) -> amount
+        # v10_zeta: regrowth ecology — (col, row) -> (original_terrain, remaining_seconds)
+        self.regrowth_timers: dict[tuple[int, int], tuple[int, float]] = {}
         self.generate()
 
     def generate(self):
@@ -165,6 +169,48 @@ class GameMap:
         taken = min(amount, remaining)
         self.resource_remaining[(c, r)] = remaining - taken
         if self.resource_remaining[(c, r)] <= 0:
+            # v10_zeta: start regrowth timer instead of permanent depletion
+            regrowth_time = REGROWTH_TIME.get(t)
+            if regrowth_time is not None:
+                self.regrowth_timers[(c, r)] = (t, float(regrowth_time))
             self.tiles[r][c] = TERRAIN_GRASS
             del self.resource_remaining[(c, r)]
         return rtype, taken
+
+    def tick_regrowth(self, dt: float) -> bool:
+        """v10_zeta: Advance regrowth timers. Restore tiles when ready.
+        Returns True if any tiles changed (caller should invalidate map cache)."""
+        completed = []
+        entered_preview = False
+        for key, (terrain, remaining) in self.regrowth_timers.items():
+            old_remaining = remaining
+            remaining -= dt
+            if remaining <= 0:
+                completed.append(key)
+            else:
+                self.regrowth_timers[key] = (terrain, remaining)
+                # Check if tile just entered preview phase
+                total = REGROWTH_TIME.get(terrain, 120)
+                threshold = total * REGROWTH_PREVIEW_FRACTION
+                if old_remaining >= threshold > remaining:
+                    entered_preview = True
+        changed = len(completed) > 0
+        for c, r in completed:
+            terrain, _ = self.regrowth_timers.pop((c, r))
+            # Only regrow if tile is still grass (not built on)
+            if self.tiles[r][c] == TERRAIN_GRASS:
+                self.tiles[r][c] = terrain
+                full_cap = RESOURCE_CAPACITY.get(terrain, 50)
+                self.resource_remaining[(c, r)] = int(full_cap * REGROWTH_CAPACITY_FRACTION)
+        return changed or entered_preview
+
+    def get_regrowth_preview(self, c: int, r: int) -> int | None:
+        """Return the original terrain type if tile is regrowing and in preview phase, else None."""
+        entry = self.regrowth_timers.get((c, r))
+        if entry is None:
+            return None
+        terrain, remaining = entry
+        total = REGROWTH_TIME.get(terrain, 120)
+        if remaining < total * REGROWTH_PREVIEW_FRACTION:
+            return terrain
+        return None

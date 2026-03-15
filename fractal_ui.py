@@ -410,6 +410,27 @@ def fractal_bar_simple(
         surf.blit(fill_surf, (x, y))
 
 
+def draw_cardioid_drop(
+    surf: pygame.Surface,
+    cx: int, cy: int, radius: int,
+    color: tuple[int, int, int],
+) -> None:
+    """Draw a cardioid (heart-curve) drop for Tonic — the Tree's restorative essence."""
+    pts: list[tuple[int, int]] = []
+    steps = 24
+    for i in range(steps + 1):
+        t = i * 2 * math.pi / steps
+        # Cardioid: r = a(1 - sin(t)), rotated so the cusp points up
+        r = radius * 0.45 * (1 - math.sin(t))
+        px = cx + int(r * math.cos(t))
+        py = cy + int(r * math.sin(t))
+        pts.append((px, py))
+    if len(pts) > 2:
+        pygame.draw.lines(surf, color, True, pts, 1)
+    # Central dot — the tonic essence
+    pygame.draw.circle(surf, color, (cx, cy + radius // 4), max(1, radius // 5))
+
+
 # Map resource code names to icon draw functions
 RESOURCE_ICON_FUNCS = {
     "gold": draw_fibonacci_spiral,
@@ -417,6 +438,7 @@ RESOURCE_ICON_FUNCS = {
     "iron": draw_octahedron,
     "steel": draw_reuleaux_triangle,
     "stone": draw_voronoi_cluster,
+    "tonic": draw_cardioid_drop,
 }
 
 

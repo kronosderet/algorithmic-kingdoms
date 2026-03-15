@@ -2,7 +2,7 @@
 
 ## Overview
 Zero-asset Pygame RTS with algorithmic art (polar roses, L-systems, golden spirals, Mandelbrot menus).
-Current version: v10_epsilon4. Working on v10_zeta Economy Depth.
+Current version: v10_zeta. Living economy: Tonic resource, resource ecology, 25 advisor rules.
 
 ## Tech Stack
 - Python 3.13, Pygame 2.6.1, NumPy
@@ -21,7 +21,7 @@ python -c "from game import Game; print('OK')"
 pyright
 
 # Build executable
-python -m PyInstaller v10_epsilon4.spec --noconfirm
+python -m PyInstaller v10_zeta.spec --noconfirm
 ```
 
 ## Project Structure

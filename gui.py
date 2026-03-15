@@ -4,7 +4,8 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, TOP_BAR_H, BOTTOM_PANEL_H,
                        ENEMY_COLORS, ENEMY_DEFS,
                        BUILDING_COLORS, BUILDING_LABELS, display_name,
                        COL_GUI_BG, COL_GUI_BORDER, COL_TEXT, COL_GOLD,
-                       COL_WOOD, COL_IRON_C, COL_STEEL, COL_STONE, COL_BTN,
+                       COL_WOOD, COL_IRON_C, COL_STEEL, COL_STONE, COL_TONIC,
+                       COL_BTN,
                        COL_BTN_HOVER, COL_BTN_DISABLED, COL_BTN_TEXT,
                        REFINE_TIME,
                        MILITARY_RANKS, RANK_XP_THRESHOLDS, RANK_COLORS,
@@ -179,7 +180,7 @@ class GUI:
         card_surf = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
         card_surf.fill(TOOLTIP_BG)
         surf.blit(card_surf, (tx, ty))
-        koch_border(surf, (tx, ty, card_w, card_h), 1, (100, 90, 60))
+        koch_border(surf, (tx, ty, card_w, card_h), 2, (100, 90, 60))
 
         # Draw text lines
         ly = ty + pad
@@ -237,7 +238,7 @@ class GUI:
         """Draw a mathematical resource icon (Fibonacci spiral, binary tree, etc.)."""
         color_map = {
             "gold": COL_GOLD, "wood": COL_WOOD, "iron": COL_IRON_C,
-            "steel": COL_STEEL, "stone": COL_STONE,
+            "steel": COL_STEEL, "stone": COL_STONE, "tonic": COL_TONIC,
         }
         color = color_map.get(res_type, COL_TEXT)
         draw_resource_icon(surf, res_type, cx, cy, 10, color)
@@ -252,29 +253,32 @@ class GUI:
                 SCREEN_WIDTH, TOP_BAR_H, (35, 32, 50), (20, 18, 30))
         surf.blit(_panel_bg_cache["top_bar"], (0, 0))
         # Koch depth-1 border
-        koch_border(surf, (0, 0, SCREEN_WIDTH, TOP_BAR_H), 1, (80, 75, 55))
+        koch_border(surf, (0, 0, SCREEN_WIDTH, TOP_BAR_H), 2, (80, 75, 55))
 
         # --- Resources (left side) --- VDD §9.5: Fibonacci Counter
         # Short display labels: Fx=Flux, Fb=Fiber, Or=Ore, Al=Alloy, Cr=Crystal
         res_labels = {"gold": "Fx", "wood": "Fb", "iron": "Or",
-                      "steel": "Al", "stone": "Cr"}
+                      "steel": "Al", "stone": "Cr", "tonic": "Tn"}
         res_list = [
             ("gold", resources.gold, COL_GOLD),
             ("wood", resources.wood, COL_WOOD),
             ("iron", resources.iron, COL_IRON_C),
             ("steel", resources.steel, COL_STEEL),
             ("stone", resources.stone, COL_STONE),
+            ("tonic", resources.tonic, COL_TONIC),
         ]
         x = 6
         for res_type, amount, color in res_list:
-            # Progressive reveal: hide iron/steel/stone until first collected
-            if res_type in ("iron", "steel", "stone") and amount == 0:
+            # Progressive reveal: hide iron/steel/stone/tonic until first collected
+            if res_type in ("iron", "steel", "stone", "tonic") and amount == 0:
                 if unlocks:
                     if res_type == "iron" and not unlocks.get("has_iron", False):
                         continue
                     elif res_type == "steel" and not unlocks.get("has_iron", False):
                         continue
                     elif res_type == "stone" and not unlocks.get("has_stone", False):
+                        continue
+                    elif res_type == "tonic" and not unlocks.get("has_tonic", False):
                         continue
                 else:
                     continue
@@ -371,7 +375,7 @@ class GUI:
                 SCREEN_WIDTH, BOTTOM_PANEL_H, (35, 32, 50), (20, 18, 30))
         surf.blit(_panel_bg_cache["bottom"], (0, py))
         # Koch depth-1 border
-        koch_border(surf, (0, py, SCREEN_WIDTH, BOTTOM_PANEL_H), 1, COL_GUI_BORDER)
+        koch_border(surf, (0, py, SCREEN_WIDTH, BOTTOM_PANEL_H), 2, COL_GUI_BORDER)
 
         self.buttons.clear()
 
@@ -413,7 +417,7 @@ class GUI:
     def _draw_squad_bar(self, surf, py, h, game):
         """Draw squad cards as a horizontal strip at top of bottom panel."""
         pygame.draw.rect(surf, (25, 25, 35), (0, py, SCREEN_WIDTH, h))
-        koch_border(surf, (0, py, SCREEN_WIDTH, h), 1, (50, 50, 60))
+        koch_border(surf, (0, py, SCREEN_WIDTH, h), 2, (50, 50, 60))
 
         squads = [s for s in game.player_squad_mgr.squad_list if s.alive_count > 0]
         if not squads:
@@ -443,7 +447,7 @@ class GUI:
             card_rect = pygame.Rect(x, py + 2, card_w, card_h)
             pygame.draw.rect(surf, bg, card_rect)
             border_col = res_color if is_sel else (60, 60, 70)
-            koch_border(surf, (x, py + 2, card_w, card_h), 1, border_col)
+            koch_border(surf, (x, py + 2, card_w, card_h), 2, border_col)
 
             # content: [index] formation_name count
             idx_label = str(i + 1)
@@ -501,7 +505,7 @@ class GUI:
     def _draw_enemy_panel(self, surf, py, e):
         """Show enemy unit info — read-only, no action buttons."""
         # red accent stripe at top of panel
-        koch_border(surf, (0, py, SCREEN_WIDTH, 3), 1, (80, 20, 20))
+        koch_border(surf, (0, py, SCREEN_WIDTH, 3), 2, (80, 20, 20))
 
         # icon circle with enemy color
         color = ENEMY_COLORS.get(e.unit_type, (80, 20, 20))
@@ -582,7 +586,7 @@ class GUI:
         if b.ruined:
             color = tuple(c // 3 for c in color)
         pygame.draw.rect(surf, color, (15, py + 10, 50, 50))
-        koch_border(surf, (15, py + 10, 50, 50), 1, COL_GUI_BORDER)
+        koch_border(surf, (15, py + 10, 50, 50), 2, COL_GUI_BORDER)
         label = BUILDING_LABELS.get(b.building_type, "??")
         ftext(surf, label, 40, py + 35, self.font_lg, (255, 255, 255), center=True)
         self._register_tooltip(pygame.Rect(15, py + 10, 50, 50), f"bld_{b.building_type}")
@@ -822,7 +826,7 @@ class GUI:
             badge_x = ix + fractal_font.size(name, self.font.get_height())[0] + 6
             badge_w = fractal_font.size(rank_name, self.font_xs.get_height())[0] + 8
             pygame.draw.rect(surf, rank_col, (badge_x, py + 5, badge_w, 14))
-            koch_border(surf, (badge_x, py + 5, badge_w, 14), 1, rank_col)
+            koch_border(surf, (badge_x, py + 5, badge_w, 14), 2, rank_col)
             ftext(surf, rank_name, badge_x + 4, py + 5, self.font_xs, (10, 10, 10))
             self._register_tooltip(pygame.Rect(badge_x, py + 5, badge_w, 14), f"rank_{u.rank}")
         elif u.unit_type == "worker":
@@ -837,7 +841,7 @@ class GUI:
                 badge_x = ix + fractal_font.size(name, self.font.get_height())[0] + 6
                 badge_w = fractal_font.size(badge_text, self.font_xs.get_height())[0] + 8
                 pygame.draw.rect(surf, (*sc, 180), (badge_x, py + 5, badge_w, 14))
-                koch_border(surf, (badge_x, py + 5, badge_w, 14), 1, sc)
+                koch_border(surf, (badge_x, py + 5, badge_w, 14), 2, sc)
                 ftext(surf, badge_text, badge_x + 4, py + 5, self.font_xs, (255, 255, 255))
                 self._register_tooltip(pygame.Rect(badge_x, py + 5, badge_w, 14), f"wrank_{rank_name}")
         else:
@@ -893,7 +897,7 @@ class GUI:
         # state tag with Koch border
         tag_w = fractal_font.size(state_str, self.font_xs.get_height())[0] + 8
         pygame.draw.rect(surf, (*state_col[:3], 60), (ix, py + 47, tag_w, 14))
-        koch_border(surf, (ix, py + 47, tag_w, 14), 1, state_col)
+        koch_border(surf, (ix, py + 47, tag_w, 14), 2, state_col)
         ftext(surf, state_str, ix + 4, py + 48, self.font_xs, state_col)
 
         # stats after state tag
@@ -1131,7 +1135,7 @@ class GUI:
                 scol = state_colors.get(st, (100, 100, 100))
                 pygame.draw.rect(surf, scol, (bx, card_y + 10, seg_w, bar_h))
                 bx += seg_w
-            koch_border(surf, (bar_x, card_y + 10, bar_w, bar_h), 1, (60, 60, 80))
+            koch_border(surf, (bar_x, card_y + 10, bar_w, bar_h), 2, (60, 60, 80))
 
             # state legend (most common state)
             top_state = max(states, key=lambda k: states[k]) if states else "idle"
@@ -1200,7 +1204,7 @@ class GUI:
                     btn_rect = pygame.Rect(20, chord_y, btn_w, btn_h)
                     self._form_squad_btn_rect = pygame.Rect(20, py + chord_y, btn_w, btn_h)
                     pygame.draw.rect(surf, (40, 60, 40), btn_rect)
-                    koch_border(surf, (20, chord_y, btn_w, btn_h), 1, (80, 200, 80))
+                    koch_border(surf, (20, chord_y, btn_w, btn_h), 2, (80, 200, 80))
                     ftext(surf, "Form Squad (F)", 24, chord_y + 2,
                               self.font_xs, (120, 255, 120))
                     chord_y += 22
@@ -1245,7 +1249,7 @@ class GUI:
         # Defend/Hunt only after combat exists
         if unlocks["has_barracks"] or unlocks["has_squad"]:
             self._add_button(surf, btn_x + slot * (btn_w + gap), btn_y, btn_w, btn_h,
-                             "Defend [D]", lambda: game.global_defend())
+                             "Defend [Z]", lambda: game.global_defend())
             slot += 1
             self._add_button(surf, btn_x + slot * (btn_w + gap), btn_y, btn_w, btn_h,
                              "Hunt Enemies", lambda: game.global_attack())
@@ -1325,7 +1329,7 @@ class GUI:
                 # Show discovery hint
                 hint = DISCOVERY_HINTS.get(fmt_idx, "?")
                 pygame.draw.rect(surf, (30, 30, 40), (fx, btn_y_start, fmt_w, 24))
-                koch_border(surf, (fx, btn_y_start, fmt_w, 24), 1, (50, 50, 60))
+                koch_border(surf, (fx, btn_y_start, fmt_w, 24), 2, (50, 50, 60))
                 ftext(surf, hint, fx + 4, btn_y_start + 6,
                           self.font_xs, (60, 60, 80))
                 self._register_tooltip(pygame.Rect(fx, btn_y_start, fmt_w, 24), f"fmt_{fname}")
@@ -1341,7 +1345,7 @@ class GUI:
             self._add_button(surf, fx, btn_y_start, fmt_w, 24, label, _set_fmt,
                              enabled=True)
             if is_active:
-                koch_border(surf, (fx, btn_y_start, fmt_w, 24), 1, res_color)
+                koch_border(surf, (fx, btn_y_start, fmt_w, 24), 2, res_color)
             self._register_tooltip(pygame.Rect(fx, btn_y_start, fmt_w, 24), f"fmt_{fname}")
             shown_fmts += 1
 
@@ -1390,7 +1394,7 @@ class GUI:
             if not stance_unlock[i]:
                 # locked stance hint
                 pygame.draw.rect(surf, (30, 30, 40), (sx, stance_y, stance_w, 24))
-                koch_border(surf, (sx, stance_y, stance_w, 24), 1, (50, 50, 60))
+                koch_border(surf, (sx, stance_y, stance_w, 24), 2, (50, 50, 60))
                 if i == 1:
                     hint = "Rank 1"
                 elif i == 2:
@@ -1410,7 +1414,7 @@ class GUI:
             self._add_button(surf, sx, stance_y, stance_w, 24, label, _set_st,
                              enabled=True)
             if is_active:
-                koch_border(surf, (sx, stance_y, stance_w, 24), 1, s_color)
+                koch_border(surf, (sx, stance_y, stance_w, 24), 2, s_color)
             self._register_tooltip(pygame.Rect(sx, stance_y, stance_w, 24), f"stance_{sname}")
             shown_stances += 1
 
@@ -1459,7 +1463,7 @@ class GUI:
     def _draw_panel_divider(surf, py, panel_h):
         """Draw a subtle Koch vertical divider between info and action columns."""
         dx = GUI._DIVIDER_X
-        koch_border(surf, (dx, py + 4, 1, panel_h - 8), 1, (50, 50, 65))
+        koch_border(surf, (dx, py + 4, 1, panel_h - 8), 2, (50, 50, 65))
 
     # ------------------------------------------------------------------
     # BUTTONS
@@ -1468,7 +1472,7 @@ class GUI:
         """v10_8d: Draw a locked/teaser button with unlock hint."""
         rect = pygame.Rect(x, y, w, h)
         pygame.draw.rect(surf, (25, 25, 35), rect)
-        koch_border(surf, (x, y, w, h), 1, (45, 45, 55))
+        koch_border(surf, (x, y, w, h), 2, (45, 45, 55))
         # 13px label, 10px hint — always fits within button bounds
         fractal_font.draw(surf, label, x + w // 2, y + h // 2 - 5, 13, (55, 55, 70), center=True)
         fractal_font.draw(surf, hint, x + w // 2, y + h // 2 + 6, 10, (70, 60, 50), center=True)
@@ -1483,7 +1487,7 @@ class GUI:
             color = COL_BTN_DISABLED
         pygame.draw.rect(surf, color, rect)
         border_col = (120, 120, 140) if hovered else COL_GUI_BORDER
-        koch_border(surf, (x, y, w, h), 1, border_col)
+        koch_border(surf, (x, y, w, h), 2, border_col)
         text_col = COL_BTN_TEXT if enabled else (80, 80, 90)
 
         # 13px label, 10px cost — sized to fit standard buttons without overflow
@@ -1525,7 +1529,7 @@ class GUI:
         bg = pygame.Surface((log_w, log_h), pygame.SRCALPHA)
         bg.fill(MSG_LOG_MINI_BG)
         surf.blit(bg, (log_x, log_y))
-        koch_border(surf, (log_x, log_y, log_w, log_h), 1, (60, 60, 80))
+        koch_border(surf, (log_x, log_y, log_w, log_h), 2, (60, 60, 80))
 
         # header
         header_col = (120, 120, 160) if not game.show_message_log else (180, 180, 220)

@@ -22,6 +22,7 @@ from constants import (UNIT_DEFS, BUILDING_DEFS, BUILDING_COLORS,
                        SMELTER_REFINERY_BONUS, FORGE_WORKER_SPEED_BONUS,
                        HARMONIC_PULSE_COOLDOWN, HARMONIC_PULSE_RADIUS,
                        HARMONIC_PULSE_BUFF_DURATION, HARMONIC_PULSE_PULSE_DURATION,
+                       TONIC_BASE_RATE, TONIC_DEPTH_MULT,
                        MSG_COL_ECONOMY, display_name)
 from entity_base import Entity
 from fractal_ui import fractal_bar_simple
@@ -226,6 +227,13 @@ class Building(Entity):
                     unit.command_move(self.rally_point[0], self.rally_point[1], game)
                 if self.train_queue:
                     self.train_time = UNIT_DEFS[self.train_queue[0]]["train"]
+
+        # v10_zeta: Tree of Life generates Tonic
+        if self.building_type == "town_hall":
+            build_pct = self.build_progress / self.build_time if self.build_time > 0 else 1.0
+            iters = max(0, min(5, int(build_pct * 5 + 0.5)))
+            tonic_rate = TONIC_BASE_RATE + iters * TONIC_DEPTH_MULT
+            game.resources.add("tonic", tonic_rate * dt)
 
         # refinery auto-refine
         if self.building_type == "refinery":

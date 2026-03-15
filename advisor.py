@@ -2,7 +2,8 @@
 # Don't Panic — The Live Advisor (v10_epsilon foundation)
 # ---------------------------------------------------------------------------
 # Rule-based diagnostic engine that reads event_logger counters + game state
-# and produces 1-3 actionable suggestions. Layer 0-1 scope (~15 rules).
+# and produces 1-3 actionable suggestions. 25 rules across economy, defense,
+# formation, ecology, and strategic categories.
 # ---------------------------------------------------------------------------
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -204,6 +205,224 @@ def _s_losses_high(game) -> Suggestion:
         "defense", priority=60)
 
 
+# -- v10_zeta: Economy depth rules -----------------------------------------
+
+def _r_low_wood(game) -> bool:
+    if game.resources.wood >= 30:
+        return False
+    # Check if any workers are on trees
+    for u in game.player_units:
+        if u.unit_type == "worker" and u.alive and u.state == "gathering":
+            if hasattr(u, 'gather_target') and u.gather_target == "wood":
+                return False
+    return game.game_time > 60
+
+def _s_low_wood(game) -> Suggestion:
+    return Suggestion(
+        "Fiber running low — send Gatherers to harvest trees (green tiles).",
+        "economy", priority=55)
+
+
+def _r_no_smelter_with_iron(game) -> bool:
+    has_refinery = _count_buildings(game, "refinery") > 0
+    has_forge = _count_buildings(game, "forge") > 0
+    return (not has_refinery and not has_forge
+            and game.resources.iron > 30 and game.game_time > 150)
+
+def _s_no_smelter_with_iron(game) -> Suggestion:
+    return Suggestion(
+        "Sitting on Ore but no Harmonic Mill — build one (3) to refine Ore into Alloy for military upgrades.",
+        "economy", priority=58)
+
+
+def _r_tonic_available(game) -> bool:
+    if game.resources.tonic < 5:
+        return False
+    # Any damaged units near town hall?
+    for b in game.player_buildings:
+        if b.building_type == "town_hall" and b.alive and b.built and not b.ruined:
+            for u in game.player_units:
+                if u.alive and u.hp < u.max_hp * 0.8:
+                    dx = u.x - b.x
+                    dy = u.y - b.y
+                    if dx * dx + dy * dy < 200 * 200:
+                        return True
+    return False
+
+def _s_tonic_available(game) -> Suggestion:
+    return Suggestion(
+        "Tonic is healing damaged units near the Tree of Life — keep wounded units nearby to recover.",
+        "economy", priority=45)
+
+
+def _r_excess_gold(game) -> bool:
+    mil = _count_units(game, "soldier") + _count_units(game, "archer")
+    return game.resources.gold > 500 and mil < 5 and game.game_time > 120
+
+def _s_excess_gold(game) -> Suggestion:
+    return Suggestion(
+        "Hoarding Flux! Spend it on military units — train Wardens (T) and Rangers (E).",
+        "economy", priority=52)
+
+
+# -- v10_zeta: Defense depth rules -----------------------------------------
+
+def _r_undefended_flank(game) -> bool:
+    towers = [b for b in game.player_buildings
+              if b.building_type == "tower" and b.built and b.alive and not b.ruined]
+    if not towers:
+        return False  # _r_no_tower handles this case
+    for b in game.player_buildings:
+        if not b.alive or not b.built or b.ruined:
+            continue
+        if b.building_type == "tower":
+            continue
+        # Check if any tower is within 250px
+        near_tower = False
+        for t in towers:
+            dx = b.x - t.x
+            dy = b.y - t.y
+            if dx * dx + dy * dy < 250 * 250:
+                near_tower = True
+                break
+        if not near_tower:
+            return True
+    return False
+
+def _s_undefended_flank(game) -> Suggestion:
+    return Suggestion(
+        "Some buildings are far from any Sentinel — build a tower nearby (4) for defense coverage.",
+        "defense", priority=48)
+
+
+def _r_tower_without_garrison(game) -> bool:
+    # Towers with garrison have the garrison field from town hall, but
+    # this refers to the strategic concept — do we have towers with no
+    # nearby military units?
+    for b in game.player_buildings:
+        if b.building_type == "tower" and b.built and b.alive and not b.ruined:
+            # Check for military units within 150px
+            has_guards = False
+            for u in game.player_units:
+                if u.alive and u.unit_type in ("soldier", "archer"):
+                    dx = u.x - b.x
+                    dy = u.y - b.y
+                    if dx * dx + dy * dy < 150 * 150:
+                        has_guards = True
+                        break
+            if not has_guards:
+                return True
+    return False
+
+def _s_tower_without_garrison(game) -> Suggestion:
+    return Suggestion(
+        "A Sentinel has no nearby guards — station units near towers for mutual support.",
+        "defense", priority=42)
+
+
+def _r_single_army_group(game) -> bool:
+    squads = game.player_squad_mgr.squad_list
+    alive_squads = [s for s in squads if s.alive_count > 0]
+    mil = _count_units(game, "soldier") + _count_units(game, "archer")
+    return len(alive_squads) == 1 and mil >= 8 and game.game_time > 180
+
+def _s_single_army_group(game) -> Suggestion:
+    return Suggestion(
+        "All units in one squad — consider splitting into two groups to cover more ground.",
+        "formation", priority=40)
+
+
+# -- v10_zeta: Ecology awareness rules ------------------------------------
+
+def _r_resources_depleting(game) -> bool:
+    # Check map center area for depletion
+    if game.game_time < 180:
+        return False
+    total_tiles = 0
+    depleted_tiles = 0
+    gm = game.game_map
+    cx, cy = gm.cols // 2, gm.rows // 2
+    scan_range = min(20, gm.cols // 4)
+    for r in range(max(0, cy - scan_range), min(gm.rows, cy + scan_range)):
+        for c in range(max(0, cx - scan_range), min(gm.cols, cx + scan_range)):
+            t = gm.tiles[r][c]
+            if t != 0:  # TERRAIN_GRASS == 0, skip
+                total_tiles += 1
+            elif (c, r) in gm.regrowth_timers:
+                depleted_tiles += 1
+                total_tiles += 1
+    return total_tiles > 0 and depleted_tiles > total_tiles * 0.4
+
+def _s_resources_depleting(game) -> Suggestion:
+    return Suggestion(
+        "Resources near base are running low — expand to new deposits further out. Depleted tiles will regrow over time.",
+        "economy", priority=50)
+
+
+def _r_tree_of_life_damaged(game) -> bool:
+    for b in game.player_buildings:
+        if b.building_type == "town_hall" and b.alive and b.built and not b.ruined:
+            if b.hp < b.max_hp * 0.5:
+                return True
+    return False
+
+def _s_tree_of_life_damaged(game) -> Suggestion:
+    return Suggestion(
+        "Your Tree of Life is badly damaged! Protect it — without it, Tonic generation stops and you lose the game.",
+        "defense", priority=97)
+
+
+# -- v10_zeta: Strategic rules ---------------------------------------------
+
+def _r_no_expansion(game) -> bool:
+    if game.game_time < 300:  # 5 minutes
+        return False
+    # Count economy building clusters
+    econ_buildings = [b for b in game.player_buildings
+                      if b.alive and b.built and not b.ruined
+                      and b.building_type in ("goldmine_hut", "lumber_camp",
+                                              "quarry_hut", "iron_depot",
+                                              "sawmill", "goldmine",
+                                              "stoneworks", "iron_works")]
+    if len(econ_buildings) < 2:
+        return True
+    # Check if all economy buildings are within 400px of each other (single cluster)
+    if econ_buildings:
+        avg_x = sum(b.x for b in econ_buildings) / len(econ_buildings)
+        avg_y = sum(b.y for b in econ_buildings) / len(econ_buildings)
+        all_near = all((b.x - avg_x) ** 2 + (b.y - avg_y) ** 2 < 400 * 400
+                       for b in econ_buildings)
+        return all_near
+    return False
+
+def _s_no_expansion(game) -> Suggestion:
+    return Suggestion(
+        "All economy buildings clustered together — expand outward to reach fresh resource deposits.",
+        "economy", priority=44)
+
+
+def _r_incident_approaching(game) -> bool:
+    if not hasattr(game.enemy_ai, 'tension'):
+        return False
+    if game.enemy_ai.tension < 0.7:
+        return False
+    # Check if army is scattered (high spread)
+    mil_units = [u for u in game.player_units
+                 if u.alive and u.unit_type in ("soldier", "archer")]
+    if len(mil_units) < 3:
+        return False
+    avg_x = sum(u.x for u in mil_units) / len(mil_units)
+    avg_y = sum(u.y for u in mil_units) / len(mil_units)
+    spread = sum((u.x - avg_x) ** 2 + (u.y - avg_y) ** 2
+                 for u in mil_units) / len(mil_units)
+    return spread > 300 * 300  # units are widely scattered
+
+def _s_incident_approaching(game) -> Suggestion:
+    return Suggestion(
+        "Tension is rising — an attack is imminent! Rally your forces near key buildings.",
+        "defense", priority=72)
+
+
 # ---------------------------------------------------------------------------
 # Rule registry
 # ---------------------------------------------------------------------------
@@ -224,6 +443,21 @@ ADVISOR_RULES: list[tuple] = [
     (_r_free_units,             _s_free_units,             "formation"),
     (_r_undiscovered_formations, _s_undiscovered_formations, "formation"),
     (_r_losses_high,            _s_losses_high,            "defense"),
+    # v10_zeta: economy depth
+    (_r_low_wood,               _s_low_wood,               "economy"),
+    (_r_no_smelter_with_iron,   _s_no_smelter_with_iron,   "economy"),
+    (_r_tonic_available,        _s_tonic_available,         "economy"),
+    (_r_excess_gold,            _s_excess_gold,            "economy"),
+    # v10_zeta: defense depth
+    (_r_undefended_flank,       _s_undefended_flank,       "defense"),
+    (_r_tower_without_garrison, _s_tower_without_garrison,  "defense"),
+    (_r_single_army_group,      _s_single_army_group,      "formation"),
+    # v10_zeta: ecology awareness
+    (_r_resources_depleting,    _s_resources_depleting,    "economy"),
+    (_r_tree_of_life_damaged,   _s_tree_of_life_damaged,   "defense"),
+    # v10_zeta: strategic
+    (_r_no_expansion,           _s_no_expansion,           "economy"),
+    (_r_incident_approaching,   _s_incident_approaching,   "defense"),
 ]
 
 
