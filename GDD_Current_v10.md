@@ -146,6 +146,26 @@ Enemy units that survive across incident boundaries evolve:
 - **After 1 incident:** Unit roots in place (speed=0, stops attacking, grows root tendrils VFX)
 - **After 2 incidents:** Metamorphoses into **Bitter Root** — a lingering dissonant tone grown into something worse (3× HP, 2× ATK, 60% base speed, pulsing red aura)
 
+### 2.9 Evolution — Incident Conductor v2
+
+The current FSM (Section 2.2) remains the skeleton of the Incident Director.
+A future **Incident Conductor** upgrade layers three perceptual "ears" on top:
+
+| Ear | Version | Listens To |
+|---|---|---|
+| **Tempo Ear** | v10_zeta | Pacing — APM, idle time, gather cadence |
+| **Harmony Ear** | v10_eta | Composition — formation quality, army balance, economy shape |
+| **Drama Ear** | v11 | Narrative — arc momentum, player surprise budget, catharsis debt |
+
+Each ear produces a normalized signal (0–1). The conductor blends them into
+a single **incident score** that modulates tier selection, cooldown, and
+composition — replacing the current tension-only gate.
+
+The FSM states, tier table, and catalogue remain unchanged; the conductor
+only adjusts *when* and *what* fires, not the event lifecycle itself.
+
+> Full specification: see **GDD_Roadmap.md § Incident Conductor v2**.
+
 ---
 
 ## 3. Map & Terrain
@@ -737,7 +757,11 @@ All UI elements use the **fractal visual system**:
 | Minimap | Upper-right, 160×160 | Terrain, units, buildings, camera rect, combat heat |
 | Message Log | Above bottom panel | Scrollable log with categories (info/discovery/attack/economy/command) |
 
+Golden-ratio panel layout: the bottom panel uses a φ split at 368px Koch divider between info column (left) and action column (right).
+
 ### 18.3 Bottom Panel States
+
+Fractal font sizing: buttons use 13px, cost labels 10px, message log entries 8px.
 
 - **Nothing selected:** 4 global command buttons + help text
 - **Enemy inspected:** Read-only panel with Dark 7 name, rank, traits, HP, stats, state
@@ -764,6 +788,53 @@ Hover delay: 0.4s. Max width: 240px. Every UI element has a tooltip:
 - Combat heat overlay: red glow at recent combat locations (30s decay)
 - Click to jump camera
 - Incident alert: minimap flash (2s) on enemy spawn
+
+### 18.7 Presence Director (v10_zeta+)
+
+The **Presence Director** is an adaptive GUI conductor that manages what
+information reaches the player and when. It replaces ad-hoc show/hide logic
+with a unified 5-channel priority system.
+
+**Channels:**
+
+| # | Channel | Governs | Current Prototype |
+|---|---|---|---|
+| 1 | **Economy** | Resource alerts, worker idle nudges, gather rate sparklines | Progressive resource reveal (top bar) |
+| 2 | **Threat** | Incident warnings, enemy composition preview, damage flash | Incident alert system |
+| 3 | **Command** | Selection feedback, formation hints, stance reminders | Context-sensitive bottom panel |
+| 4 | **Information** | Tooltips, discovery banners, advisor messages | Tooltip system + Don't Panic advisor |
+| 5 | **Atmosphere** | Ambient VFX intensity, music cue triggers, screen tint | (not yet prototyped) |
+
+Current progressive resource reveal (top bar hiding unneeded resources) and
+the context-sensitive bottom panel (Section 18.3) are Channel 1 and Channel 3
+prototypes respectively.
+
+**Priority stack:**
+```
+Threat > Command > Economy > Information > Atmosphere
+```
+
+When multiple channels compete for the same screen real estate or attention
+budget, higher-priority channels suppress lower ones. Suppressed messages
+queue and replay during the next CALM phase (Section 2.2).
+
+**Attention budget:** Each frame has a finite "attention token" pool (tuned
+per difficulty). Channels bid for tokens; the director allocates top-down by
+priority, guaranteeing that critical threat information is never buried under
+economy spam.
+
+**Player profile tracking:** The director maintains a rolling profile of
+player behavior — APM, camera movement patterns, selection frequency,
+reaction time to incidents. Over a session it classifies the player on two
+axes: **tempo** (fast/slow) and **focus** (macro/micro). The profile biases
+channel thresholds:
+- Fast-macro players see fewer tooltips, more sparklines
+- Slow-micro players see more formation hints, fewer economy nudges
+
+The profile persists only within a single game session (no cross-session
+storage in current design).
+
+> Full specification: see **GDD_Roadmap.md § Presence Director**.
 
 ---
 
@@ -886,6 +957,8 @@ rts/
                        selection rings
   pathfinding.py     — A* with weighted terrain (4000 node limit)
   spatial_grid.py    — O(1) spatial neighbor queries for unit interactions
+  advisor.py         — Don't Panic live advisor (rule-based diagnostic)
+  presence.py        — Presence Director: adaptive GUI conductor (v10_zeta)
   event_logger.py    — CSV event recording + game summary
 ```
 

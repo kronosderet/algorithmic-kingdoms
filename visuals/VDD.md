@@ -105,7 +105,7 @@ The game's visuals are **depth-layer gated**. What the player sees depends on ho
 | **3 — Harmony** | Resonance auras (faint waveform halos), terrain resonance scars visible, characteristic hints on units | Dense | "The world is responding to my math." |
 | **4 — Resonance** | Interference patterns between formations, Sentinel symmetry axes, orbital shell visualization | Very dense | "Everything is connected to everything." |
 | **5 — Music** | Reality distortion effects, visible waveforms, formation singing particles, Lorenz weather trails | Overwhelming to the uninitiated | "The math has become weather." |
-| **6 — Transcendence** | Full orchestral visualization, Tree of Life root network, Mandelbrot boundary on minimap | Maximum | "I am inside the equation." |
+| **6 — Transcendence** | Full orchestral visualization, Tree of Life root network, Mandelbrot boundary on minimap. Resonance Cascade visualization possible — the visual climax of the entire system | Maximum | "I am inside the equation." |
 | **7 — ???** | The Mirror Field. Both visual languages simultaneously. The palimpsest. | Beyond | "There is another side." |
 
 **Key principle**: No visual element from Layer N+1 ever appears at Layer N. The world visually *unfolds*. A screenshot at Layer 0 looks like a clean RTS. A screenshot at Layer 6 looks like a mathematical hallucination rendered in real-time. Both are the same game.
@@ -799,6 +799,8 @@ r(θ + t) = base_radius + amplitude * cos(n * (θ + t))
 | **Tier 6 Harmonic** | Full visible standing wave pattern. Air between formations shimmers with mathematical interference | 5+ |
 | **Hex effects** | Dark inverse of resonance — anti-glow, pixel repulsion, color inversion in hex radius | 5+ |
 
+**Incident Conductor connection (v10_zeta+):** Enemy compositions are chosen as GF(7) counter-chords; the visual dissonance between player and enemy formations is AUDIBLE before it's visible — the Harmony Ear detects clashing tones ~1-2s before interference patterns render on screen. At Layer 4+, the player learns to read the sound before the light arrives. See Roadmap for the Harmony Ear math and counter-chord selection.
+
 ### 7.6 The Mandelbrot Boundary Visualization (v12+)
 
 On the minimap and (at Layer 6+) in the game world:
@@ -904,7 +906,7 @@ def _draw_serif(surf, x, y, angle, length, depth, color):
 | Small labels | 16px | 0 | Subtle |
 | Tiny | 13px | 0 | No |
 
-Fallback: `pygame.font.SysFont(None, size)` for sizes <13px or strings >50 chars.
+Fallback: `pygame.font.SysFont(None, size)` for sizes below 7px only.
 
 ### 9.3 Panel Frames — Koch Border System
 
@@ -984,6 +986,8 @@ FractalFont with Koch-bordered pill shape. Fade-out as fractal dissolution:
 3. Random character strokes disappear
 4. Final: just dots where text was, then gone
 
+**Presence Director integration (v10_zeta+):** Notification prominence scales with player profile familiarity. Experienced players (high familiarity score) receive shorter display durations (2s vs 4s default), smaller pill sizes (80% scale), and reduced glow intensity — the system learns what the player already knows and stops shouting it. New/unfamiliar event types always get full prominence regardless of profile.
+
 ### 9.10 Progressive GUI Growth — The Depth Ladder in Practice
 
 | Layer | Top Bar | Bottom Panel | Minimap | World Overlays |
@@ -996,6 +1000,43 @@ FractalFont with Koch-bordered pill shape. Fade-out as fractal dissolution:
 | **5** | + Reality distortion meter | + Tier 6 effect controls, singing frequency display | + Mandelbrot boundary begins | + Visible waveforms, distortion fields |
 | **6** | + Full harmonic dashboard | + Tree of Life root display, full orchestral UI | + Full Mandelbrot territory | + Everything |
 | **7** | + Shadow field indicators | + Both orchestras visible | + Both Trees visible | + The Mirror Field |
+
+### 9.11 The Presence Director — GUI as Living Organism (v10_zeta+)
+
+The Presence Director treats the entire GUI as a single organism with five sensory channels. Each channel controls a different visual dimension, and they crossfade independently — the GUI breathes.
+
+**The Five Visual Channels:**
+
+| Channel | What It Controls | Transition Style | Duration |
+|---|---|---|---|
+| **Atmosphere** | Panel gradients, Koch border depth, font brightness, ambient particles | Smooth lerp | 2s for state changes, 0.5s for combat spikes |
+| **Focus** | Which panel is prominent, camera suggestions, highlight rings | Ease-in-out slide | 0.8s |
+| **Pacing** | Animation speed multiplier, notification frequency, event density | Gradual ramp | 3-5s (player shouldn't notice the shift) |
+| **Tension** | Color temperature shift, border complexity, particle agitation | Proportional to threat | Continuous — tracks Incident Conductor stress |
+| **Celebration** | Gold tinting, bloom intensity, fractal depth bonus, victory particles | Burst then decay | 0.3s attack, 2s sustain, 1s release |
+
+**Atmosphere Surface — The Emotional Skin of the GUI:**
+
+The Atmosphere Surface is a per-frame tint applied to every panel background gradient. It shifts the entire GUI's emotional register without touching layout or content:
+
+- **Peacetime exploration**: Warm amber tint `(45, 40, 25)` base → panels feel like parchment by candlelight. Koch borders at depth 1 (simple, calm). Font brightness at 90%. Ambient particle density: sparse golden motes drifting upward, ~3-5 visible.
+- **Economy boom**: Amber brightens to gold `(55, 50, 30)`. Resource display gets a subtle pulse bloom. Particle density increases — Fibonacci spirals occasionally spawn from resource icons.
+- **Combat active**: Panels darken to blue-gray `(25, 28, 35)` — deliberately muted to push contrast toward the game area where the action is. Koch border depth rises to 2 (more complex, more alert). Font brightness drops to 75% for non-critical text, stays 100% for HP/threat info. Ambient particles shift to sparse red embers.
+- **Victory aftermath**: Gold-tinged gradients `(50, 48, 30)` wash across all panels over 2s. Koch borders return to depth 1 but with gold coloring. Celebration channel fires: brief fractal depth +1 across all visible elements (roses get extra petals, Koch gets one more iteration). Lasts 5s, then graceful decay to peacetime.
+- **Defeat imminent**: Red-tinged panels `(45, 25, 25)` with Koch borders escalating to depth 3 — the GUI itself looks agitated, borders visibly more complex and jagged. Font brightness for threat-related text pulses at 1.5Hz. Ambient particles become dense, fast, red-shifted. This is the GUI's panic response.
+- **Deceptive cadence**: The Incident Conductor's cadence system pre-darkens the atmosphere 3s before a surprise second wave arrives. The player who reads the GUI learns that "the panels just got darker even though we won" means danger is coming. This is deliberate — the GUI leaks the Conductor's intentions through its skin.
+
+**The Animation Contract:**
+
+No GUI element appears or disappears abruptly — every transition is animated. Panel entrance: scale from 0.95 to 1.0 with 0.3s ease-out. Panel exit: fade alpha over 0.4s while Koch border depth decreases to 0. Notification arrival: slide from right with 0.2s ease-out. Tab switch: crossfade contents over 0.15s. Even error states animate — a rejected build command makes the button's Koch border briefly spike to depth 3 then return (visual "wince").
+
+**Channel Crossfading:**
+
+Channels are independent but aware of each other. When Tension rises while Celebration is active (e.g., victory followed by immediate new wave), Celebration's decay accelerates (0.5s instead of 1s) and Tension's ramp starts from the current gold-tint rather than jumping to blue-gray. The result: a smooth gold→amber→blue-gray sweep that the player reads as "enjoy it while it lasts." All crossfades use cosine interpolation to avoid linear-ramp roboticism.
+
+**Performance Contract:**
+
+The Atmosphere Surface is a single multiply-blend per panel per frame — no per-pixel computation. Channel states are 5 floats updated once per game tick. Koch border depth changes trigger a cache invalidation (max 2-3 panels per transition). Total frame cost: <0.5ms at 60 FPS.
 
 ---
 
@@ -1059,59 +1100,105 @@ All shapes defined in unit coordinates (0.0-1.0), scaled at render time via `siz
 
 ---
 
+## 11B. The Singing Army — Procedural Audio Visualization (v11+)
+
+This section describes what the player SEES when formations sing. The math lives in the Roadmap (Harmony Ear, GF(7) chord theory, Fourier formation analysis). Here we describe the light.
+
+**Formation Chord Particles — Standing Waves Made Visible:**
+
+Each formation's chord (determined by its unit composition mapped through GF(7)) produces visible waveform particles at Layer 5+. High-harmony formations emit standing wave patterns — luminous sine arcs that hover around the formation perimeter, nodes and antinodes visible as bright/dim points. A perfect 1-3-5 triad (Do-Mi-Sol) produces clean, stable standing waves with 3 bright nodes evenly spaced. A dissonant cluster produces chaotic, flickering waveforms that never settle.
+
+Particle properties derive from the chord:
+- **Wavelength** (visual arc spacing): inversely proportional to chord tension — consonant = long graceful arcs, dissonant = tight agitated ripples
+- **Amplitude** (brightness): proportional to formation harmony score — high harmony glows, low harmony sputters
+- **Color**: blended from the tone colors of the chord's component notes (a Mi-Sol-Ti chord shimmers in green-amber-violet)
+- **Persistence**: high-harmony particles linger 2-3 frames as afterimages; low-harmony particles die in 1 frame
+
+**Fourier Formation Shapes — The Shape IS the Sound:**
+
+The Fourier transform of a formation's spatial arrangement maps to a frequency spectrum. What the player sees: the formation's geometric footprint generates a particle emission pattern. A circular formation (many harmonics) emits in all directions. A tight line formation (strong fundamental) emits a focused beam perpendicular to the line. An L-shaped formation creates asymmetric emission with visible interference where the two arms meet. At Layer 5+, these emission patterns are faintly visible as directional particle streams — the formation's "voice" has a visible shape.
+
+**The Resonance Cascade — Visual Climax:**
+
+When a perfect resolution chain-reaction occurs (see Roadmap: multiple formations resolving simultaneously through GF(7) chord progression), the screen fills with fractal depth for 3 seconds:
+- All Koch borders jump to maximum depth (3+) simultaneously
+- Spring physics across all visible formations lock into crystalline equilibrium — every spring connection goes perfectly taut, glowing gold
+- Standing wave particles from all formations synchronize into a single coherent pattern
+- For exactly 3 seconds, all four isomorphism faces (GF(7) ↔ Z₇ ↔ formation ↔ chord) are simultaneously visible: the math shows its face
+- The Atmosphere Surface goes pure gold. Ambient particle density maxes out. The screen is, briefly, made of light
+- After 3s: graceful decay over 2s back to the current atmosphere state. The glow fades but the crystalline spring positions hold for another 5s as a visual echo
+
+**The Fundamental — The Ghost Note:**
+
+Below every formation chord is an implied fundamental frequency (the GCD of the chord's intervals). This manifests visually as a deep, slow pulse — a radial ripple that expands outward from the formation center at ~0.5Hz, visible as a subtle brightness wave in the terrain beneath the formation. At Layer 5+, formations sharing the same fundamental pulse in sync — a visual bass note connecting distant groups. The player learns to read which formations are "in the same key" by watching the ground breathe.
+
+---
+
 ## 12. GUI Remake Run — Implementation Plan
 
 This plan turns the current functional-but-flat GUI into the fractal interface described above. Scoped to what's achievable NOW (v10_epsilon), with hooks for future depth-layer gating.
 
-### Phase A: Fractal Font Foundation
+### Phase A: Fractal Font Foundation — COMPLETE (shipped v10_epsilon3)
+
+| Task | File | Status |
+|---|---|---|
+| Define `FRACTAL_GLYPHS` dict (A-Z, 0-9, punctuation — ~80 entries) | `fractal_font.py` | DONE |
+| `FractalFont` class with glyph cache + 2-pass rendering (glow + core) | `fractal_font.py` | DONE |
+| Serif branching system (depth 0/1/2 based on size) | `fractal_font.py` | DONE |
+| Replace `draw_text()` calls in top bar, bottom panel titles, notifications | `gui.py` | DONE |
+| Benchmark: must stay under 2ms/frame for all text rendering | `fractal_font.py` | DONE |
+
+### Phase B: Koch Border & Panel Overhaul — COMPLETE (shipped v10_epsilon3)
+
+| Task | File | Status |
+|---|---|---|
+| `koch_border()` utility function with depth + animation support | `gui.py` | DONE |
+| Radial gradient panel backgrounds (replace flat fills) | `gui.py` | DONE |
+| Koch-bordered buttons with hover bloom (rose corners) | `gui.py` | DONE |
+| Bottom panel: Koch frame, type-colored accent, shape echo background | `gui.py` | DONE |
+| Top bar: Mandelbrot micro-strip background at 5% alpha | `gui.py` | DONE |
+
+### Phase C: Bars, Selection, Polish — MOSTLY COMPLETE
+
+| Task | File | Status |
+|---|---|---|
+| `fractal_bar()` for HP/progress/train (pre-rendered wave slices) | `gui.py`, `unit.py`, `building.py` | DONE |
+| Rose/hex/spiral selection rings per unit type | `unit.py` | DONE |
+| Koch minimap border + golden viewport rectangle | `game.py` | DONE |
+| Notification dissolution animation (serif→border→strokes→dots→gone) | `gui.py` | TODO |
+| Game-over panel: Koch borders, radial gradient, grade rendering | `gui.py` | DONE |
+
+### Phase D: Integration & Performance — IN PROGRESS
+
+| Task | File | Status |
+|---|---|---|
+| Profile full render pass: must stay under 16ms @ 60 FPS | all | DONE |
+| Glyph surface caching validation (memory < 10MB for full glyph set) | `fractal_font.py` | DONE |
+| Koch border caching (avoid re-rendering static panels every frame) | `gui.py` | DONE |
+| Visual QA pass: readability at all zoom levels, colorblind-safe contrast | all | IN PROGRESS |
+| Fallback testing: SysFont graceful degradation for edge cases | `fractal_font.py` | DONE |
+
+### Phase E: Presence Director Visual Integration (v10_zeta)
 
 | Task | File | Effort |
 |---|---|---|
-| Define `FRACTAL_GLYPHS` dict (A-Z, 0-9, punctuation — ~80 entries) | `fractal_font.py` (new) | 2 sessions |
-| `FractalFont` class with glyph cache + 2-pass rendering (glow + core) | `fractal_font.py` | 1 session |
-| Serif branching system (depth 0/1/2 based on size) | `fractal_font.py` | 0.5 session |
-| Replace `draw_text()` calls in top bar, bottom panel titles, notifications | `gui.py` | 1 session |
-| Benchmark: must stay under 2ms/frame for all text rendering | `fractal_font.py` | 0.5 session |
+| Atmosphere Surface: per-panel tint multiply-blend based on game state | `gui.py` | 1 session |
+| Channel-aware draw methods: each GUI draw call queries Presence Director state | `gui.py`, `presence_director.py` | 1.5 sessions |
+| Atmosphere transitions: cosine-interpolated crossfades between states (2s default) | `presence_director.py` | 0.5 session |
+| Koch border depth driven by Tension channel (depth 1→2→3 with threat) | `gui.py` | 0.5 session |
+| Familiarity decay: notification prominence scaling based on player profile | `gui.py`, `presence_director.py` | 0.5 session |
+| Deceptive cadence pre-darkening: atmosphere responds to Conductor's cadence hints | `presence_director.py` | 0.5 session |
+| Integration test: verify all 5 channels crossfade correctly under rapid state changes | all | 0.5 session |
 
-### Phase B: Koch Border & Panel Overhaul
-
-| Task | File | Effort |
-|---|---|---|
-| `koch_border()` utility function with depth + animation support | `gui.py` or `fractal_ui.py` (new) | 0.5 session |
-| Radial gradient panel backgrounds (replace flat fills) | `gui.py` | 1 session |
-| Koch-bordered buttons with hover bloom (rose corners) | `gui.py` | 1 session |
-| Bottom panel: Koch frame, type-colored accent, shape echo background | `gui.py` | 0.5 session |
-| Top bar: Mandelbrot micro-strip background at 5% alpha | `gui.py` | 0.5 session |
-
-### Phase C: Bars, Selection, Polish
-
-| Task | File | Effort |
-|---|---|---|
-| `fractal_bar()` for HP/progress/train (pre-rendered wave slices) | `gui.py`, `unit.py`, `building.py` | 1 session |
-| Rose/hex/spiral selection rings per unit type | `unit.py` | 1 session |
-| Koch minimap border + golden viewport rectangle | `game.py` | 0.5 session |
-| Notification dissolution animation (serif→border→strokes→dots→gone) | `gui.py` | 0.5 session |
-| Game-over panel: Koch borders, radial gradient, grade rendering | `gui.py` | 0.5 session |
-
-### Phase D: Integration & Performance
-
-| Task | File | Effort |
-|---|---|---|
-| Profile full render pass: must stay under 16ms @ 60 FPS | all | 0.5 session |
-| Glyph surface caching validation (memory < 10MB for full glyph set) | `fractal_font.py` | 0.5 session |
-| Koch border caching (avoid re-rendering static panels every frame) | `gui.py` | 0.5 session |
-| Visual QA pass: readability at all zoom levels, colorblind-safe contrast | all | 1 session |
-| Fallback testing: SysFont graceful degradation for edge cases | `fractal_font.py` | 0.5 session |
-
-### Total Estimate: ~13 sessions across 4 phases
+### Total Estimate: ~13 sessions for Phases A-D (mostly complete), ~5 sessions for Phase E
 
 ### Implementation Order
 
 ```
-Phase A (font) → Phase B (panels) → Phase C (bars/selection) → Phase D (QA)
+Phase A (font) → Phase B (panels) → Phase C (bars/selection) → Phase D (QA) → Phase E (Presence Director)
 ```
 
-Each phase is independently shippable. Phase A alone transforms the game's typographic identity. Phase B makes it feel like a fractal world. Phase C and D polish.
+Phases A-B are COMPLETE. Phase C needs notification dissolution. Phase D visual QA is ongoing. Phase E begins with v10_zeta economy work and depends on the Presence Director logic from the Roadmap being implemented first.
 
 ---
 
