@@ -2,6 +2,7 @@ import pygame
 import math
 from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, COL_BG, COL_TEXT, FPS,
                        DIFFICULTY_DESCRIPTIONS)
+from fractal_font import fractal_font
 
 # --- Fractal palette (game-palette Mandelbrot) ---
 _FRACTAL_DEEP   = (10, 8, 25)
@@ -134,11 +135,12 @@ class MainMenu:
     def __init__(self, screen):
         self.screen = screen
         self.clock = pygame.time.Clock()
-        self.font_title = pygame.font.SysFont(None, 68)
-        self.font_btn = pygame.font.SysFont(None, 32)
-        self.font_desc = pygame.font.SysFont(None, 19)
-        self.font_sub = pygame.font.SysFont(None, 24)
-        self.font_ver = pygame.font.SysFont(None, 16)
+        # Fractal font sizes (replacing SysFont)
+        self._sz_title = 52
+        self._sz_btn = 26
+        self._sz_desc = 15
+        self._sz_sub = 20
+        self._sz_ver = 12
 
         # fractal background state
         self._palette = _build_palette()
@@ -287,30 +289,29 @@ class MainMenu:
 
         # name text with slight glow
         if hovered:
-            glow = self.font_btn.render(name, True,
-                                        tuple(min(255, c + 40) for c in color_accent))
-            self.screen.blit(glow, glow.get_rect(centerx=cx + 1, top=rect.top + 10))
-        text_surf = self.font_btn.render(name, True, color_accent)
-        self.screen.blit(text_surf, text_surf.get_rect(centerx=cx, top=rect.top + 9))
+            glow_col = tuple(min(255, c + 40) for c in color_accent)
+            fractal_font.draw(self.screen, name, cx + 1, rect.top + 10,
+                              self._sz_btn, glow_col, center=True)
+        fractal_font.draw(self.screen, name, cx, rect.top + 9,
+                          self._sz_btn, color_accent, center=True)
 
         # description lines
         lines = desc_lines if desc_lines else [desc]
         line_y = rect.top + 35
         for line in lines:
-            desc_surf = self.font_desc.render(line, True, (150, 150, 170))
-            self.screen.blit(desc_surf, desc_surf.get_rect(centerx=cx, top=line_y))
-            line_y += 16
+            fractal_font.draw(self.screen, line, cx, line_y,
+                              self._sz_desc, (150, 150, 170), center=True)
+            line_y += 18
 
         # recommended tag
         if recommended:
-            tag_surf = self.font_desc.render("Recommended for first game", True,
-                                             (218, 165, 32))
-            self.screen.blit(tag_surf, tag_surf.get_rect(centerx=cx, top=line_y))
-            line_y += 16
+            fractal_font.draw(self.screen, "Recommended for first game", cx, line_y,
+                              self._sz_desc, (218, 165, 32), center=True)
+            line_y += 18
 
         # key hint
-        key_surf = self.font_desc.render(f"[{key}]", True, (100, 100, 120))
-        self.screen.blit(key_surf, key_surf.get_rect(centerx=cx, top=line_y))
+        fractal_font.draw(self.screen, f"[{key}]", cx, line_y,
+                          self._sz_desc, (100, 100, 120), center=True)
 
     def _draw_button(self, rect, text, mx, my):
         hovered = rect.collidepoint(mx, my)
@@ -344,11 +345,11 @@ class MainMenu:
 
         # text with glow on hover
         if hovered:
-            glow = self.font_btn.render(text, True, (240, 240, 250))
-            self.screen.blit(glow, glow.get_rect(center=(cx + 1, cy + 1)))
-        text_surf = self.font_btn.render(text, True,
-                                          (220, 220, 230) if hovered else (160, 160, 180))
-        self.screen.blit(text_surf, text_surf.get_rect(center=(cx, cy)))
+            fractal_font.draw(self.screen, text, cx + 1, cy + 1,
+                              self._sz_btn, (240, 240, 250), center=True)
+        txt_col = (220, 220, 230) if hovered else (160, 160, 180)
+        fractal_font.draw(self.screen, text, cx, cy,
+                          self._sz_btn, txt_col, center=True)
 
     def _render(self):
         # fractal background
@@ -371,22 +372,22 @@ class MainMenu:
                          (109, 82, 16, 60), width=1, rotation=rose_rot, n=100)
 
         # --- title with multi-layer glow ---
-        title_text = "Resonance"
+        title_text = "RESONANCE"
 
         # deep shadow
-        s3 = self.font_title.render(title_text, True, (40, 30, 10))
-        self.screen.blit(s3, s3.get_rect(center=(cx + 3, self._TITLE_Y + 3)))
+        fractal_font.draw(self.screen, title_text, cx + 3, self._TITLE_Y + 3,
+                          self._sz_title, (40, 30, 10), center=True)
         # warm glow
-        s2 = self.font_title.render(title_text, True, (140, 110, 30))
-        self.screen.blit(s2, s2.get_rect(center=(cx + 1, self._TITLE_Y + 1)))
+        fractal_font.draw(self.screen, title_text, cx + 1, self._TITLE_Y + 1,
+                          self._sz_title, (140, 110, 30), center=True)
         # main title in warm gold
-        s1 = self.font_title.render(title_text, True, (230, 205, 90))
-        self.screen.blit(s1, s1.get_rect(center=(cx, self._TITLE_Y)))
+        fractal_font.draw(self.screen, title_text, cx, self._TITLE_Y,
+                          self._sz_title, (230, 205, 90), center=True)
 
         # --- subtitle with mathematical flourish ---
-        sub_text = "~ forged from mathematics ~"
-        sub_surf = self.font_sub.render(sub_text, True, (160, 150, 130))
-        self.screen.blit(sub_surf, sub_surf.get_rect(center=(cx, self._SUB_Y)))
+        sub_text = "~ FORGED FROM MATHEMATICS ~"
+        fractal_font.draw(self.screen, sub_text, cx, self._SUB_Y,
+                          self._sz_sub, (160, 150, 130), center=True)
 
         # thin decorative line under subtitle (golden spiral inspired curve)
         line_y = self._SUB_Y + 18
@@ -419,13 +420,10 @@ class MainMenu:
         self._draw_button(self._get_exit_btn_rect(), "Exit", mx, my)
 
         # --- bottom info bar ---
-        hint_surf = self.font_desc.render(
-            "Press 1 / 2 / 3 to start   |   ESC to quit", True, (70, 70, 90))
-        self.screen.blit(hint_surf,
-                         hint_surf.get_rect(center=(cx, SCREEN_HEIGHT - 50)))
+        fractal_font.draw(self.screen, "Press 1 / 2 / 3 to start  |  ESC to quit",
+                          cx, SCREEN_HEIGHT - 50, self._sz_desc, (70, 70, 90), center=True)
 
-        ver_surf = self.font_ver.render("v10_epsilon2", True, (50, 50, 65))
-        self.screen.blit(ver_surf,
-                         ver_surf.get_rect(bottomleft=(12, SCREEN_HEIGHT - 8)))
+        fractal_font.draw(self.screen, "v10_epsilon2",
+                          12, SCREEN_HEIGHT - 20, self._sz_ver, (50, 50, 65))
 
         pygame.display.flip()

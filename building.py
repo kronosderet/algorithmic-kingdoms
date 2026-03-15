@@ -29,7 +29,8 @@ from building_shapes import (_l_system_expand, _l_system_render, _sierpinski,
                              _koch_snowflake,
                              _TH_BROWN, _TH_GREEN, _BK_MAROON,
                              _RF_GRAY, _TW_STONE, _FORGE_ORANGE, _STEEL_BLUE)
-from utils import dist, draw_text
+from utils import dist
+from fractal_font import fractal_font
 
 
 # Forward reference: Cannonball is imported at runtime to avoid circular import
@@ -716,8 +717,7 @@ class Building(Entity):
         if z >= 0.5:
             label = BUILDING_LABELS.get(self.building_type, "??")
             fsz = max(10, int((20 if self.size > 1 else 16) * z))
-            font = pygame.font.SysFont(None, fsz)
-            draw_text(surf, label, cx, cy, font, (255, 255, 255), center=True)
+            fractal_font.draw(surf, label, cx, cy, fsz, (255, 255, 255), center=True)
 
         # build progress bar
         if not self.built and self.build_time > 0:
