@@ -3,16 +3,16 @@ Proof-of-concept: Terrain textures & visual effects (VDD Phase 4).
 
 - Value-noise terrain tiles (grass, stone, sand, water with shimmer)
 - Parametric arrow projectiles
-- Spirograph-trail cannonballs
-- Lissajous bloom explosions
+- Sentinel resonance pulse (Koch ring + spirograph absorption)
+- Lissajous dissonance bloom (enemy death in resonance field)
 - Breathing polar-rose selection ring
 
 Controls:
   1/2/3/4  Switch terrain (grass / stone / water / sand)
   A        Fire arrow projectile
-  C        Fire cannonball with spirograph trail
+  C        Emit resonance pulse (Koch wave)
   S        Toggle selection ring
-  Click    Spawn Lissajous explosion
+  Click    Spawn dissonance bloom
   ESC      Quit
 """
 import pygame
@@ -31,9 +31,10 @@ STONE_GRAY2 = (140, 135, 115)
 SAND_TAN = (194, 178, 128)
 TERRAIN_GOLD = (218, 165, 32)
 FORGE_ORANGE = (255, 140, 40)
-SOLDIER_RED = (200, 60, 60)
-ARCHER_GREEN = (50, 190, 50)
-WORKER_BLUE = (50, 130, 220)
+SOLDIER_RED = (200, 60, 60)     # Re — Soldier
+ARCHER_PURPLE = (140, 100, 200) # Mi — Archer (Precision Purple)
+WORKER_BLUE = (50, 130, 220)    # Do — Gatherer
+ARCHER_GREEN = ARCHER_PURPLE    # alias for compatibility
 GLOW_WHITE = (240, 235, 220)
 
 W, H = 1280, 720
@@ -162,40 +163,78 @@ class Arrow:
                              (int(tail_x), int(tail_y)), (int(fx), int(fy)), 1)
 
 
-class Cannonball:
-    def __init__(self, x, y, angle=0):
+class ResonancePulse:
+    """Sentinel harmonic pulse — expanding Koch ring with spirograph absorption trails."""
+    def __init__(self, x, y):
         self.x, self.y = x, y
-        self.angle = angle
-        self.speed = 300
         self.alive = True
-        self.trail = []
         self.age = 0
+        self.max_age = 1.2
+        self.max_radius = 200
+        self.absorption_pts = []  # spirograph absorption trails
 
     def update(self, dt):
-        self.x += math.cos(self.angle) * self.speed * dt
-        self.y += math.sin(self.angle) * self.speed * dt
         self.age += dt
-        # spirograph trail points
-        R, r, d = 5, 3, 5
-        t = self.age * 8
-        sx = (R + r) * math.cos(t) - d * math.cos((R + r) / r * t)
-        sy = (R + r) * math.sin(t) - d * math.sin((R + r) / r * t)
-        self.trail.append((self.x + sx * 1.5, self.y + sy * 1.5, self.age))
-        # trim old trail
-        self.trail = [(x, y, a) for x, y, a in self.trail if self.age - a < 0.8]
-        if self.x < -50 or self.x > W + 50 or self.y < -50 or self.y > H + 50:
+        if self.age > self.max_age:
             self.alive = False
+        # Generate spirograph absorption points (contracting toward center)
+        if self.age < 0.8 and random.random() < 0.3:
+            angle = random.uniform(0, 2 * math.pi)
+            dist = self.age / self.max_age * self.max_radius
+            px = self.x + dist * math.cos(angle)
+            py = self.y + dist * math.sin(angle)
+            self.absorption_pts.append((px, py, self.age))
+        self.absorption_pts = [(x, y, a) for x, y, a in self.absorption_pts
+                               if self.age - a < 0.6]
 
     def draw(self, surf):
-        # trail
-        for tx, ty, a in self.trail:
-            alpha = max(0, 1 - (self.age - a) / 0.8)
-            c = lerp_c(SOLDIER_RED, FORGE_ORANGE, alpha)
-            r = max(1, int(3 * alpha))
-            pygame.draw.circle(surf, c, (int(tx), int(ty)), r)
-        # ball
-        pygame.draw.circle(surf, (80, 80, 80), (int(self.x), int(self.y)), 5)
-        pygame.draw.circle(surf, (120, 120, 120), (int(self.x), int(self.y)), 5, 1)
+        progress = self.age / self.max_age
+        radius = int(progress * self.max_radius)
+        alpha = max(0, 1.0 - progress)
+
+        # Koch-style ring (simplified as circle with perturbation)
+        n = 60
+        pts = []
+        for i in range(n):
+            theta = 2 * math.pi * i / n
+            r = radius + 3 * math.sin(6 * theta)  # Koch-like bumps
+            pts.append((int(self.x + r * math.cos(theta)),
+                        int(self.y + r * math.sin(theta))))
+        if len(pts) >= 3 and radius > 5:
+            # Wavefront ring
+            c = lerp_c((180, 160, 255), (218, 165, 32), progress)
+            ring_surf = pygame.Surface((W, H), pygame.SRCALPHA)
+            pygame.draw.polygon(ring_surf, (*c, int(alpha * 160)), pts, 2)
+            surf.blit(ring_surf, (0, 0))
+
+            # Trailing rings
+            for trail_i in range(1, 3):
+                trail_r = max(0, radius - trail_i * 20)
+                if trail_r > 5:
+                    trail_pts = []
+                    for i in range(n):
+                        theta = 2 * math.pi * i / n
+                        r = trail_r + 2 * math.sin(6 * theta)
+                        trail_pts.append((int(self.x + r * math.cos(theta)),
+                                          int(self.y + r * math.sin(theta))))
+                    trail_alpha = int(alpha * 80 * (1.0 - trail_i * 0.3))
+                    pygame.draw.polygon(ring_surf, (*c, max(5, trail_alpha)),
+                                        trail_pts, 1)
+                    surf.blit(ring_surf, (0, 0))
+
+        # Spirograph absorption trails (contracting toward center)
+        R_spiro, r_spiro, d_spiro = 4, 2.5, 3
+        for ax, ay, birth in self.absorption_pts:
+            t_frac = (self.age - birth) / 0.6
+            # Trail contracts toward Sentinel
+            cx = ax + (self.x - ax) * t_frac
+            cy = ay + (self.y - ay) * t_frac
+            t = (self.age - birth) * 12
+            sx = (R_spiro + r_spiro) * math.cos(t) - d_spiro * math.cos((R_spiro + r_spiro) / r_spiro * t)
+            sy = (R_spiro + r_spiro) * math.sin(t) - d_spiro * math.sin((R_spiro + r_spiro) / r_spiro * t)
+            trail_c = lerp_c((120, 20, 40), (218, 165, 32), t_frac)
+            dot_r = max(1, int(3 * (1.0 - t_frac)))
+            pygame.draw.circle(surf, trail_c, (int(cx + sx), int(cy + sy)), dot_r)
 
 
 # ── explosions ──────────────────────────────────────────────
@@ -300,7 +339,7 @@ def main():
     time_acc = 0.0
 
     arrows = []
-    cannonballs = []
+    pulses = []
     explosions = []
     sel_ring = SelectionRing(W // 2, H // 2, WORKER_BLUE)
     show_ring = True
@@ -332,8 +371,7 @@ def main():
                     arrows.append(Arrow(50, random.randint(100, H - 100),
                                         random.uniform(-0.3, 0.3)))
                 elif event.key == pygame.K_c:
-                    cannonballs.append(Cannonball(50, random.randint(100, H - 100),
-                                                  random.uniform(-0.2, 0.2)))
+                    pulses.append(ResonancePulse(W // 2, H // 2))
                 elif event.key == pygame.K_s:
                     show_ring = not show_ring
                     sel_ring.visible = show_ring
@@ -345,9 +383,9 @@ def main():
         for a in arrows:
             a.update(dt)
         arrows = [a for a in arrows if a.alive]
-        for c in cannonballs:
-            c.update(dt)
-        cannonballs = [c for c in cannonballs if c.alive]
+        for p in pulses:
+            p.update(dt)
+        pulses = [p for p in pulses if p.alive]
         for e in explosions:
             e.update(dt)
         explosions = [e for e in explosions if e.alive]
@@ -370,8 +408,8 @@ def main():
         # draw entities
         for a in arrows:
             a.draw(screen)
-        for c in cannonballs:
-            c.draw(screen)
+        for p in pulses:
+            p.draw(screen)
         for e in explosions:
             e.draw(screen)
         sel_ring.draw(screen)
@@ -381,7 +419,7 @@ def main():
         info = f"Terrain: {terrain}  |  FPS: {fps:.0f}  |  Ring: {'ON' if show_ring else 'OFF'}"
         screen.blit(font_lg.render("Terrain & Effects PoC", True, TERRAIN_GOLD), (20, 10))
         screen.blit(font.render(info, True, (180, 180, 200)), (20, 45))
-        ctrl = "1-4: terrain  A: arrow  C: cannonball  Click: explosion  S: ring  ESC: quit"
+        ctrl = "1-4: terrain  A: arrow  C: resonance pulse  Click: dissonance bloom  S: ring  ESC: quit"
         screen.blit(font.render(ctrl, True, (120, 120, 140)), (20, H - 25))
 
         pygame.display.flip()

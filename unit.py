@@ -66,6 +66,7 @@ from utils import dist, pos_to_tile, tile_center, draw_text
 from pathfinding import a_star
 from entity_base import Entity, _process_combat_hit
 from squads import formation_slot
+from fractal_ui import draw_selection_ring
 
 # ---------------------------------------------------------------------------
 # Lazy imports to avoid circular dependencies
@@ -2213,9 +2214,10 @@ class Unit(Entity):
         r = max(2, int(UNIT_RADIUS.get(self.unit_type, 12) * z))
         is_enemy = self.owner == "enemy"
 
-        # selection ring
+        # selection ring — fractal shape per unit type
         if self.selected:
-            pygame.draw.circle(surf, COL_SELECT, (sx, sy), r + max(1, int(3 * z)), 2)
+            sel_r = r + max(1, int(3 * z))
+            draw_selection_ring(surf, self.unit_type, sx, sy, sel_r, COL_SELECT, 2)
 
         # v10f: algorithmic shape based on unit type
         if self.unit_type == "worker":

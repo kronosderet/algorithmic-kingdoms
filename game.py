@@ -43,8 +43,12 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE,
                        DISCOVERY_SLOWMO_DURATION, DISCOVERY_SLOWMO_FACTOR,
                        DISCOVERY_BANNER_DURATION,
                        TUTORIAL_HINTS, TUTORIAL_HINT_DURATION, TUTORIAL_HINT_COOLDOWN,
+                       INCIDENT_ALERT_COLOR, TENSION_PULSE_SPEED,
+                       ATTACK_ARROW_COLOR, ATTACK_ARROW_SIZE,
                        display_name)
 from utils import dist, pos_to_tile, draw_text, ruin_rebuild_cost
+from gui import ftext
+from fractal_ui import koch_border
 from game_map import GameMap
 from camera import Camera
 from spatial_grid import SpatialGrid
@@ -68,6 +72,7 @@ class Game:
         self.game_over = False
         self.game_won = False
         self.game_surrendered = False
+        self.peak_army_size = 0
         self.paused = False
         self.pause_menu_selection = 0  # v10_8d: highlighted menu item
 
@@ -460,6 +465,11 @@ class Game:
                 self.add_notification(f"Stance: {STANCE_NAMES[st]}", 1.5, color)
                 return
 
+        # v10_epsilon2: Quick-Form (F key) — auto-form squad with best harmony
+        if key == pygame.K_f and combat_sel:
+            self._quick_form_squad()
+            return
+
         # v10_delta: Delete key — dissolve selected squad
         if key == pygame.K_DELETE and combat_sel:
             seen = set()
@@ -552,6 +562,9 @@ class Game:
             result = self.gui.handle_click(pos)
             if result == "toggle_log":
                 self.show_message_log = not self.show_message_log
+                return
+            if result == "form_squad":
+                self._quick_form_squad()
                 return
             if result:
                 return
@@ -961,6 +974,41 @@ class Game:
                                      steel=d.get("steel", 0), stone=d.get("stone", 0)):
             self.placing_building = building_type
 
+    def _quick_form_squad(self):
+        """v10_epsilon2: Quick-Form — auto-create squad with best harmony match."""
+        combat_sel = [e for e in self.selected
+                      if isinstance(e, Unit) and e.unit_type in ("soldier", "archer")]
+        free_units = [u for u in combat_sel if self.player_squad_mgr.is_free(u)]
+        if len(free_units) >= FORMATION_MIN_VIABLE and self.discovered_formations:
+            from squads import compute_harmony
+            s_ct = sum(1 for u in free_units if u.unit_type == "soldier")
+            a_ct = sum(1 for u in free_units if u.unit_type == "archer")
+            ranked = sorted(self.discovered_formations,
+                            key=lambda fi: compute_harmony(fi, s_ct, a_ct),
+                            reverse=True)
+            # Double-tap F cycles to next-best formation
+            now = pygame.time.get_ticks()
+            if (hasattr(self, '_last_f_tap_time')
+                    and now - self._last_f_tap_time < DOUBLE_CLICK_THRESHOLD
+                    and hasattr(self, '_last_f_fmt_idx')):
+                try:
+                    cur_pos = ranked.index(self._last_f_fmt_idx)
+                    best_fmt = ranked[(cur_pos + 1) % len(ranked)]
+                except ValueError:
+                    best_fmt = ranked[0]
+            else:
+                best_fmt = ranked[0]
+            self._last_f_tap_time = now
+            self._last_f_fmt_idx = best_fmt
+            sq = self.player_squad_mgr.create_squad(free_units, formation=best_fmt)
+            if sq:
+                self.add_notification(
+                    f"Squad formed: {FORMATION_NAMES[best_fmt]} ({sq.alive_count} units)",
+                    2.0, (100, 255, 100))
+        elif not self.discovered_formations:
+            self.add_notification("Discover a formation first — move 3+ units together!",
+                                 2.0, (180, 160, 80))
+
     def _can_place_building(self, btype, col, row):
         d = BUILDING_DEFS[btype]
         size = d["size"]
@@ -1300,6 +1348,11 @@ class Game:
         self.player_grid.rebuild(self.player_units)
         self.enemy_grid.rebuild(self.enemy_units)
 
+        # track peak army size for game-over stats
+        mil_count = sum(1 for u in self.player_units if u.unit_type in ("soldier", "archer"))
+        if mil_count > self.peak_army_size:
+            self.peak_army_size = mil_count
+
         # track whether enemies exist before updates
         had_enemies = len(self.enemy_units) > 0
 
@@ -1582,7 +1635,7 @@ class Game:
 
         # v10_2: attack-move cursor indicator
         if self.attack_move_mode:
-            draw_text(self.screen, "ATTACK MOVE", mx + 12, my - 12, self.font_sm, (255, 80, 80))
+            ftext(self.screen, "ATTACK MOVE", mx + 12, my - 12, self.font_sm, (255, 80, 80))
 
         # notifications
         self._render_notifications()
@@ -1595,6 +1648,14 @@ class Game:
         if self.show_message_log:
             self.gui.draw_message_log_full(self.screen, self)
 
+        # Phase 2: edge-of-screen attack arrows for off-screen enemies
+        if self.enemy_units:
+            self._render_attack_arrows()
+
+        # Phase 5: incident alert banner during IMMINENT
+        if self.enemy_ai.state == "imminent":
+            self._render_incident_alert()
+
         # discovery banner (major event announcement)
         if self._discovery_banner:
             self._render_discovery_banner()
@@ -1606,22 +1667,84 @@ class Game:
         if self.paused:
             self._draw_pause_menu()
 
-        # game over / win overlay
-        if self.game_over:
-            label = "SURRENDERED" if self.game_surrendered else "DEFEAT"
-            self._draw_overlay(label, (200, 50, 50))
-        elif self.game_won:
-            label = self.difficulty_profile.get("label", "Medium")
-            self._draw_overlay(f"VICTORY! ({label})", (50, 200, 50))
+        # game over / win overlay — Phase 1 stats panel
+        if self.game_over or self.game_won:
+            self.gui.draw_game_over_panel(self.screen, self)
 
         pygame.display.flip()
+
+    def _render_attack_arrows(self):
+        """Phase 2: Red chevron arrows at screen edge pointing toward off-screen enemies."""
+        import math
+        vr = self.camera.visible_rect()
+        # Cluster enemy positions — find centroid of off-screen enemies
+        off_screen = [(u.x, u.y) for u in self.enemy_units
+                      if u.alive and not vr.collidepoint(u.x, u.y)]
+        if not off_screen:
+            return
+
+        # Group into directional clusters (up to 4 arrows max)
+        # Simple approach: one arrow pointing toward centroid of all off-screen enemies
+        cx_world = sum(x for x, y in off_screen) / len(off_screen)
+        cy_world = sum(y for x, y in off_screen) / len(off_screen)
+
+        # Convert to screen coords
+        sx, sy = self.camera.world_to_screen(cx_world, cy_world)
+
+        # Clamp to screen edge within game area
+        margin = ATTACK_ARROW_SIZE + 5
+        game_top = GAME_AREA_Y + margin
+        game_bot = GAME_AREA_Y + GAME_AREA_H - margin
+        ax = max(margin, min(SCREEN_WIDTH - margin, sx))
+        ay = max(game_top, min(game_bot, sy))
+
+        # Angle from arrow position to enemy centroid
+        dx = sx - ax
+        dy = sy - ay
+        if abs(dx) < 1 and abs(dy) < 1:
+            return
+        angle = math.atan2(dy, dx)
+
+        # Draw chevron arrow
+        s = ATTACK_ARROW_SIZE
+        tip_x = ax + int(math.cos(angle) * s * 0.5)
+        tip_y = ay + int(math.sin(angle) * s * 0.5)
+        left_x = ax + int(math.cos(angle + 2.6) * s * 0.6)
+        left_y = ay + int(math.sin(angle + 2.6) * s * 0.6)
+        right_x = ax + int(math.cos(angle - 2.6) * s * 0.6)
+        right_y = ay + int(math.sin(angle - 2.6) * s * 0.6)
+
+        pulse = 0.6 + 0.4 * abs(math.sin(self.game_time * 4.0))
+        col = tuple(int(c * pulse) for c in ATTACK_ARROW_COLOR)
+        pygame.draw.polygon(self.screen, col,
+                            [(tip_x, tip_y), (left_x, left_y), (right_x, right_y)])
+
+    def _render_incident_alert(self):
+        """Phase 5: Center-screen flash banner during IMMINENT state."""
+        edges = self.enemy_ai.pending_spawn_edges
+        if not edges:
+            return
+        direction_str = ", ".join(e.upper() for e in edges)
+        text = f"ENEMIES APPROACHING — {direction_str}"
+        # Semi-transparent dark backdrop
+        cx = SCREEN_WIDTH // 2
+        cy = GAME_AREA_Y + GAME_AREA_H // 3
+        banner_w, banner_h = 400, 36
+        banner = pygame.Surface((banner_w, banner_h), pygame.SRCALPHA)
+        banner.fill((30, 10, 10, 180))
+        self.screen.blit(banner, (cx - banner_w // 2, cy - banner_h // 2))
+        # Pulsing alpha based on state timer
+        import math
+        pulse = 0.7 + 0.3 * math.sin(self.enemy_ai.state_timer * 8.0)
+        col = tuple(int(c * pulse) for c in INCIDENT_ALERT_COLOR)
+        ftext(self.screen, text, cx, cy - 6, self.font_notif, col, center=True)
 
     def _render_notifications(self):
         """Draw floating notification messages."""
         y = GAME_AREA_Y + 50
         for text, timer, color in self._notifications:
             fade_color = tuple(max(0, min(255, int(c * max(0.0, min(1.0, timer))))) for c in color)
-            draw_text(self.screen, text, SCREEN_WIDTH // 2, y, self.font_notif,
+            ftext(self.screen, text, SCREEN_WIDTH // 2, y, self.font_notif,
                       fade_color, center=True)
             y += 28
 
@@ -1653,7 +1776,7 @@ class Game:
 
         # hint text centered
         text_col = tuple(max(0, int(c * alpha)) for c in color)
-        draw_text(self.screen, text, SCREEN_WIDTH // 2, bar_y + bar_h // 2,
+        ftext(self.screen, text, SCREEN_WIDTH // 2, bar_y + bar_h // 2,
                   self.font_sm, text_col, center=True)
 
     def _render_discovery_banner(self):
@@ -1696,16 +1819,16 @@ class Game:
 
         # title text
         title_color = tuple(int(c * alpha) for c in fmt_color)
-        draw_text(self.screen, title, cx, cy - 12, self.font_notif, title_color, center=True)
+        ftext(self.screen, title, cx, cy - 12, self.font_notif, title_color, center=True)
 
         # subtitle text
         if subtitle:
             sub_color = tuple(max(0, int(200 * alpha)) for _ in range(3))
-            draw_text(self.screen, subtitle, cx, cy + 16, self.font_sm, sub_color, center=True)
+            ftext(self.screen, subtitle, cx, cy + 16, self.font_sm, sub_color, center=True)
 
         # hotkey hint at bottom
         hint_color = (int(120 * alpha), int(120 * alpha), int(140 * alpha))
-        draw_text(self.screen, f"F{fmt_idx + 1} to use this formation",
+        ftext(self.screen, f"F{fmt_idx + 1} to use this formation",
                   cx, cy + box_h // 2 - 8, self.font_xs, hint_color, center=True)
 
     def _render_cmd_effects(self):
@@ -1917,12 +2040,12 @@ class Game:
         self.screen.blit(ghost, (sx, sy))
 
         label = BUILDING_LABELS.get(self.placing_building, "??")
-        draw_text(self.screen, label, sx + px_size // 2, sy + px_size // 2, self.font, (255, 255, 255), center=True)
+        ftext(self.screen, label, sx + px_size // 2, sy + px_size // 2, self.font, (255, 255, 255), center=True)
 
         # cost tooltip above ghost
         cost = GUI.building_cost_str(self.placing_building)
         name = display_name(self.placing_building)
-        draw_text(self.screen, f"{name} - {cost}", sx + px_size // 2, sy - 14, self.font_sm, (255, 255, 200), center=True)
+        ftext(self.screen, f"{name} - {cost}", sx + px_size // 2, sy - 14, self.font_sm, (255, 255, 200), center=True)
 
     def _render_rally_points(self):
         """v10_1: Draw rally point flags for selected buildings."""
@@ -2060,6 +2183,27 @@ class Game:
                 pygame.draw.circle(heat_surf, (255, 40, 40, alpha), (px, py), r_heat)
             mm.blit(heat_surf, (0, 0))
 
+        # Phase 2: minimap edge flash during active incident
+        if (self.enemy_ai.state in ("active", "imminent")
+                and self.enemy_ai.last_spawn_edges):
+            import math as _math
+            flash_alpha = int(120 * (0.5 + 0.5 * _math.sin(self.game_time * 6.0)))
+            flash_surf = pygame.Surface((MINIMAP_SIZE, MINIMAP_SIZE), pygame.SRCALPHA)
+            for edge in self.enemy_ai.last_spawn_edges:
+                if edge == "top":
+                    pygame.draw.line(flash_surf, (255, 60, 40, flash_alpha),
+                                     (0, 0), (MINIMAP_SIZE, 0), 3)
+                elif edge == "bottom":
+                    pygame.draw.line(flash_surf, (255, 60, 40, flash_alpha),
+                                     (0, MINIMAP_SIZE - 1), (MINIMAP_SIZE, MINIMAP_SIZE - 1), 3)
+                elif edge == "left":
+                    pygame.draw.line(flash_surf, (255, 60, 40, flash_alpha),
+                                     (0, 0), (0, MINIMAP_SIZE), 3)
+                elif edge == "right":
+                    pygame.draw.line(flash_surf, (255, 60, 40, flash_alpha),
+                                     (MINIMAP_SIZE - 1, 0), (MINIMAP_SIZE - 1, MINIMAP_SIZE), 3)
+            mm.blit(flash_surf, (0, 0))
+
         # v10_1: rally point flags on minimap
         for b in self.player_buildings:
             if b.alive and b.built and b.rally_point:
@@ -2073,11 +2217,12 @@ class Game:
         vy = int(vr.y * tile_scale)
         vw = max(4, int(vr.width * tile_scale))
         vh = max(4, int(vr.height * tile_scale))
-        pygame.draw.rect(mm, (255, 255, 255), (vx, vy, vw, vh), 1)
+        pygame.draw.rect(mm, (255, 215, 0), (vx, vy, vw, vh), 1)
 
-        # draw border and blit to screen
-        pygame.draw.rect(mm, (180, 180, 180), (0, 0, MINIMAP_SIZE, MINIMAP_SIZE), 1)
+        # blit minimap, then Koch depth-1 frame on top
         self.screen.blit(mm, (MINIMAP_X, MINIMAP_Y))
+        koch_border(self.screen, (MINIMAP_X, MINIMAP_Y, MINIMAP_SIZE, MINIMAP_SIZE),
+                    1, (80, 75, 55))
 
     def _minimap_rect(self):
         return pygame.Rect(MINIMAP_X, MINIMAP_Y, MINIMAP_SIZE, MINIMAP_SIZE)
@@ -2155,7 +2300,7 @@ class Game:
         # title with subtle pulse
         pulse = 0.85 + 0.15 * _m.sin(ticks * 0.003)
         title_col = tuple(int(c * pulse) for c in (200, 220, 255))
-        draw_text(self.screen, "PAUSED", SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 130,
+        ftext(self.screen, "PAUSED", SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 130,
                   self.font_lg, title_col, center=True)
 
         # menu panel background
@@ -2197,17 +2342,17 @@ class Game:
                 text_col = (220, 230, 255)
             else:
                 text_col = (160, 170, 200)
-            draw_text(self.screen, label, menu_x + 16, item_y + 9, self.font, text_col)
+            ftext(self.screen, label, menu_x + 16, item_y + 9, self.font, text_col)
 
         # footer hint
-        draw_text(self.screen, "P to resume  |  Arrow keys to navigate  |  Enter to select",
+        ftext(self.screen, "P to resume  |  Arrow keys to navigate  |  Enter to select",
                   SCREEN_WIDTH // 2, menu_y + menu_h + 16, self.font_xs,
                   (80, 90, 120), center=True)
 
         # game time display
         mins = int(self.game_time) // 60
         secs = int(self.game_time) % 60
-        draw_text(self.screen, f"Time: {mins}:{secs:02d}  |  Incident: {self.enemy_ai.incident_number}/{self.enemy_ai.incidents_required}",
+        ftext(self.screen, f"Time: {mins}:{secs:02d}  |  Incident: {self.enemy_ai.incident_number}/{self.enemy_ai.incidents_required}",
                   SCREEN_WIDTH // 2, menu_y + menu_h + 34, self.font_xs,
                   (80, 90, 120), center=True)
 
@@ -2215,5 +2360,5 @@ class Game:
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 150))
         self.screen.blit(overlay, (0, 0))
-        draw_text(self.screen, text, SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 30, self.font_lg, color, center=True)
-        draw_text(self.screen, "Press R to restart or ESC for menu", SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 30, self.font, COL_TEXT, center=True)
+        ftext(self.screen, text, SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 30, self.font_lg, color, center=True)
+        ftext(self.screen, "Press R to restart or ESC for menu", SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 30, self.font, COL_TEXT, center=True)

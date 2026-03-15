@@ -1,38 +1,122 @@
 # Visual Design Document (VDD)
-## Algorithmic Art Direction for the RTS
+## Resonance — The Mathematics Made Visible
+
+> *"The game should look like what math feels like when you finally understand it —*
+> *the moment the equation stops being symbols and becomes a landscape."*
 
 ---
 
 ## 1. Core Philosophy
 
-### 1.1 Algorithmic Naturalism
+### 1.1 The Visual Thesis
 
-Every visual element is generated procedurally from mathematical functions.
-The look is organic geometry — shapes that emerge from recursive rules
-(coastlines, ferns, crystals). Nothing is hand-drawn; everything is computed.
+Resonance is not a game that uses math for decoration. It is a game where **every pixel is a mathematical object** wearing a visual costume. The art direction exists to make the mathematics legible, beautiful, and emotionally resonant — without ever showing an equation.
 
-The entire game ships as a single .exe with zero external assets.
+The entire game ships as a single `.exe` with zero external assets. Every shape, every color, every animation is computed from parametric functions at render time. This is not a constraint — it is the medium. The visual language IS the mathematical language.
 
-### 1.2 The Three Pillars
+### 1.2 The Seven Visual Pillars
 
-| Pillar | Meaning | Math Lineage |
+The old three pillars (Growth, Force, Order from Chaos) expand to seven — one per tone of the Heptarchy:
+
+| Pillar | Tone | Visual Domain | Math Lineage | Emotional Quality |
+|---|---|---|---|---|
+| **Foundation** | Do (1) | Economy, gathering, the ground | Superellipses, tessellation, hexagonal packing | Stability, warmth, the earth beneath your feet |
+| **Tension** | Re (2) | Melee combat, blades, impact | Polar roses, Lissajous curves | Contained violence, the spring before release |
+| **Precision** | Mi (3) | Ranged combat, trajectories, sight lines | Golden spirals, Fibonacci lattices, parabolic arcs | Sharpness, elegance, the arrow in flight |
+| **Endurance** | Fa (4) | Defense, absorption, immovability | Voronoi cells, Reuleaux curves, convex hulls | Weight, solidity, the mountain that does not move |
+| **Velocity** | Sol (5) | Charge, momentum, decisive action | Cycloids, involutes, velocity fields | Lightning, the moment of commitment |
+| **Sustain** | La (6) | Healing, sustenance, the warm minor | Sinusoidal envelopes, Gaussian distributions | Warmth that holds, the note that refuses to end |
+| **Transcendence** | Ti (7) | The bridge, the boundary, the zero | Mandelbrot boundary, strange attractors, Julia sets | The uncanny — beautiful and terrifying simultaneously |
+
+### 1.3 The Visual Duality — Convergence and Divergence
+
+The game's deepest visual principle: **player = convergent, enemy = divergent**.
+
+| Aspect | Player (Convergent) | Enemy (Divergent) |
 |---|---|---|
-| **Growth** | Buildings/economy feel like living things expanding | L-systems, fractals, Fibonacci |
-| **Force** | Combat units project contained violence, tension | Lissajous curves, polar roses, spirals |
-| **Order from Chaos** | Map, terrain, fog emerge from noise into clarity | Perlin noise, Voronoi, Mandelbrot |
+| **Fractal type** | Mandelbrot interior — bounded, stable, rich | Mandelbrot exterior — escaping, chaotic, burning |
+| **Color temperature** | Cool blues, warm golds, deep greens | Hot reds, acid greens, bruised purples |
+| **Shape character** | Smooth curves, completed symmetries, closed forms | Jagged perturbations, broken symmetries, open wounds |
+| **Motion quality** | Breathing (sine), spring-damped, gravitational | Twitching (noise), jerky, repulsive |
+| **Sound parallel** | Consonance, resolution, the chord coming home | Dissonance, divergence, the series that never sums |
 
-### 1.3 Aesthetic Targets
+This duality is not binary. The **Mandelbrot boundary** — the infinitely complex edge between interior and exterior — is where the most visually complex events occur: harmonic capture, biharmonic resonance, the conversation between fields. At the boundary, convergent and divergent visual languages interleave. The player literally sees order and chaos superimposed.
+
+### 1.4 Aesthetic Targets
 
 - **Resolution-independent**: All shapes scale with zoom via parametric math
-- **Color palette**: Muted earth tones with mathematical accent glows
-- **No outlines**: Shapes defined by fill, overlap, and subtle glow
-- **Subtle motion**: Gentle parameter oscillation gives life without frame-based animation
+- **Color palette**: Seven-tone chromatic system with convergent/divergent variants
+- **No outlines**: Shapes defined by fill, overlap, and mathematical glow
+- **Subtle motion**: Parameter oscillation at ~0.3-2.0 Hz gives life without frame-based animation
+- **Earned complexity**: Visual richness scales with gameplay depth. Layer 0 is spare. Layer 7 is overwhelming. The eye learns to read the math the same way the ear learns to hear it
+- **The silence matters**: Empty space, darkness, the gaps between shapes — these are as designed as the shapes themselves. A formation with perfect harmony surrounded by void should feel like a candle in a cathedral
+
+### 1.5 Code ↔ UI Name Mapping
+
+The codebase uses pragmatic internal names. The UI displays Heptarchy-themed names. This table is the **canonical mapping** — if code and UI disagree, this table wins.
+
+#### Buildings
+
+| Code Name | UI Name (Heptarchy) | Class/Variable | Role |
+|---|---|---|---|
+| `town_hall` | **Tree of Life** | `Building(type="town_hall")` | Economy root, sap source, L-system tree |
+| `barracks` | **Resonance Forge** | `Building(type="barracks")` | Unit training, Sierpinski lattice |
+| `refinery` | **Harmonic Mill** | `Building(type="refinery")` | Resource processing, spirograph |
+| `sentinel` | **Sentinel** | `Building(type="sentinel")` | Lattice anchor + resonance defense (was `tower`) |
+
+> **Migration note**: Code currently uses `tower` in many places. The rename `tower` → `sentinel` is pending in the codebase. Until complete, `tower` in code = Sentinel in design. The old Tower concept (Koch snowflake turret firing cannonballs) no longer exists as a separate building — its defense role is absorbed into Sentinel via resonance fields, and its Koch snowflake shape becomes the Sentinel's aura geometry.
+
+#### Units
+
+| Code Name | UI Name (Heptarchy) | Tone | Dark Mirror |
+|---|---|---|---|
+| `worker` / `gatherer` | **Gatherer** | Do (1) | Blight Reaper |
+| `soldier` | **Warden** | Re (2) | Hollow Warden |
+| `archer` | **Ranger** | Mi (3) | Fade Ranger |
+| `shield` | **Bulwark** | Fa (4) | Ironbark |
+| `knight` | **Lancer** | Sol (5) | Thornknight |
+| `healer` | **Mender** | La (6) | Bloodtithe |
+| `sage` | **Sage** | Ti (7) | Hexweaver |
+
+> **Current state**: Only Gatherer, Warden (Soldier), and Ranger (Archer) exist in code. Shield through Sage are v10_eta+ additions. The code name `soldier` displays as "Warden" in UI strings only — the class remains `Soldier` internally.
+
+#### Resources
+
+| Code Name | UI Name | Icon Shape |
+|---|---|---|
+| `gold` | **Flux** | Fibonacci spiral |
+| `wood` | **Fiber** | Binary tree |
+| `iron` | **Ore** | Octahedron wireframe |
+| `steel` | **Alloy** | Reuleaux triangle |
+| `stone` | **Crystal** | Voronoi cell cluster |
+| `sap` | **Sap** | Bifurcating root (same name) |
 
 ---
 
-## 2. Main Menu — The Mandelbrot Throne
+## 2. The Visual Depth Ladder
+
+The game's visuals are **depth-layer gated**. What the player sees depends on how deep they've gone. This is not just UI — the world itself reveals more at higher layers.
+
+| Layer | What's Visible | Visual Density | Emotional Read |
+|---|---|---|---|
+| **0 — Seed** | Terrain, units as simple shapes, basic HP bars, minimal HUD | Sparse, clean, comprehensible | "I can see everything. I understand this." |
+| **1 — Growth** | Military unit detail (roses, spirals), building fractals at depth 2-3, stance indicators | Moderate | "The shapes are alive." |
+| **2 — Pattern** | Formation geometry visible (spring connections, slot positions), squad borders, chord preview | Rich | "The patterns connect." |
+| **3 — Harmony** | Resonance auras (faint waveform halos), terrain resonance scars visible, characteristic hints on units | Dense | "The world is responding to my math." |
+| **4 — Resonance** | Interference patterns between formations, Sentinel symmetry axes, orbital shell visualization | Very dense | "Everything is connected to everything." |
+| **5 — Music** | Reality distortion effects, visible waveforms, formation singing particles, Lorenz weather trails | Overwhelming to the uninitiated | "The math has become weather." |
+| **6 — Transcendence** | Full orchestral visualization, Tree of Life root network, Mandelbrot boundary on minimap | Maximum | "I am inside the equation." |
+| **7 — ???** | The Mirror Field. Both visual languages simultaneously. The palimpsest. | Beyond | "There is another side." |
+
+**Key principle**: No visual element from Layer N+1 ever appears at Layer N. The world visually *unfolds*. A screenshot at Layer 0 looks like a clean RTS. A screenshot at Layer 6 looks like a mathematical hallucination rendered in real-time. Both are the same game.
+
+---
+
+## 3. Main Menu — The Mandelbrot Throne
 
 **IMPLEMENTED in `menu.py`**
+
+The main menu IS the game's cosmological thesis: the Mandelbrot set as the boundary between the player's world and the enemy's. The camera drifts toward the seahorse valley — the most complex region of the boundary — because that's where the game lives.
 
 Key parameters:
 - Mandelbrot renderer at half-resolution, max_iter=256
@@ -40,32 +124,66 @@ Key parameters:
 - Smooth iteration count: `mu = n - log2(log2(|z|))`
 - Slow zoom drift toward mini-brot in seahorse valley
 - Julia set transitions per difficulty:
-  - Easy: `c = -0.4 + 0.6j` (Douady rabbit)
-  - Medium: `c = -0.8 + 0.156j`
-  - Hard: `c = -0.7269 + 0.1889j` (dendrite)
+  - Easy: `c = -0.4 + 0.6j` (Douady rabbit — friendly, rounded)
+  - Medium: `c = -0.8 + 0.156j` (complex but navigable)
+  - Hard: `c = -0.7269 + 0.1889j` (dendrite — sharp, unforgiving)
+- Difficulty buttons framed with polar roses (3/5/7 petals matching leaf_k)
+- Golden ratio positioning: title at h/φ³, buttons at h/φ²
+
+**Future (v12+):** The menu fractal subtly reflects the player's highest achieved Layer. A Layer 0 player sees the standard Mandelbrot. A Layer 5 player sees deeper zoom with richer color banding. A Layer 7 player sees the boundary *from both sides* — interior and exterior simultaneously visible, the fractal becoming a window rather than a wall.
 
 ---
 
-## 3. Units — Polar Roses & Parametric Warriors
+## 4. Units — The Seven Voices Made Flesh
 
-**IMPLEMENTED in `entities.py`** (unit shape drawing)
+### 4.1 The Visual Grammar
 
-Key shape parameters:
+Every unit is a **polar equation in motion**. The equation defines the shape; the state modifies the parameters; the rank deepens the complexity. Enemy variants use the same equations with **divergent perturbation** — the same math, corrupted.
 
-| Unit | Polar Equation | Key Param |
+| Tone | Unit | Polar Equation | Key Param | Visual Spirit |
+|---|---|---|---|---|
+| **Do (1)** | Gatherer | Superellipse `r = 1/(|cos|^n + |sin|^n)^(1/n)` | n=4, rotated 30° | The hex — nature's tiling choice, the worker bee |
+| **Re (2)** | Soldier | Rose `r = cos(kθ)` | k=3/2 (recruit) → k=5 (captain) | Petals that cut — each rank adds a blade |
+| **Mi (3)** | Archer | Golden spiral `r = ae^(bθ)`, mirrored | b=0.3063 (ln(φ)/(π/2)) | The bow IS a spiral. Fibonacci dots mark the aim |
+| **Fa (4)** | Shield | Reuleaux triangle / constant-width curve | width parameter scales with HP ratio | Curves that cannot be penetrated — same width from every angle |
+| **Sol (5)** | Knight | Cycloid `x = r(t - sin t), y = r(1 - cos t)` | Phase velocity determines charge visual | The wheel of war — rolling thunder, ground contact at every point |
+| **La (6)** | Healer | Gaussian bell curve envelope on sine carrier | σ (spread) scales with heal range | The warmth distribution — strongest at center, fading gently |
+| **Ti (7)** | Sage | Julia set boundary points (sampled) | c parameter from unit's hidden ∅ value | Not a shape — a boundary. Never the same twice. |
+
+**Enemy variants**: Same base equations + jagged high-frequency perturbation:
+```
+r_enemy = r_base + noise * sin(17θ) * (1 + 0.3 * anim_attack)
+```
+Inverted rotation direction. Dual-frequency breathing (corrupted heartbeat). The enemy doesn't have different math — it has the same math *out of tune*.
+
+Rank variants:
+- **Gatherers**: Add concentric hexes (rank 2+), inner counter-rotation (rank 3+), skill-color border glow
+- **Soldiers**: Add petals (k increases with rank), trail ghosts at rank 3+ while moving
+- **Archers**: Add Fibonacci dots along spiral limbs, limb count increases with rank
+- **Shields** (v10_eta): Reuleaux curve becomes n-gon constant-width (3 → 5 → 7 sides with rank)
+- **Knights** (v10_eta): Cycloid gains more lobes, motion blur intensity scales with rank
+- **Healers** (v11): Gaussian envelope widens, concentric heal rings appear
+- **Sages** (v12): Julia set boundary becomes more detailed (higher iteration count) with rank
+
+### 4.2 Characteristic Visual Signatures (v10_eta+)
+
+When a unit's characteristics are revealed through rank, subtle visual modifiers appear:
+
+| Characteristic | Symbol | Visual Effect |
 |---|---|---|
-| **Worker** | Superellipse `r = 1/(|cos|^n + |sin|^n)^(1/n)` | n=4, rotated 30deg |
-| **Soldier** | Rose `r = cos(k*theta)` | k=3/2 (recruit) → k=5 (captain) |
-| **Archer** | Golden spiral `r = a*e^(b*theta)`, mirrored | b=0.3063 (ln(phi)/(pi/2)) |
-| **Enemy** | Same equations + jagged perturbation | `r += noise*sin(17*theta)`, inverted rotation |
-
-Rank variants: Workers add concentric hexes; Soldiers add petals (k increases); Archers add Fibonacci dots along spiral limbs.
+| **Precision (σ)** | Sharp edges | Polar equation exponent increases — shapes become crisper, points sharper |
+| **Resonance (ω)** | Glow pulse | Faint aura oscillation at the unit's natural frequency |
+| **Entropy (S)** | Jitter | Vertex positions gain low-amplitude noise — shape shimmers unpredictably |
+| **Symmetry (Γ)** | Perfect form | Rotational symmetry enforced — shape is mathematically exact |
+| **Density (ρ)** | Compact fill | Shape radius slightly reduced, fill opacity increased |
+| **Elasticity (κ)** | Spring bounce | Shape overshoots and settles on state transitions |
+| **??? (∅)** | *Nothing visible* | The 7th characteristic has no visual. It was never meant to be seen. |
 
 ---
 
-## 3B. Unit Lifecycle Animations — Idle, Move, Fight, Fall
+## 4B. Unit Lifecycle Animations — Idle, Move, Fight, Fall
 
-### 3B.1 Animation Principles
+### 4B.1 Animation Principles
 
 | State | Animates What | Math Mechanism |
 |---|---|---|
@@ -80,7 +198,7 @@ Rank variants: Workers add concentric hexes; Soldiers add petals (k increases); 
 1. **Parametric, not positional**: Animate input parameters of polar equations (radius multiplier, rotation offset, sharpness exponent, perturbation amplitude).
 2. **Timers, not frames**: Uses `game_time` (continuous float) and smooth interpolation. No discrete frame counts.
 
-### 3B.2 Universal Animation State Machine
+### 4B.2 Universal Animation State Machine
 
 ```python
 Unit.__init__:
@@ -99,9 +217,9 @@ Unit.update:
         self._anim_attack = max(0, self._anim_attack - dt / 0.18)
 ```
 
-### 3B.3 Universal Animation Effects
+### 4B.3 Universal Animation Effects
 
-#### 3B.3.1 Damage Flash (White Strobe)
+#### Damage Flash (White Strobe)
 
 ```
 on take_damage:
@@ -115,7 +233,7 @@ during draw:
 
 Enemy variant: flash toward `(200, 40, 40)` red instead of white.
 
-#### 3B.3.2 Idle Breathing (Radius Pulse)
+#### Idle Breathing (Radius Pulse)
 
 ```
 if state == "idle" or state == "guard":
@@ -125,7 +243,7 @@ if state == "idle" or state == "guard":
 
 Per-unit `_anim_time` offsets create staggered breathing across groups.
 
-#### 3B.3.3 Movement Lean (Directional Squash)
+#### Movement Lean (Directional Squash)
 
 ```
 if state == "moving":
@@ -138,7 +256,7 @@ if state == "moving":
 squash_amount = 0.08 + 0.04 * min(1.0, speed / max_speed)
 ```
 
-#### 3B.3.4 Flee Contraction
+#### Flee Contraction
 
 ```
 if state == "fleeing":
@@ -147,7 +265,7 @@ if state == "fleeing":
     rotation_offset += 0.03 * fear_t
 ```
 
-#### 3B.3.5 Death Dissolve (Universal Framework)
+#### Death Dissolve (Universal Framework)
 
 ```
 on death:
@@ -165,96 +283,69 @@ during death animation (_anim_death: 0.0 → 1.0):
 
 ---
 
-### 3B.4 Worker — The Humming Hive
+### 4B.4 Gatherer — The Humming Hive
 
 #### Idle: Hex Breathe + Inner Rotation
-
 ```
 radius_mult = 1.0 + 0.025 * sin(_anim_time * 1.8)
-inner_rotation_offset = _anim_time * 0.15    # 0.15 rad/sec drift
-inner2_rotation_offset = -_anim_time * 0.10   # counter-rotate
-
+inner_rotation_offset = _anim_time * 0.15
+inner2_rotation_offset = -_anim_time * 0.10
 skill_border_alpha = 180 + int(40 * sin(_anim_time * 2.5))
 ```
 
 #### Moving: Waddle Bounce
-
 ```
 if state == "moving":
-    waddle_y = -abs(sin(_anim_time * 6.0)) * 2.0 * z   # 6 Hz bounce
+    waddle_y = -abs(sin(_anim_time * 6.0)) * 2.0 * z
     draw_y = sy + int(waddle_y)
     rotation_offset = 0.04 * sin(_anim_time * 6.0)
 
 if carry_amount > 0:
-    waddle_freq = 4.5       # slower pace
-    waddle_amp = 3.0 * z    # bigger bounce
+    waddle_freq = 4.5; waddle_amp = 3.0 * z
     orbit_wobble = sin(_anim_time * 3.0) * 0.15
 ```
 
 #### Gathering: Rhythmic Pulse
-
 ```
 if state == "gathering":
     gather_phase = (_anim_time * 2.5) % (2 * pi)
-    if gather_phase < 0.4:  # quick compression pulse
-        vertical_squash = 0.88   # 12% vertical compression
+    if gather_phase < 0.4:
+        vertical_squash = 0.88
     else:
         vertical_squash = lerp(0.88, 1.0, (gather_phase - 0.4) / 1.5)
-
     flash = 1.0 if gather_phase < 0.3 else 0.0
     inner_color = lerp(base_inner_color, resource_color, flash * 0.4)
 ```
 
 #### Building: Spinning Industry
-
 ```
 if state == "building":
-    inner_rotation = _anim_time * 1.2     # fast inner spin
-    inner2_rotation = -_anim_time * 0.9    # counter-rotate
+    inner_rotation = _anim_time * 1.2
+    inner2_rotation = -_anim_time * 0.9
     if int(_anim_time / 0.3) != int((_anim_time - dt) / 0.3):
         sparkle_vertex = int(_anim_time * 7) % n_pts
         draw_small_flash(pts[sparkle_vertex], color=(240, 230, 200))
 ```
 
-#### Taking Damage: Hex Shatter-Snap
-
-```
-on take_damage:
-    _anim_flash = 1.0
-
-during draw with _anim_flash > 0:
-    for each vertex (x, y) in hex_pts:
-        dx, dy = x - cx, y - cy
-        explode_t = _anim_flash ** 3  # sharp snap, then slow settle
-        x += dx * 0.15 * explode_t
-        y += dy * 0.15 * explode_t
-```
-
 #### Dying: Honeycomb Dissolution
-
 ```
 death animation (0.0 → 1.0 over 0.6 sec):
     for i in range(6):
         wedge_pts = [center, hex_pts[i*n//6], hex_pts[(i+1)*n//6]]
         drift_angle = (2 * pi * i / 6) + death_seed_offset[i]
         drift_dist = _anim_death * 20 * z
-        wedge_offset_x = drift_dist * cos(drift_angle)
-        wedge_offset_y = drift_dist * sin(drift_angle)
         wedge_rotation = _anim_death * 0.8
         alpha = int(255 * max(0, 1.0 - _anim_death * 1.6))
         draw_wedge(translated + rotated, color, alpha)
 ```
 
-Skill-color afterglow: faint ring in skill color (alpha 40→0 over final 0.2s).
-
 ---
 
-### 3B.5 Soldier — The Pulsing Blade
+### 4B.5 Soldier — The Pulsing Blade
 
 #### Idle / Guard: Rose Rotation + Petal Breathe
-
 ```
-idle_rotation = _anim_time * 0.3     # 0.3 rad/sec
+idle_rotation = _anim_time * 0.3
 radius_mult = 1.0 + 0.03 * sin(_anim_time * 2.0)
 
 if state == "idle" and target_entity:
@@ -265,951 +356,534 @@ inner_rotation = -_anim_time * 0.5  # counter-rotate inner rose
 ```
 
 #### Moving: Forward Lean + Trail Ghosts
-
 ```
 if state == "moving":
     target_rotation = move_angle - pi/2
     current_rotation = lerp(current_rotation, target_rotation, 0.15)
     squash_amount = 0.15
     flutter = sin(_anim_time * 8.0) * 0.03
-    radius_mult = 1.0 + flutter
 
 if rank >= 3 and state == "moving":
     for ghost_i, ghost_age in enumerate([0.10, 0.20]):
         ghost_alpha = int(60 * (1.0 - ghost_i * 0.5))
-        ghost_x = sx - vx * ghost_age
-        ghost_y = sy - vy * ghost_age
         draw_soldier_shape(ghost_x, ghost_y, r * 0.95, alpha=ghost_alpha)
 ```
 
 #### Attacking: Lunge + Sharpness Spike
-
 ```
-on attack_timer reset (attack lands):
+on attack_timer reset:
     _anim_attack = 1.0
 
 Phase 1 — LUNGE (attack_t: 1.0 → 0.5, ~90ms):
-    lunge_dir = atan2(target.y - self.y, target.x - self.x)
-    lunge_offset_x = 6 * z * attack_t * cos(lunge_dir)
-    lunge_offset_y = 6 * z * attack_t * sin(lunge_dir)
-    effective_sharpness = 0.6 - 0.3 * attack_t   # 0.6 → 0.3 (sharper)
+    lunge_offset = 6 * z * attack_t * toward_target
+    effective_sharpness = 0.6 - 0.3 * attack_t
     radius_mult = 1.0 + 0.15 * attack_t
 
 Phase 2 — RETRACT (attack_t: 0.5 → 0.0, ~90ms):
     lunge_offset *= attack_t * 2
-    effective_sharpness = 0.6 - 0.3 * attack_t * 2
-    radius_mult = 1.0 + 0.15 * attack_t * 2
 ```
 
 Berserker trait: `lunge_distance = 9 * z`, sharpness drops to 0.15.
 
-#### Taking Damage: Petal Buckle
-
-```
-during _anim_flash > 0:
-    radius_mult = 1.0 - 0.12 * (_anim_flash ** 2)
-    effective_k = k + 0.3 * sin(_anim_time * 30) * _anim_flash
-```
-
 #### Dying: Petal Shed
-
 ```
 death animation (0.0 → 1.0 over 0.6 sec):
     n_petals = int(2 * k)
     shed_interval = 0.8 / n_petals
-
     for petal_i in range(n_petals):
         petal_birth = petal_i * shed_interval
-        if _anim_death < petal_birth:
-            draw_petal_segment(petal_i, attached=True)
-        else:
-            petal_age = _anim_death - petal_birth
-            drift = petal_age * 30 * z
-            tumble = petal_age * 2.5
-            alpha = int(255 * max(0, 1.0 - petal_age * 2.5))
+        if _anim_death >= petal_birth:
+            drift = (anim_death - petal_birth) * 30 * z
+            tumble = (anim_death - petal_birth) * 2.5
+            alpha = int(255 * max(0, 1.0 - (anim_death - petal_birth) * 2.5))
             draw_detached_petal(petal_i, drift, tumble, alpha)
-
-    if rank >= 3:
-        center_alpha = int(255 * max(0, 1.0 - _anim_death * 1.2))
-        draw_center_dot(alpha=center_alpha)
 ```
 
-Rank 3+: petals shed in golden-angle spiral pattern. Rank 4: final blue flash on center dot.
+Rank 3+: petals shed in golden-angle spiral. Rank 4: final blue flash on center dot.
 
 ---
 
-### 3B.6 Archer — The Flexing Bow
+### 4B.6 Archer — The Flexing Bow
 
 #### Idle: Limb Sway + String Tension
-
 ```
-idle_flex = sin(_anim_time * 1.5) * 0.04  # 4% limb flex
-top_limb_offset = idle_flex
-bot_limb_offset = -idle_flex
+idle_flex = sin(_anim_time * 1.5) * 0.04
 string_x_offset = -idle_flex * r * 0.3
 arrow_y_offset = sin(_anim_time * 2.0) * 1.0 * z
-
 dot_brightness = 0.8 + 0.2 * sin(_anim_time * 1.2 + dot_index * 0.7)
 ```
 
-#### Moving: Bounce + Arrow Sway
-
-```
-if state == "moving":
-    bounce_y = -abs(sin(_anim_time * 5.0)) * 1.5 * z
-    arrow_angle_offset = sin(_anim_time * 5.0) * 0.06
-    bow_tilt = 0.08
-```
-
 #### Shooting: Full Draw-Release Cycle
-
 ```
-Phase 1 — NOCK (attack_timer: 100% → 70% of attack_cd):
+Phase 1 — NOCK (100% → 70% of attack_cd):
     string_draw = lerp(0, r * 0.25, nock_t)
-    arrow_tail_x = lerp(normal_tail, pulled_tail, nock_t)
     limb_spread = 1.0 + 0.06 * nock_t
 
-Phase 2 — HOLD (attack_timer: 70% → 15%):
+Phase 2 — HOLD (70% → 15%):
     string_draw = r * 0.25
-    limb_spread = 1.06
     tremble = sin(_anim_time * 25) * 0.01 * (1.0 - hold_t)
-    string_draw += tremble * r
 
-Phase 3 — RELEASE (attack_timer: 15% → 0%, arrow fires):
-    release_t = 1.0 - (attack_timer / (attack_cd * 0.15))
-    string_draw = r * 0.25 * (1.0 - release_t ** 0.5)  # fast snap (sqrt curve)
-    limb_spread = 1.06 - 0.10 * release_t   # limbs overshoot inward
+Phase 3 — RELEASE (15% → 0%):
+    string_draw = r * 0.25 * (1.0 - release_t ** 0.5)  # fast sqrt snap
+    limb_spread = 1.06 - 0.10 * release_t   # overshoot inward
     recoil_x = -3 * z * (1.0 - release_t)
-    draw_nocked_arrow = False
 
-Aftermath — SETTLE (next 0.2 sec):
-    settle_t = min(1.0, time_since_release / 0.2)
+Aftermath — SETTLE (0.2 sec):
     limb_spread = 1.0 + 0.04 * sin(settle_t * pi * 3) * (1.0 - settle_t)
     string_x = normal_x + 2 * sin(settle_t * pi * 4) * (1.0 - settle_t)
 ```
 
-Sharpshooter trait: hold-phase tremble amplitude * 0.3.
-
-#### Taking Damage: String Vibration
-
-```
-during _anim_flash > 0:
-    string_x_offset = sin(_anim_time * 50) * 3 * z * _anim_flash
-    draw_x += sin(_anim_time * 35) * 1.5 * z * _anim_flash
-    draw_y += cos(_anim_time * 41) * 1.0 * z * _anim_flash
-```
-
 #### Dying: Bow Uncoils
-
 ```
 death animation (0.0 → 1.0 over 0.6 sec):
     effective_theta_range = (1.0 - _anim_death) * normal_theta_range
-
     if _anim_death > 0.2:
         string_break_t = (_anim_death - 0.2) / 0.3
-        top_string_curl = string_break_t * 0.5
-        bot_string_curl = -string_break_t * 0.5
         string_alpha = int(255 * max(0, 1.0 - string_break_t * 2))
-
     arrow_fall_y = _anim_death * 15 * z
-    arrow_rotation = _anim_death * 1.2
-
     for dot_i, dot in enumerate(fib_dots):
         dot_shed_time = 0.3 + dot_i * 0.1
         if _anim_death > dot_shed_time:
             dot_drift = (_anim_death - dot_shed_time) * 25 * z
-            dot_angle = golden_angle * dot_i
-
-    alpha = int(255 * max(0, 1.0 - _anim_death * 1.5))
 ```
 
 ---
 
-### 3B.7 Siege — The Grinding Engine
+### 4B.7 Siege — The Grinding Engine
 
 #### Idle: Spike Pulse + Inner Rotation
-
 ```
-radius_mult = 1.0 + 0.04 * sin(_anim_time * 1.2)  # slow, heavy pulse
+radius_mult = 1.0 + 0.04 * sin(_anim_time * 1.2)  # slow, heavy
 inner_gear_rotation = _anim_time * 0.4
 spike_emphasis = 1.0 + 0.06 * abs(sin(_anim_time * 0.8))
 ```
 
-#### Moving: Rolling Advance
-
-```
-if state == "moving":
-    body_rotation += dt * 0.5   # slow roll
-    bob_y = sin(_anim_time * 2.5) * 1.5 * z
-```
-
 #### Attacking: Spike Extend
-
 ```
-on attack:
-    _anim_attack = 1.0
-
-during attack animation:
-    spike_mult = 1.0 + 0.35 * _anim_attack ** 2
-    inner_flash = _anim_attack * 0.6
-    for each spike_i:
-        spike_angle = spike_theta(spike_i)
-        angle_to_target = atan2(target.y - self.y, target.x - self.x)
-        alignment = max(0, cos(spike_angle - angle_to_target))
-        spike_extra = alignment * 0.2 * _anim_attack
+spike_mult = 1.0 + 0.35 * _anim_attack ** 2
+for each spike_i:
+    alignment = max(0, cos(spike_angle - angle_to_target))
+    spike_extra = alignment * 0.2 * _anim_attack
 ```
 
 #### Dying: Implosion
-
 ```
 death animation (0.0 → 1.0 over 0.8 sec):
     spike_mult = 1.0 - _anim_death * 0.8
     body_radius = radius * (1.0 - _anim_death * 0.7)
-
     if _anim_death > 0.6:
-        fragment_t = (_anim_death - 0.6) / 0.4
-        for frag_i in range(4):
-            frag_angle = 2 * pi * frag_i / 4 + death_seed_offset
-            frag_drift = fragment_t * 20 * z
-            draw_fragment(frag_angle, frag_drift, alpha=fading)
-
-    if _anim_death > 0.85:
-        flash_alpha = int(200 * (1.0 - (_anim_death - 0.85) / 0.15))
-        draw_circle(center, r * 0.3, (200, 100, 20, flash_alpha))
+        fragments burst outward with orange flash
 ```
 
 ---
 
-### 3B.8 Elite — The Unstable Star
+### 4B.8 Elite — The Unstable Star
 
 #### Idle: Counter-Rotating Rose Orbit
-
 ```
 outer_rotation = _anim_time * 0.25
 inner_rotation = -_anim_time * 0.35
 center_glow_radius = max(2, r // 5) + sin(_anim_time * 3.0) * 1.5 * z
-center_glow_alpha = 160 + int(60 * sin(_anim_time * 2.0))
-```
-
-#### Moving: Rose Alignment
-
-```
-if state == "moving":
-    target_rotation = move_angle - pi/2
-    outer_rotation = lerp(outer_rotation, target_rotation, 0.2)
-    inner_rotation = lerp(inner_rotation, target_rotation + pi, 0.15)
-    center_glow_alpha = 220
-```
-
-#### Attacking: Aura Expansion
-
-```
-on attack:
-    _anim_attack = 1.0
-
-during attack:
-    outer_radius = r * (0.95 + 0.25 * _anim_attack)
-    inner_radius = r * (0.55 - 0.15 * _anim_attack)
-    center_glow = max(3, r // 3) * (1.0 + 0.5 * _anim_attack)
-    halo_radius = r * (1.05 + 0.15 * _anim_attack)
 ```
 
 #### Dying: Binary Fission
-
 ```
 death animation (0.0 → 1.0 over 0.7 sec):
-    split_angle = death_seed * 2 * pi / 1000
-    split_dist = _anim_death * 35 * z
-
-    outer_cx = cx + split_dist * cos(split_angle)
-    outer_cy = cy + split_dist * sin(split_angle)
-    inner_cx = cx - split_dist * cos(split_angle)
-    inner_cy = cy - split_dist * sin(split_angle)
-
-    outer_radius = r * 0.95 * (1.0 - _anim_death * 0.7)
-    inner_radius = r * 0.55 * (1.0 - _anim_death * 0.6)
-    glow_alpha = int(180 * (1.0 - _anim_death * 1.3))
-
-    if _anim_death > 0.8:
-        for i in range(8):
-            dot_angle = 2 * pi * i / 8 + death_seed
-            dot_drift = (_anim_death - 0.8) * 40 * z
-            draw_dot(center + drift, alpha=fading)
+    outer and inner roses drift apart along death_seed angle
+    radii shrink, glow fades
+    final dot burst at 80% progress
 ```
 
 ---
 
-### 3B.9 Implementation Details
+### 4B.9 Animation Implementation Details
 
-#### 3B.9.1 Animation Timer Management
-
+#### Timer Management
 ```python
-# Init in __init__:
-self._anim_time = random.uniform(0, 10.0)
+self._anim_time = random.uniform(0, 10.0)  # desync
 self._anim_flash = 0.0    # 1.0 → 0.0 over 0.12s
 self._anim_attack = 0.0   # 1.0 → 0.0 over 0.18s
 self._anim_dying = False
 self._anim_death = 0.0    # 0.0 → 1.0 over 0.6s
-self._death_seed = 0
-
-# Update in update():
-self._anim_time += dt
-self._anim_flash = max(0, self._anim_flash - dt / 0.12)
-self._anim_attack = max(0, self._anim_attack - dt / 0.18)
-if self._anim_dying:
-    speed = 1.0 / 0.6   # 0.8 for siege
-    self._anim_death = min(1.0, self._anim_death + dt * speed)
-
-# Triggers:
-# in take_damage(): self._anim_flash = 1.0
-# in _do_attack():  self._anim_attack = 1.0
-# when hp <= 0:     self._anim_dying = True; self._death_seed = hash(id(self)) % 10000
 ```
 
-#### 3B.9.2 Draw Integration
-
-```python
-def draw(self, surf, cam):
-    radius_mult = 1.0
-    rotation_offset = 0.0
-    offset_x, offset_y = 0, 0
-    sharpness_mod = 0.0
-    squash_dir = None
-    squash_amount = 0.0
-    alpha = 255
-
-    if self._anim_dying:
-        alpha = int(255 * max(0, 1.0 - self._anim_death * 1.6))
-        ... # unit-type-specific death
-    else:
-        if state == "idle":
-            radius_mult += 0.03 * sin(self._anim_time * 1.8)
-        if state == "moving":
-            ... # lean + bounce
-        if self._anim_flash > 0:
-            ... # flash overlay
-        if self._anim_attack > 0:
-            ... # lunge offset
-
-    r = int(base_r * radius_mult)
-    sx += offset_x
-    sy += offset_y
-    self._draw_shape(surf, sx, sy, r, z, ...)
-```
-
-#### 3B.9.3 Performance Budget
-
-| Component | Per-Unit Cost | Notes |
-|---|---|---|
-| Timer updates | 4 float ops | In `update()`, negligible |
-| Idle breath | 1 `sin` call | ~0 cost |
-| Move lean | 1 `atan2` + 1 `cos` per vertex | Absorb into existing polar loop |
-| Attack lunge | 2 `cos/sin` + lerps | Only on attacking units |
-| Damage flash | 1 color lerp | Only on recently-hit units |
-| Death dissolve | N fragments x transform | Only on dying units (rare, brief) |
-| Trail ghosts | 1-2 extra shape draws | Rank 3+ soldiers only while moving |
-
-Worst case: 200 units all fighting = ~200 extra sin/cos calls/frame. At 60 FPS: **< 0.5ms**.
-
-#### 3B.9.4 Enemy Animation Corruption
-
+#### Enemy Animation Corruption
 ```
 if is_enemy:
-    breath = sin(_anim_time * 1.8) * 0.5 + sin(_anim_time * 2.7) * 0.5
-    radius_mult = 1.0 + 0.04 * breath  # irregular dual-frequency breathing
-    squash_amount *= 1.5               # 18% lean instead of 12%
-    lunge_distance *= 1.2              # 20% farther attack lunge
-    death_speed = 1.0 / 0.4            # faster death (0.4s vs 0.6s)
-    jagged_amplitude = base_jagged * (1.0 + 0.3 * _anim_attack)
+    breath = sin(t * 1.8) * 0.5 + sin(t * 2.7) * 0.5  # irregular dual-freq
+    squash_amount *= 1.5    # 18% lean instead of 12%
+    lunge_distance *= 1.2   # 20% farther attack
+    death_speed = 1.0 / 0.4  # faster death (0.4s vs 0.6s)
+    jagged_amplitude = base * (1.0 + 0.3 * _anim_attack)
 ```
 
-#### 3B.9.5 Trait-Modified Animations
+#### Trait-Modified Animations
 
 | Trait | Animation Effect |
 |---|---|
 | **Brave** | Idle pulse amplitude +50% |
-| **Cowardly** | Idle pulse faster (+30% freq), smaller amplitude |
-| **Aggressive** | Attack lunge distance +30%, faster retract |
-| **Cautious** | Slower idle rotation, minimal movement lean |
-| **Berserker** | Below 50% HP: sharpness permanently spiked, no settle |
-| **Nimble** | Movement bounce amplitude +40%, faster flutter |
-| **Inspiring** | Center dot/glow pulses brighter (rank 3+ aura) |
-| **Lone Wolf** | No trail ghosts even at high rank |
-| **Sharpshooter** | Archer hold-phase tremble reduced 70% |
+| **Aggressive** | Attack lunge +30%, faster retract |
+| **Berserker** | Below 50% HP: sharpness permanently spiked |
+| **Nimble** | Movement bounce +40%, faster flutter |
+| **Sharpshooter** | Hold-phase tremble reduced 70% |
+
+#### Performance Budget
+Worst case: 200 units all fighting = ~200 extra sin/cos calls/frame. At 60 FPS: **< 0.5ms**.
 
 ---
 
-## 4. Buildings — L-System Fortresses
+## 5. Buildings — L-System Fortresses
 
-**IMPLEMENTED in `entities.py`** (building shape drawing)
+### 5.1 Current Building Shapes
 
-Key shape parameters:
+**IMPLEMENTED in `building.py` / `building_shapes.py`**
 
 | Building | Shape | Equation/Grammar | Key Params |
 |---|---|---|---|
-| **Town Hall** | L-system tree | `F -> FF+[+F-F-F]-[-F+F+F]`, angle=22.5deg | Iter 0-4, grows with construction |
+| **Town Hall / Tree of Life** | L-system tree | `F -> FF+[+F-F-F]-[-F+F+F]`, angle=22.5° | Iter 0-4, grows with construction |
 | **Barracks** | Sierpinski triangle | Subdivide equilateral, remove center | Depth 0-3 |
 | **Refinery** | Spirograph (epitrochoid) | `x=(R+r)cos(t)-d*cos((R+r)/r*t)` | R=5, r=3, d=5 |
-| **Tower** | Koch snowflake | Koch curve on square base | Depth 2-3, Lv.2 gets orange tips |
+| **Sentinel** | Standing stone + Koch aura | Reuleaux monolith body, Koch-curve resonance field | Voronoi texture, D1-D8 symmetry anchoring |
 
 Construction: fractal depth/iterations increase with build_progress.
 Ruin state: iterations drop to minimum, colors desaturate.
 
+### 5.2 The Sentinel — Lattice Anchor & Resonance Defense (v10_zeta+)
+
+The Sentinel is the unified defense and geometry building. It replaces the old "Tower" concept entirely — there are no cannonballs, no turrets. Defense comes from **harmonic resonance**: the Sentinel projects a field that damages divergent (enemy) entities passing through its symmetry zone. The more Sentinels form dihedral symmetry, the stronger and wider the resonance field becomes.
+
+Sentinels are the visual backbone of base-building. They are **standing stones** — visually distinct from all functional buildings. They anchor the geometry within which everything else gains meaning, AND they protect the base through the mathematics of their arrangement.
+
+#### Sentinel Shape
+
+```
+Standing stone: tall Reuleaux triangle (constant-width curve)
+    aspect ratio 1:2.5 (tall, monolithic)
+    base color: (140, 130, 100) warm stone
+    surface: Voronoi cell texture (5-7 cells, deterministic per position)
+    glow: faint aura whose color matches tuned tone (v10_eta+)
+    animation: slow 0.2 Hz vertical pulse (breathing monolith)
+
+Resonance field (Koch aura):
+    Koch snowflake outline centered on Sentinel, radius = defense_range
+    depth: scales with Sentinel level (depth 1 at Lv.1, depth 2 at Lv.2)
+    color: (180, 160, 255) resonance glow at 30% alpha, pulses at 0.5 Hz
+    when enemies inside field: Koch outline brightens, pulse accelerates to 2 Hz
+    field overlaps: where two Sentinel Koch fields intersect, interference
+        pattern appears (constructive = bright nodes, destructive = dark)
+```
+
+#### Resonance Defense Mechanics (Visual)
+
+The Sentinel does not fire projectiles. It **resonates**. Defense is expressed visually through:
+
+1. **Passive Field**: Koch snowflake outline at defense range, faintly pulsing. Enemies entering the field take continuous damage — visualized as their divergent perturbation increasing (shapes become more jagged, colors destabilize toward white noise).
+
+2. **Harmonic Pulse** (replaces old "Sentinel's Cry"): When triggered (cooldown-based), a circular resonance wave expands outward from the Sentinel. Visual: concentric Koch rings expanding and fading, color shifts from resonance glow to gold at the wavefront. Damages enemies, buffs allies.
+
+3. **Lattice Amplification**: When Sentinels form symmetry groups (D2+), the resonance fields merge along symmetry axes. Visual: Koch outlines connect into a unified boundary. Interior becomes a **resonance zone** — faint golden wash, visible standing wave pattern at Layer 4+. Enemies inside the unified zone take amplified damage.
+
+4. **Dissonance Absorption**: When an enemy dies inside a Sentinel's field, the death energy is visually drawn toward the Sentinel as contracting spirograph trails (the old cannonball trail math, repurposed). The Sentinel's Voronoi texture briefly flickers with absorbed color before returning to stone.
+
+```
+Field damage visual on enemy:
+    perturbation_amp += 0.15 * field_strength    # shapes become more jagged
+    color = lerp(base_color, (255, 255, 255), field_strength * 0.3)  # bleaching
+    vertex_noise_freq = 17 + 8 * field_strength  # higher frequency corruption
+
+Harmonic pulse visual:
+    for ring_i in range(3):
+        ring_radius = pulse_progress * max_range - ring_i * 15
+        koch_depth = 2 if ring_i == 0 else 1
+        alpha = int(200 * (1.0 - pulse_progress) * (1.0 - ring_i * 0.3))
+        draw_koch_circle(center, ring_radius, koch_depth, RESONANCE_GLOW, alpha)
+```
+
+#### Symmetry Axis Visualization
+
+When Sentinels form dihedral symmetry groups, the axes become visible:
+
+| State | Visual |
+|---|---|
+| **Complete axis** | Gold line `(218, 165, 32)`, 1px, full opacity, faint glow |
+| **Broken axis** (Sentinel missing) | Dashed line `(180, 80, 40)`, flickering at 2 Hz, gap pulses red |
+| **Potential axis** (one more Sentinel needed) | Dotted line `(80, 75, 55)`, 30% alpha, slow fade pulse |
+| **Corrupted axis** (Bloodtithe corruption) | Axis color inverts to `(120, 20, 60)`, dark undertone glow, particles drift downward |
+
+#### Ghost Placement Guides
+
+When placing a Sentinel:
+- **Mirror ghosts**: Translucent Sentinel outlines at positions that would complete the next symmetry order
+- **Fill zone**: Interior area shaded by completion percentage (0% = transparent, 100% = faint gold wash)
+- **Harmonic preview**: If tuning is available (v10_eta), ghost shows what tone each position would optimally hold
+
+#### Base Symmetry Visual Progression
+
+| Order | Geometry | Visual Character |
+|---|---|---|
+| **D1** (2 Sentinels) | Mirror line | Single gold axis, simple bilateral glow |
+| **D2** (4 Sentinels) | Cross | Perpendicular axes, quadrant shading |
+| **D3** (6 Sentinels) | Triangle | Three axes forming Star of David pattern |
+| **D4** (8 Sentinels) | Square | Four axes, strong grid feel, visible mirror zones |
+| **D6** (12 Sentinels) | Hexagon | Six axes, honeycomb interior glow, nature's tiling |
+| **Fractal L1+** | Meta-structure | Outer axes connect to inner, self-similar glow pattern |
+
 ---
 
-## 4B. Building Lifecycle Fractals — Damage, Ruin & Repair
+## 5B. Building Lifecycle Fractals — Damage, Ruin & Repair
 
-### 4B.1 Visual States
+### 5B.1 Universal Damage Language
 
-| State | Trigger | Visual Effect |
-|---|---|---|
-| **Healthy** | `hp == max_hp` | Full fractal, bright colors, active animation |
-| **Damaged** | `hp < max_hp` | Progressive degradation interpolated by HP ratio |
-| **Ruined** | `hp == 0, ruined=True` | Collapsed fractal, debris, desaturated palette |
-| **Repairing** | Worker assigned, `build_progress` rising | Restoration glow, regrowth animation |
-
-Damage is a gradient, not a switch.
-
-### 4B.2 Universal Damage Language
-
-#### 4B.2.1 Color Desaturation Gradient
-
+#### Color Desaturation Gradient
 ```
 damage_ratio = 1.0 - (hp / max_hp)
-
-For each color channel (R, G, B):
-    gray = 0.299*R + 0.587*G + 0.114*B
-    damaged_c = lerp(original_c, gray, damage_ratio * 0.6)
+For each channel: damaged_c = lerp(original_c, gray, damage_ratio * 0.6)
 ```
-
 0.6 cap prevents total gray — ruins retain ghost of original hue.
 
-#### 4B.2.2 Damage Shake (Micro-Tremor)
-
-```
-on_hit:
-    shake_timer = 0.15 sec
-    shake_amplitude = 3px * (damage / max_hp)
-
-during shake_timer > 0:
-    draw_offset_x = shake_amplitude * sin(time * 40)
-    draw_offset_y = shake_amplitude * cos(time * 53)
-    shake_timer -= dt
-    shake_amplitude *= 0.85
-```
-
+#### Damage Shake (Micro-Tremor)
 Two frequencies (40/53 Hz) create Lissajous micro-orbit, damps in ~150ms.
 
-#### 4B.2.3 Crack Lines (Universal)
-
+#### Crack Lines (Deterministic)
 ```
-n_cracks = int((1.0 - hp_ratio) * 5)    # 0 at full, up to 3 at ruin
-crack_seed = building_id * 7919          # deterministic per building
-
-for each crack:
-    start = random_point_on_edge(seed)
-    for segment in range(3 + crack_index):
-        angle = seeded_noise(segment) * pi/3
-        draw_line(dark_color, start, start + polar(angle, length))
-        start += polar(angle, length)
+n_cracks = int((1.0 - hp_ratio) * 5)
+crack_seed = building_id * 7919
+Color: (8, 5, 3) near-black, 1px width
 ```
 
-Color: `(8, 5, 3)` near-black, 1px width. Deterministic (same seed = same pattern).
+### 5B.2 Per-Building Damage, Ruin & Repair
 
-#### 4B.2.4 Damage Particle Debris
+**Town Hall — The Dying & Reborn Tree:**
+- Damage: Autumn decay (green → amber → brown → gray). Branch pruning by hash threshold
+- Ruin: Charred stump, iter 1, smoke wisps, two ember dots
+- Repair: Spring regrowth — tips flash bright green, bloom pulse at 100%
 
-Below 40% HP, small fragments drift downward:
-- Shape: tiny triangle (3-5px), darkened building palette color
-- Motion: 20px/sec fall + sine drift (5px amplitude, 2sec period)
-- Lifetime: 1.5 sec, respawn at random building edge
-- Alpha: 180 → 0 over lifetime
+**Barracks — The Shattering & Reforging Lattice:**
+- Damage: Fracture propagation (jittering sub-triangles, depth reduction)
+- Ruin: Outer border only (dashed), scattered fragment triangles
+- Repair: Crystallization wave — triangles flash and snap into place
+
+**Refinery — The Grinding Halt & Restart:**
+- Damage: Wobble & stutter (rotation speed modulated by sin(t×3), cusp dots dim)
+- Ruin: Simple dashed circle, scattered cusp dots
+- Repair: 4-phase restart sequence — dots return, curve re-emerges, rotation accelerates
+
+**Sentinel — The Cracking & Retuned Monolith:**
+- Damage: Voronoi fracture propagation (cells crack apart, resonance field flickers and shrinks). Koch aura depth reduces (2→1→0). Stone color desaturates toward gray
+- Ruin: Cracked monolith leaning 15°, Voronoi cells fully separated with dark gaps, Koch aura gone, faint residual glow at base (the stone remembers)
+- Repair: Harmonic retuning — Voronoi cells knit back together with gold flash at seams, Koch aura re-emerges ring by ring (depth 0→1→2), final pulse wave on full repair
+
+### 5B.3 Performance Budget
+Total: **< 2% frame time** for full base under attack. Max 8 particles per building.
 
 ---
 
-### 4B.3 Town Hall — The Dying & Reborn Tree
+## 6. Terrain — Noise Fields, Voronoi & Living Strata
 
-#### Damage: Autumn Decay
+### 6.1 Current Terrain Rendering
 
-```
-hp_ratio > 0.75:  SUMMER — full green canopy, 4 iterations
-hp_ratio > 0.50:  AUTUMN — tips green→amber→brown, 20% branches pruned
-hp_ratio > 0.25:  LATE AUTUMN — tips brown/gray, 40% pruned, iter→3
-                   Trunk: (139,90,43) → (80,50,25)
-hp_ratio ≤ 0.25:  WINTER — all tips gray, 60% pruned, iter→2
-```
+**Grass**: Perlin noise, two octaves. Base green `(46,139,87)` with ±15 value noise.
 
-Branch pruning:
-```
-prune_threshold = (1.0 - hp_ratio) * 0.6
-for each branch_start '[':
-    branch_hash = hash(branch_index + building_id)
-    if (branch_hash % 1000) / 1000.0 < prune_threshold:
-        skip to matching ']'
-```
-
-Leaf fall particles (below 50% HP): damped pendulum spiraling down:
-```
-x(t) = start_x + amplitude * sin(omega * t) * exp(-0.5 * t)
-y(t) = start_y + fall_speed * t
-color = lerp(green, amber, t / lifetime)
-```
-
-#### Ruin: The Charred Stump
-
-- Iter locked to 1, colors → charcoal: trunk `(30,20,12)`, tips `(15,12,8)`
-- Smoke wisp: 3-4 circles (6-10px), alpha 40-80, y_drift -15px/s, x_drift sin sway, color `(60,55,50)`
-- Two ember dots (2px, `(200,80,20)`) flicker at trunk base
-
-#### Repair: Spring Regrowth
-
-```
-during repair:
-    tip_color = lerp(charcoal_gray, bright_spring_green, build_progress)
-    spring_green = (60, 200, 70)   # brighter than normal
-
-    if branch_just_appeared(this_iteration):
-        tip_glow = lerp(spring_green, (150, 255, 120), pulse_t)
-        pulse_t decays 1.0 → 0.0 over 0.8 sec
-```
-
-- Smoke fades at 25% progress, embers extinguish at 15%
-- At 100%: bloom pulse — all tips flash bright green for 0.3s
-
----
-
-### 4B.4 Barracks — The Shattering & Reforging Lattice
-
-#### Damage: Fracture Propagation
-
-```
-hp_ratio > 0.75:  INTACT — full depth 4, crisp colors
-hp_ratio > 0.50:  STRESSED — outermost sub-triangles jitter 2-3px
-hp_ratio > 0.25:  FRACTURING — depth→3, 30% leaf triangles outlines only
-hp_ratio ≤ 0.25:  CRUMBLING — depth→2, 50% outlines, border flickers
-```
-
-Fragment jitter:
-```
-for each leaf_triangle vertex (x, y):
-    jitter_seed = hash(vertex_index + building_id + damage_epoch)
-    if hp_ratio < 0.5:
-        offset_x = seeded_random(-3, 3) * (1.0 - hp_ratio)
-        offset_y = seeded_random(-3, 3) * (1.0 - hp_ratio)
-```
-
-`damage_epoch` increments per hit — fragments shift on impact, then hold.
-
-#### Ruin: The Broken Frame
-
-- Only outer equilateral border remains (dashed: 6px segments, 4px gaps)
-- 3-5 scattered fragment triangles at base, dark maroon `(50,15,15)`, slightly rotated
-- Interior empty
-
-#### Repair: Crystallization Wave
-
-```
-during repair:
-    effective_depth = int(build_progress * 4 + 0.5)
-    for each newly_appearing_triangle:
-        flash_color = (220, 100, 100)
-        flash_alpha = lerp(255, 0, local_age / 0.5)
-        draw_triangle(color=lerp(flash_color, target_color, local_age / 0.5))
-```
-
-- Ruin fragments lift back during first 20% of repair
-- Dashed border becomes solid at 10%, border color restores at 90%
-
----
-
-### 4B.5 Refinery — The Grinding Halt & Restart
-
-#### Damage: Wobble & Stutter
-
-```
-hp_ratio > 0.75:  RUNNING — smooth rotation, all cusps lit
-hp_ratio > 0.50:  STUTTERING — rotation_speed = base * (0.5 + 0.5*sin(time*3))
-                   1-2 cusp dots go dark
-hp_ratio > 0.25:  SEIZING — speed * 0.2, heavy wobble:
-                   perturbation = sin(13*t + time*5) * 3px * (1-hp_ratio)
-                   50% cusp dots dark
-hp_ratio ≤ 0.25:  FAILING — rotation frozen, perturbation maxed
-                   1 flickering cusp dot, occasional spark particles
-```
-
-Wobble perturbation (primes 13/17 for non-repeating pattern):
-```
-damage_wobble = (1.0 - hp_ratio) * 0.15
-x(t) = (R+r)*cos(t) - d*cos((R+r)/r*t) + damage_wobble * sin(13*t + phase)
-y(t) = (R+r)*sin(t) - d*sin((R+r)/r*t) + damage_wobble * cos(17*t + phase)
-```
-
-Spark particles (below 25% HP):
-```
-every 0.8-1.5 sec: emit 2-3 dots (2px) from random cusp
-speed: 40-80 px/sec, lifetime: 0.15-0.25 sec
-color: (255, 240, 100) → (200, 100, 20)
-```
-
-#### Ruin: The Broken Gear
-
-- Curve collapses to simple circle (dashed), 4-6 scattered cusp dots at base
-- No rotation, no animation; near-monochrome gray
-
-#### Repair: The Restart Sequence
-
-```
-Phase 1 (0-20%): Cusp dots pull back to positions, circle dashed→solid
-Phase 2 (20-60%): Spirograph re-emerges, slow jerky rotation (speed*0.1)
-                   Cusp dots relight one per ~8% progress
-Phase 3 (60-90%): Full curve, rotation accelerates via smoothstep
-                   Wobble decreases: amp = (1.0-progress)*0.15
-                   Colors gray → blue-gray → steel-blue
-Phase 4 (90-100%): All cusps flash bright, full speed, celebratory sparks
-```
-
----
-
-### 4B.6 Tower — The Crumbling & Rebuilt Battlement
-
-#### Damage: Edge Erosion
-
-```
-hp_ratio > 0.75:  FORTIFIED — full Koch depth, Lv.2 glow dots bright
-hp_ratio > 0.50:  WEATHERED — outer_edge_depth = base-1 (inner preserved)
-                   1-2 glow dots dim
-hp_ratio > 0.25:  CRUMBLING — global depth-1, rubble rects at base
-                   Border 1px, glow dots half extinguished + flicker
-hp_ratio ≤ 0.25:  BREACHED — depth-2 (min 1), V-shaped notch in one edge:
-                   replace Koch middle-third with inward dent
-                   All glow dots extinguished, 4-5 rubble rects
-```
-
-Breach notch (deterministic per building_id):
-```
-for chosen edge's middle third:
-    instead of outward equilateral bump → inward equilateral dent
-```
-
-#### Ruin: The Rubble Mound
-
-- Koch depth 0 (base triangle only), fill `(50,50,45)`
-- One vertex collapsed inward: `verts[i] = lerp(verts[i], center, 0.3)`
-- 5-7 rubble fragments (mix rects + triangles), stone shades `(45,42,38)` to `(65,62,55)`
-- Lv.2 towers: faint ember dot (orange, alpha 20-60 pulsing)
-
-#### Repair: The Masonry Restoration
-
-```
-Phase 1 (0-15%): Collapsed vertex straightens, rubble dissolves
-Phase 2 (15-50%): Koch depth restores; new bumps flash mortar color:
-    mortar_color = (200, 190, 160)
-    edge_color = lerp(mortar_color, stone_color, age / 0.6)
-Phase 3 (50-85%): Full detail, breach notch lerps back to outward bump:
-    breach_depth = lerp(-1, +1, (progress - 0.5) / 0.35)
-    Border 2px restored
-Phase 4 (85-100%): Glow dots relight, mortar snaps to final color
-    Brief white border flash (0.2s)
-```
-
----
-
-### 4B.7 Implementation Details
-
-#### 4B.7.1 HP-Ratio Interpolation
-
-```python
-def draw(self, surf, cam):
-    hp_ratio = self.hp / self.max_hp if self.max_hp > 0 else 1.0
-    is_ruin = self.ruined
-    damage_t = 1.0 - hp_ratio
-    def damage_color(base_color):
-        gray = int(0.299*base_color[0] + 0.587*base_color[1] + 0.114*base_color[2])
-        return tuple(int(c + (gray - c) * damage_t * 0.6) for c in base_color)
-```
-
-#### 4B.7.2 Particle System (Lightweight)
-
-```python
-class BuildingParticle:
-    __slots__ = ('x', 'y', 'vx', 'vy', 'life', 'max_life',
-                 'color', 'size', 'shape')  # shape: 'circle', 'triangle', 'rect'
-
-Building.__init__:
-    self._particles = []
-    self._particle_timer = 0.0
-    # MAX 8 particles per building
-```
-
-#### 4B.7.3 Damage Shake State
-
-```python
-Building.__init__:
-    self._shake_timer = 0.0
-    self._shake_amp = 0.0
-
-Building.take_damage:
-    self._shake_timer = 0.15
-    self._shake_amp = min(4.0, 3.0 * (dmg / self.max_hp))
-
-Building.draw:
-    if self._shake_timer > 0:
-        ox = self._shake_amp * math.sin(game_time * 40)
-        oy = self._shake_amp * math.cos(game_time * 53)
-        cx += int(ox); cy += int(oy)
-```
-
-#### 4B.7.4 Deterministic Seeding
-
-```python
-damage_seed = hash((self.col, self.row, self.building_type))
-```
-
-Same building always shows same crack/breach pattern, even across save/load.
-
-#### 4B.7.5 Performance Budget
-
-| Effect | Cost |
-|---|---|
-| Color desaturation | ~0 (per-pixel on existing color) |
-| Branch pruning (TH) | 1 hash+compare per `[` token |
-| Wobble (Refinery) | 2 extra sin/cos per point (~5%) |
-| Breach notch (Tower) | 1 Koch segment flip (zero extra) |
-| Particles | Max 80 total (8/building x ~10 buildings) |
-| Shake offset | 2 trig calls per damaged building |
-
-Total: **< 2% frame time** for full base under attack.
-
-#### 4B.7.6 Repair vs Construction Visual Distinction
-
-| Aspect | Construction | Repair |
-|---|---|---|
-| Color ramp | Dark → full saturation | Charcoal → bright flash → normal |
-| Growth speed | Steady, linear | Jerky-to-smooth (mechanical restart) |
-| Particles | None | Ruin debris dissolves, mortar/glow flashes |
-| Fractal growth | Iterations add smoothly | Iterations add with restoration shimmer |
-
----
-
-## 5. Terrain — Noise Fields & Voronoi
-
-### 5.1 Tile Rendering
-
-**Grass**: Perlin noise, two octaves. Base green `(46,139,87)` with +/-15 value noise.
-
-**Water**: Sine wave interference:
+**Water** (future): Sine wave interference:
 ```
 brightness = sin(x * 0.3 + t) * sin(y * 0.2 + t * 0.7) * 0.5 + 0.5
 ```
 
-**Stone/Iron/Gold deposits**: Voronoi cell overlay per tile:
+**Resource deposits**: Voronoi cell overlay per tile:
 - Gold: sparse large cells (3-4 seeds), warm jitter
 - Iron: medium angular cells (6-8 seeds), cool gray
 - Stone: dense packed cells (10-12 seeds), warm tan
 
 **Trees**: Current circle-on-circle. Future: simplified 2-iter L-system.
 
-### 5.2 Map Border / Fog of War (Future)
+### 6.2 Living Strata Visual Layers (v11+)
 
-Map edge fades into Mandelbrot-derivative border — explored world dissolves
-into fractal chaos at edges.
+The seven geological epochs leave visual marks that reveal progressively with depth layer:
+
+| Epoch | What's Visible | First Visible At |
+|---|---|---|
+| **1 — Stone** | Mountain elevation (already visible as terrain height shading) | Layer 0 |
+| **2 — Water** | River paths, lake surfaces, moisture gradient on tiles | Layer 0 |
+| **3 — Green** | Forest density, grassland variation | Layer 0 |
+| **4 — Crystal** | Resource deposit coloring (geological motivation visible in clustering patterns) | Layer 0 |
+| **5 — Ruin** | Ancient structure foundations, broken walls, formation glyphs | Layer 3 (faint outlines at Layer 2) |
+| **6 — Scar** | Resonance scars (warm golden shimmer), dissonance wounds (dark bruise-purple desaturation) | Layer 3 |
+| **7 — Silence** | The palimpsest — all layers simultaneously, history written in terrain | Layer 7 |
+
+#### Resonance Weathering (v11+)
+Tiles near high-harmony formations slowly shift toward resonance-positive terrain:
+- Color: subtle golden warmth creeps into tile base color
+- Texture: Voronoi cells become more regular (ordered by resonance)
+- Tile near dissonance: darkens, cells become jagged
+
+#### Ruin Visual Types (v12+)
+
+| Ruin | Visual | Discovery Hint |
+|---|---|---|
+| **Broken Sentinel Ring** | 3-5 stone shapes in partial symmetry, ghost axes faintly visible at Layer 3+ | Ancient base geometry |
+| **Overgrown Barracks** | Stone rectangles under grass overlay, excavatable | Building patterns |
+| **Resonance Obelisk** | Single standing stone with persistent glow — activates when player builds nearby | Free Sentinel position |
+| **Formation Glyph** | Partial fractal etched in ground (Rose/Spiral/Koch recognizable) | Formation discovery hint |
+| **Dissonance Crater** | Darkened terrain, warped Voronoi cells, enemy spawn bias | Warning: this place attracted darkness before |
+
+### 6.3 Map Border
+
+Map edge fades into Mandelbrot-derivative border — explored world dissolves into fractal chaos at edges. At Layer 5+, the border shows the actual Mandelbrot boundary, visually connecting the menu fractal to the game world.
 
 ---
 
-## 6. Projectiles & Effects
+## 7. Projectiles & Effects
 
-### 6.1 Arrows — Parametric Darts
-
+### 7.1 Arrows — Parametric Darts
 ```
 body: line from (x, y) to (x - dx*len, y - dy*len)
 head: small delta-shaped triangle
 fletching: two short angled lines at tail
 ```
-
 Parametric tapering (line width decreases toward tail). Grounded: `(120,100,80)`.
 
-### 6.2 Cannonballs — Spirograph Trails
+### 7.2 Sentinel Resonance Pulse — Koch Wave
 
-Trail as fading hypotrochoid:
-```
-x(t) = (R - r) * cos(t) + d * cos((R - r) / r * t)
-y(t) = (R - r) * sin(t) + d * sin((R - r) / r * t)
-```
-4-5 trail points as fading circles. Explosive = orange trail, normal = gray.
-
-### 6.3 Explosions — Lissajous Bloom
-
-Expanding rotating Lissajous figure:
-```
-x(t) = A * sin(a*t + delta)
-y(t) = B * sin(b*t)
-    a/b = 3/2 or 5/4; A,B expand; delta rotates
-```
-Fades from bright orange-white to transparent.
-
-### 6.4 Selection Ring — Breathing Rose
+The Sentinel's active defense ability (replaces cannonballs). A harmonic pulse wave expanding from the Sentinel:
 
 ```
-r(theta + t) = base_radius + amplitude * cos(n * (theta + t))
+Expanding Koch ring:
+    radius = pulse_age * expansion_speed    # 250 px/s
+    koch_depth = 2 (wavefront) → 1 (trailing rings)
+    color = lerp(RESONANCE_GLOW, EARTH_GOLD, pulse_age / max_age)
+    alpha = int(220 * (1.0 - pulse_age / max_age))
+    line_width = 2 at wavefront, 1 for trails
+
+Trailing spirograph absorption (on enemy hit):
+    hypotrochoid trail drawn FROM enemy position TOWARD nearest Sentinel
+    4-5 trail points as fading circles (reuses old spirograph math)
+    color: enemy's divergent color → desaturated → absorbed into stone
+    duration: 0.3s
+```
+
+Ally buff visual: units inside pulse radius get a brief golden outline flash (0.2s).
+
+### 7.3 Resonance Field Damage — Dissonance Bloom
+
+When enemies take continuous damage inside a Sentinel's passive Koch field, the damage manifests as:
+
+```
+Per-enemy inside field:
+    Lissajous bloom at enemy position (a/b = 3/2)
+    Very small (8-12px radius), rapidly rotating
+    Color: enemy's base color → white → transparent
+    Duration: 0.15s per damage tick, overlapping creates shimmer
+
+On enemy death inside field:
+    Larger Lissajous bloom (a/b = 5/4, 20-30px)
+    Color: bright orange-white → Sentinel's resonance glow → transparent
+    Contracting spirograph trail from death position to nearest Sentinel
+    Sentinel's Voronoi cells flash with absorbed energy color (0.3s)
+```
+
+The old spirograph trail and Lissajous bloom math is preserved — it just flows *toward* Sentinels instead of *away from* towers.
+
+### 7.4 Selection Ring — Breathing Rose
+```
+r(θ + t) = base_radius + amplitude * cos(n * (θ + t))
     n = 6, amplitude = 2px, t rotates slowly
 ```
 
----
+### 7.5 Resonance Effects (v11+)
 
-## 7. UI & HUD Elements
-
-### 7.1 Health Bars — Fibonacci Segmentation
-
-Bar divided into Fibonacci-width segments (1,1,2,3,5,8,13... px scaled to HP).
-Largest segments vanish first on damage.
-
-### 7.2 Resource Icons — Mathematical Symbols
-
-| Resource | Shape | Math Basis |
+| Effect | Visual | Layer |
 |---|---|---|
-| Gold | Fibonacci spiral | 3 quarter-turns |
-| Wood | Binary tree | Recursive Y-branch, 3 iterations |
-| Iron | Octahedron wireframe | Polyhedron projection |
-| Steel | Reuleaux triangle | Constant-width curve |
-| Stone | Voronoi cell cluster | 4-5 cells packed |
+| **Formation aura** | Faint waveform halo matching formation shape. Rose = petal shimmer, Koch = perimeter glow | 3+ |
+| **Harmonic interference** | Where two formation auras overlap: constructive = bright nodes, destructive = dark anti-nodes | 4+ |
+| **Reality distortion** | Coordinate warp — pixels near the formation visually bend. Fermata: afterimages. Modulation: path curvature | 5+ |
+| **Tier 6 Harmonic** | Full visible standing wave pattern. Air between formations shimmers with mathematical interference | 5+ |
+| **Hex effects** | Dark inverse of resonance — anti-glow, pixel repulsion, color inversion in hex radius | 5+ |
 
-### 7.3 Minimap — Heat Overlay
+### 7.6 The Mandelbrot Boundary Visualization (v12+)
 
-Gaussian heat kernel per kill event, decays over 30 seconds.
+On the minimap and (at Layer 6+) in the game world:
+- **Player-controlled areas**: Mandelbrot interior colors (deep blue, violet, black)
+- **Enemy-influenced areas**: Exterior colors (orange, red, hot white)
+- **The boundary between them**: Infinitely detailed fractal edge, rendered at minimap resolution
+- Shifts in real-time as harmony and dissonance territories change
 
 ---
 
-## 8. Color Palette — Current & Extended
+## 8. Color Language — The Chromatic Heptarchy
 
-### 8.1 Existing Palette
+### 8.1 The Seven Tone Colors
+
+Each tone has a primary color that pervades everything associated with it:
+
+| Tone | Unit | Primary Color | Accent | Emotional Read |
+|---|---|---|---|---|
+| **Do (1)** | Gatherer | `(50, 130, 220)` Worker Blue | `(80, 180, 255)` | Reliable, present |
+| **Re (2)** | Soldier | `(200, 60, 60)` Military Red | `(255, 100, 80)` | Dangerous, contained |
+| **Mi (3)** | Archer | `(140, 100, 200)` Precision Purple | `(180, 130, 255)` | Sharp, elegant |
+| **Fa (4)** | Shield | `(160, 150, 130)` Stone Tan | `(200, 190, 170)` | Immovable, ancient |
+| **Sol (5)** | Knight | `(218, 165, 32)` Earth Gold | `(255, 200, 60)` | Decisive, brilliant |
+| **La (6)** | Healer | `(46, 139, 87)` Life Green | `(80, 200, 120)` | Warm, sustaining |
+| **Ti (7)** | Sage | `(100, 50, 150)` Void Violet | `(150, 80, 220)` | Uncanny, liminal |
+
+### 8.2 The Dark 7 — Enemy Tone Colors
+
+Each Dark 7 enemy mirrors a player tone with a divergent color shift:
+
+| Player Tone | Dark Mirror | Color | Shift Description |
+|---|---|---|---|
+| Do → Blight Reaper | `(20, 80, 20)` | Green desaturated to fungal |
+| Re → Hollow Warden | `(80, 80, 100)` | Red drained to hollow gray-blue |
+| Mi → Fade Ranger | `(140, 0, 140)` | Purple shifted to aggressive magenta |
+| Fa → Ironbark | `(90, 70, 40)` | Tan darkened to bark brown |
+| Sol → Thornknight | `(140, 100, 20)` | Gold tarnished to rust |
+| La → Bloodtithe | `(55, 10, 15)` | Green inverted to dark blood red |
+| Ti → Hexweaver | `(40, 15, 60)` | Violet deepened to abyss purple |
+
+### 8.3 System Colors
 
 ```
 DARK CORE       (20, 20, 30)      UI backgrounds, void, fractal interior
-EARTH GOLD      (218, 165, 32)    Gold resource, accents, fractal filaments
+EARTH GOLD      (218, 165, 32)    Gold resource, accents, symmetry axes
 BRONZE          (205, 127, 50)    Veteran rank, warm highlights
-LIFE GREEN      (46, 139, 87)     Grass, health, nature
-MILITARY RED    (200, 60, 60)     Soldiers, combat, danger
-WORKER BLUE     (50, 130, 220)    Workers, construction, selection
-STONE TAN       (160, 150, 130)   Stone, towers, stability
-STEEL BLUE      (100, 160, 220)   Steel, refinement, technology
-IRON GRAY       (170, 170, 185)   Iron, raw materials
-ENEMY CRIMSON   (220, 20, 60)     Elite enemies, threat
-SHADOW PURPLE   (140, 0, 140)     Enemy archers, corruption
+CONVERGENT BLUE (15, 25, 60)      Player territory, Mandelbrot interior
+DIVERGENT RED   (120, 20, 40)     Enemy territory, Mandelbrot exterior
+RESONANCE GLOW  (180, 160, 255)   Harmony effects, Tier 3+ auras
+DISSONANCE BURN (200, 80, 40)     Hex effects, enemy ritual glow
+BOUNDARY WHITE  (240, 235, 220)   Mathematical highlights, transitions
+FRACTAL DEEP    (10, 8, 25)       Deepest Mandelbrot, maximum depth
+GHOST STONE     (80, 75, 60)      Ancient ruins, unrevealed elements
 ```
 
-### 8.2 Extended Palette (for algorithmic art)
+### 8.4 Resonance Color Spectrum
 
-```
-FRACTAL DEEP     (10, 8, 25)       Deepest Mandelbrot zones
-GLOW WHITE       (240, 235, 220)   Mathematical highlights, explosion peaks
-CANOPY GREEN     (30, 110, 50)     L-system branch tips, tree canopy
-FORGE ORANGE     (255, 140, 40)    Explosive upgrade, fire, smelting
-VOID BLUE        (15, 25, 60)      Deep water, menu background tint
-CORRUPTION NOISE (120, 20, 40)     Enemy unit perturbation tint
-```
+Harmony quality maps to a color ramp used throughout the UI:
+
+| Quality | Range | Color | Feel |
+|---|---|---|---|
+| **Weak** | 0-50% | `(120, 80, 80)` muted red | Unresolved, tense |
+| **Thin** | 50-70% | `(160, 160, 140)` pale | Searching |
+| **Rich** | 70-90% | Formation's resonance color | Singing |
+| **Perfect** | 90-100% | `(255, 230, 80)` blazing gold | Resolution |
 
 ---
 
-## 9. Implementation Priority
+## 9. The Fractal Interface — GUI as Living Organism
 
-### Phase 1 — Menu Fractal (standalone)
-1. Mandelbrot renderer (half-res, custom palette)
-2. Slow zoom drift
-3. Integrate into `menu.py`
+The GUI is not chrome bolted onto the game. It is **another mathematical organism** that grows with the player. At Layer 0, the GUI is nearly invisible. By Layer 6, it is a fractal cathedral of information.
 
-### Phase 2 — Unit Shape Upgrade
-1. Polar rose soldiers
-2. Hex workers
-3. Spiral-bow archers
-4. Rank-variant petal counts
+### 9.1 Design Principles
 
-### Phase 2.5 — Unit Lifecycle Animations
-1. Universal animation timer system + damage flash + idle breathing
-2. Per-type state animations (move lean, attack lunge, shoot cycle)
-3. Death dissolve sequences for all 5 unit types
-4. Trait-modified animation parameters
-
-### Phase 3 — Building Shape Upgrade
-1. L-system town hall
-2. Sierpinski barracks
-3. Spirograph refinery
-4. Koch snowflake tower
-
-### Phase 3.5 — Building Lifecycle Fractals
-1. HP-interpolated fractal degradation for all building types
-2. Distinct ruin-state visuals with debris particles
-3. Animated repair/rebuild restoration effects
-4. Damage flash and screen-shake hooks
-
-### Phase 4 — Terrain & Effects
-1. Noise-based terrain texture
-2. Lissajous explosions
-3. Spirograph cannonball trails
-4. Water sine shimmer
-
-### Phase 5 — UI Polish
-1. Fibonacci health bars
-2. Mathematical resource icons
-3. Breathing selection ring
-4. Minimap heat overlay
-
----
-
-## 10. Technical Notes
-
-### 10.1 Performance Budget
-
-All algorithmic art must be pre-rendered to surfaces and cached:
-- **Menu Mandelbrot**: Render once at startup to 640x360 surface. Update zoom every 2-3s.
-- **Unit shapes**: Pre-compute per (type, rank) as 32x32/48x48 surfaces. Re-render on zoom change (quantized to 0.1 steps).
-- **Building L-systems**: Pre-render at each depth (0-4). Cache 5 surfaces per type.
-- **Terrain tiles**: Render to tile atlas on map generation. Never recompute unless tiles change.
-
-### 10.2 Pygame Constraints
-
-- No shader support — all math on CPU via Python/numpy
-- `pygame.Surface` with `SRCALPHA` for transparency
-- `pygame.draw` primitives for lines/circles/polygons
-- `pygame.surfarray` for pixel-level Mandelbrot/noise
-- `numpy` for vectorized fractal computation
-
-### 10.3 Zoom Scaling
-
-All shapes defined in unit coordinates (0.0-1.0), scaled at render time via `size * camera.zoom`.
-Zoomed out: fewer iterations/points. Zoomed in: more detail. Free LOD.
-
----
-
-## Phase 4: GUI Overhaul — The Fractal Interface (v11)
-
-### 4.1 Design Principles
-
-1. **Fractal Coherence**: UI elements use same math as game world (Koch for buildings, roses for units)
+1. **Fractal Coherence**: UI elements use the same math as the game world (Koch borders, rose decorations, spiral fills)
 2. **Organic Geometry**: No flat rectangles — fractal borders, parametric outlines, fading edges
 3. **Animated but Calm**: ~0.3 Hz pulse, Koch depth modulation, polar rose bloom on hover
 4. **Earned Complexity**: Simple states = simple visuals; complex states = fractal richness
+5. **Progressive Revelation**: The GUI literally grows new panels, indicators, and decorations as depth layers unlock
 
----
+### 9.2 Fractal Typography — Self-Similar Glyphs
 
-### 4.2 Fractal Typography — Self-Similar Glyphs
+L-system rune font. Each glyph is polyline segments in normalized coords (0..1). Monospace: `char_w = font_size * 0.6`, `char_h = font_size`.
 
-L-system rune font. Each glyph is polyline segments in normalized coords (0..1).
-Monospace: `char_w = font_size * 0.6`, `char_h = font_size`.
-
-Stroke rendering: 2-pass (glow at 40% alpha + core at full color).
-
-```python
-FRACTAL_GLYPHS = {
-    "A": [[(0.1,1), (0.5,0), (0.9,1)], [(0.25,0.6), (0.75,0.6)]],
-    "B": [[(0.15,0), (0.15,1)], [(0.15,0), (0.7,0), (0.8,0.12), (0.8,0.38),
-           (0.7,0.5), (0.15,0.5)], [(0.15,0.5), (0.75,0.5), (0.85,0.62),
-           (0.85,0.88), (0.75,1), (0.15,1)]],
-    "C": [[(0.85,0.15), (0.6,0), (0.3,0), (0.15,0.15), (0.15,0.85),
-           (0.3,1), (0.6,1), (0.85,0.85)]],
-    # ... ~80 entries total (A-Z, a-z, 0-9, punctuation)
-}
-```
-
-Self-similar serifs at font size >= 24px (depth 1), >= 36px (depth 2):
+Stroke rendering: 2-pass (glow at 40% alpha + core at full color). Self-similar serifs at size ≥24px (depth 1), ≥36px (depth 2):
 
 ```python
 def _draw_serif(surf, x, y, angle, length, depth, color):
@@ -1222,187 +896,71 @@ def _draw_serif(surf, x, y, angle, length, depth, color):
     _draw_serif(surf, ex, ey, angle - 0.6, length * 0.5, depth - 1, color)
 ```
 
-#### Font Rendering Pipeline
-
-```python
-class FractalFont:
-    def __init__(self, size, color=(230, 205, 90)):
-        self.size = size
-        self.char_w = int(size * 0.6)
-        self.char_h = size
-        self.color = color
-        self.glow_color = tuple(max(0, c - 80) for c in color)
-        self.serif_depth = 0 if size < 24 else (1 if size < 36 else 2)
-        self._cache = {}
-
-    def render_text(self, surf, text, x, y, center=False):
-        total_w = len(text) * self.char_w
-        if center:
-            x -= total_w // 2
-        for ch in text:
-            self._render_glyph(surf, ch, x, y)
-            x += self.char_w
-        return total_w
-
-    def _render_glyph(self, surf, ch, x, y):
-        if ch == " ":
-            return
-        key = (ch, self.size, self.color)
-        if key not in self._cache:
-            self._cache[key] = self._build_glyph_surface(ch)
-        surf.blit(self._cache[key], (x, y))
-
-    def _build_glyph_surface(self, ch):
-        s = pygame.Surface((self.char_w + 4, self.char_h + 4), pygame.SRCALPHA)
-        strokes = FRACTAL_GLYPHS.get(ch.upper(), FRACTAL_GLYPHS.get(ch, None))
-        if not strokes:
-            return s
-        ox, oy = 2, 2
-        # pass 1: glow
-        for polyline in strokes:
-            pts = [(int(p[0]*self.char_w+ox), int(p[1]*self.char_h+oy)) for p in polyline]
-            if len(pts) >= 2:
-                pygame.draw.lines(s, (*self.glow_color, 100), False, pts,
-                                  max(2, self.size//10+1))
-        # pass 2: core
-        for polyline in strokes:
-            pts = [(int(p[0]*self.char_w+ox), int(p[1]*self.char_h+oy)) for p in polyline]
-            if len(pts) >= 2:
-                pygame.draw.lines(s, (*self.color, 255), False, pts,
-                                  max(1, self.size//14))
-        # pass 3: serifs
-        if self.serif_depth > 0:
-            for polyline in strokes:
-                for p in [polyline[0], polyline[-1]]:
-                    px = int(p[0]*self.char_w+ox)
-                    py = int(p[1]*self.char_h+oy)
-                    _draw_serif(s, px, py, -math.pi/4,
-                               self.size*0.08, self.serif_depth, self.color)
-        return s
-```
-
-#### Font Size Tiers
-
 | Context | Size | Serif Depth | Glow |
 |---|---|---|---|
+| Hero title | 40px | 2 | Strong |
 | Panel titles | 28px | 1 | Yes |
 | Body text | 20px | 0 | Yes |
 | Small labels | 16px | 0 | Subtle |
 | Tiny | 13px | 0 | No |
-| Hero title | 40px | 2 | Strong |
-| Building label (world) | 16-20*z | 0 | No |
-
-#### Color Variants
-
-| Context | Color |
-|---|---|
-| Default | `(230, 205, 90)` gold |
-| Warning | `(220, 80, 40)` red-orange |
-| Disabled | `(80, 75, 60)` muted |
-| Building label | `(255, 255, 255)` white |
-| Enemy info | `(200, 80, 80)` hostile red |
 
 Fallback: `pygame.font.SysFont(None, size)` for sizes <13px or strings >50 chars.
 
----
-
-### 4.3 Panel Frames — Koch Border System
+### 9.3 Panel Frames — Koch Border System
 
 ```python
 def koch_border(surf, rect, depth, color, line_width=1):
-    x, y, w, h = rect
     corners = [(x, y), (x+w, y), (x+w, y+h), (x, y+h)]
     for i in range(4):
-        p1 = corners[i]
-        p2 = corners[(i + 1) % 4]
-        points = _koch_side(p1, p2, depth)
-        if len(points) >= 2:
-            pygame.draw.lines(surf, color, False, points, line_width)
+        points = _koch_side(corners[i], corners[(i+1)%4], depth)
+        pygame.draw.lines(surf, color, False, points, line_width)
 ```
 
 Animated depth: `depth_float = 1.0 + 0.5 * sin(game_time * 0.3)`
 
 Panel background: radial gradient center `(35,32,50)` → edge `(20,18,30)`.
-Optional: 20x15 Mandelbrot micro-render at 5% alpha as texture.
-
-#### Panel Types
 
 | Panel | Border Color | Border Depth | Background |
 |---|---|---|---|
 | Top bar | `(80,75,55)` gold-gray | 1 | Horizontal Mandelbrot strip |
 | Bottom info | `(80,80,100)` | 1-2 breathing | Radial gradient |
-| Building panel | Building's own color | 1 | Faint building shape echo |
+| Building panel | Building's own color | 1 | Faint shape echo |
 | Unit panel | Unit type color | 1 | Faint polar rose echo |
 | Tooltip | `(100,90,60)` gold | 1 (static) | Solid dark |
-| Notification | Event color | 0 | Translucent |
+| Game-over | Outcome color | 2 | Deep radial gradient |
+| Don't Panic | `(60, 80, 120)` calm blue | 1 | Gentle blue wash |
 
----
+### 9.4 Buttons — Polar Rose Bloom
 
-### 4.4 Buttons — Polar Rose Bloom
+- **Idle**: Koch depth-1 border `(60,55,45)`, radial gradient fill, gold text
+- **Hover**: Koch depth-2, brighter fill, tiny 3-petal roses at corners, bright gold text
+- **Pressed**: Koch depth-1, darker fill, text offset +1px down
+- **Disabled**: Simple rect `(40,38,45)`, flat fill, muted text
+- Cost display: resource-colored fractal font below. Affordable: subtle pulse glow
 
-**Idle**: Koch depth-1 border `(60,55,45)`, radial gradient fill, gold text `(200,185,80)`
-**Hover**: Koch depth-2 `(120,100,50)`, brighter fill, tiny 3-petal roses at corners, bright gold text `(240,220,110)`
-**Pressed**: Koch depth-1 `(80,70,40)`, darker fill, text offset +1px down
-**Disabled**: Simple rect `(40,38,45)`, flat fill, muted text `(70,65,50)`
+### 9.5 Resource Display — Fibonacci Counter
 
-Cost display: resource-colored fractal font below button. Not affordable: dimmed + "x". Affordable: subtle pulse glow.
+Resource icons:
+| Resource | Shape | Math Basis |
+|---|---|---|
+| Gold/Flux | Fibonacci spiral | 3 quarter-turns |
+| Wood/Fiber | Binary tree | Recursive Y-branch, 3 iterations |
+| Iron/Ore | Octahedron wireframe | Polyhedron projection |
+| Steel/Alloy | Reuleaux triangle | Constant-width curve |
+| Stone/Crystal | Voronoi cell cluster | 4-5 cells packed |
+| Sap (v10_zeta) | Bifurcating root | Downward L-system, 2 iterations |
+| Resonance (v11) | Standing wave | Sine envelope with nodes |
 
----
+Animations: idle pulse (1.0 + 0.03 × sin(t × 1.5)), income flash to 1.15×, depletion warning wobble.
 
-### 4.5 Resource Display — Fibonacci Counter
+### 9.6 HP & Progress Bars — Spirograph Fills
 
-Resource icons enhanced with:
-- Idle pulse: `1.0 + 0.03 * sin(time * 1.5)`
-- Income flash: scale to 1.15x with bright flash
-- Depletion warning (<=10% of peak): slow wobble rotation + dim
+Pre-rendered wave pattern cached surface; blit width slice per frame:
+- Build progress: blue `(0,180,255)` wave, frequency increases with completion
+- Train progress: gold wave. Lissajous bloom on completion
+- HP: Fibonacci-segmented (largest segments vanish first on damage)
 
-Number display: FractalFont with resource color.
-- Tick-up: digits grow from 0-height over 0.15s
-- Tick-down: digits dissolve as Koch-fragmented outlines
-
-Optional supply bar: 3px fractal progress bar using micro-spirograph fill:
-```
-fill_t = resource_amount / peak_amount
-spirograph_t = fill_t * 4 * math.pi
-```
-
----
-
-### 4.6 HP & Progress Bars — Spirograph Fills
-
-```python
-def fractal_bar(surf, x, y, w, h, ratio, color, bg_color):
-    pygame.draw.rect(surf, bg_color, (x, y, w, h))
-    fill_w = int(w * ratio)
-    for px in range(fill_w):
-        wave = math.sin(px * 0.3 + game_time * 2.0) * (h * 0.15)
-        top = max(0, int(h / 2 - h / 2 + wave))
-        bot = min(h, int(h / 2 + h / 2 + wave))
-        for py in range(top, bot):
-            t = py / h
-            c = _lerp_color(color, (color[0]//2, color[1]//2, color[2]//2), t)
-            surf.set_at((x + px, y + py), c)
-```
-
-Pre-render wave pattern to cached surface; blit appropriate width slice per frame.
-
-Build progress: blue `(0,180,255)` wave, frequency increases with completion.
-Train progress: gold wave. Lissajous bloom (tiny, gold, 0.3s) on completion.
-
----
-
-### 4.7 Selection System — Rose Rings
-
-```python
-def _draw_selection_rose(surf, sx, sy, r, k, rotation, color):
-    pts = []
-    for i in range(60):
-        theta = rotation + 2 * math.pi * i / 60
-        rv = (r + 4) * abs(math.cos(k * theta)) ** 0.5
-        rv = max(rv, r * 0.7)
-        pts.append((sx + rv * math.cos(theta), sy + rv * math.sin(theta)))
-    pygame.draw.lines(surf, color, True, pts, 1)
-```
+### 9.7 Selection System — Rose Rings
 
 - Worker: superellipse hex ring
 - Soldier: 5-petal rose ring at r+3
@@ -1410,17 +968,15 @@ def _draw_selection_rose(surf, sx, sy, r, k, rotation, color):
 - Buildings: Koch-curve rectangle outline, breathing depth
 - Multi-select box: Koch-bordered, depth increases with box size
 
----
-
-### 4.8 Minimap Frame
+### 9.8 Minimap Frame
 
 - Border: Koch depth-2 frame, `(80,75,55)` gold-gray
 - Camera viewport: golden Koch depth-1 rectangle
-- Combat heat: Lissajous bloom marks (fading trefoils) instead of red circles
+- Combat heat: Lissajous bloom marks (fading trefoils)
+- Attack flash: Red edge pulse during active incidents (Phase 2 UX — implemented)
+- Mandelbrot overlay (v12+): Interior/exterior coloring showing harmony/dissonance territory
 
----
-
-### 4.9 Notifications — Dissolving Runes
+### 9.9 Notifications — Dissolving Runes
 
 FractalFont with Koch-bordered pill shape. Fade-out as fractal dissolution:
 1. Serif branches disappear (depth decreases)
@@ -1428,117 +984,153 @@ FractalFont with Koch-bordered pill shape. Fade-out as fractal dissolution:
 3. Random character strokes disappear
 4. Final: just dots where text was, then gone
 
+### 9.10 Progressive GUI Growth — The Depth Ladder in Practice
+
+| Layer | Top Bar | Bottom Panel | Minimap | World Overlays |
+|---|---|---|---|---|
+| **0** | Resources (5), build timer | Selected unit/building info, build buttons | Terrain + units | HP bars, selection rings |
+| **1** | + Tension meter, incident counter | + Stance buttons, formation bar (locked icons) | + Combat heat | + Damage numbers, command rings |
+| **2** | + Harmony % on formations | + Chord preview, squad cards, "Form Squad (F)" button | + Squad indicators | + Formation slot positions (springs visible) |
+| **3** | + Resonance counter | + Characteristic hints, harmony quality descriptors | + Resonance scar overlay | + Faint formation auras |
+| **4** | + Orbital shell indicators | + Sentinel symmetry info, mirror bonus display | + Symmetry axis overlay | + Interference patterns |
+| **5** | + Reality distortion meter | + Tier 6 effect controls, singing frequency display | + Mandelbrot boundary begins | + Visible waveforms, distortion fields |
+| **6** | + Full harmonic dashboard | + Tree of Life root display, full orchestral UI | + Full Mandelbrot territory | + Everything |
+| **7** | + Shadow field indicators | + Both orchestras visible | + Both Trees visible | + The Mirror Field |
+
 ---
 
-### 4.10 Wave Timer — Breathing Arc
+## 10. The Game-Over Canvas
 
-```python
-def _draw_wave_timer(surf, cx, cy, radius, ratio, color):
-    pygame.draw.circle(surf, (30, 30, 40), (cx, cy), radius, 2)
-    arc_end = 2 * math.pi * ratio
-    pts = [(cx, cy)]
-    for i in range(int(60 * ratio) + 1):
-        theta = -math.pi / 2 + arc_end * i / max(1, int(60 * ratio))
-        pts.append((cx + radius * math.cos(theta),
-                     cy + radius * math.sin(theta)))
-    if len(pts) >= 3:
-        pygame.draw.polygon(surf, color, pts)
-    # inner rose decoration (5-petal, within filled arc)
-    for i in range(48):
-        theta = 2 * math.pi * i / 48
-        rv = (radius - 4) * abs(math.cos(2.5 * theta))
-        if theta - math.pi / 2 > arc_end:
-            continue
-        pygame.draw.circle(surf, (255, 255, 255, 40),
-                           (int(cx + rv * math.cos(theta - math.pi/2)),
-                            int(cy + rv * math.sin(theta - math.pi/2))), 1)
+The game-over screen (Phase 1 UX overhaul — implemented) is the player's **report card rendered as visual art**:
+
+### Victory
+- Background: dark overlay with faint golden radial gradient (the harmony that won)
+- Title: "VICTORY!" in formation's resonance color
+- Stats panel: Koch-bordered, gold axes
+- Grade (S/A/B/C): rendered large in resonance spectrum color
+- Tip: warm gold, encouraging
+
+### Defeat
+- Background: dark overlay with faint red radial gradient (the dissonance that killed)
+- Title: "DEFEAT" in enemy crimson
+- Stats panel: Koch-bordered, muted gray
+- Contextual tip: golden, specific to failure mode
+- Difficulty suggestion: green, gentle
+
+### Surrender
+- Background: neutral dark overlay
+- Title: "SURRENDERED" in amber
+- Stats: as defeat but with no judgment tone
+
+---
+
+## 11. Technical Notes
+
+### 11.1 Performance Budget
+
+All algorithmic art must be pre-rendered to surfaces and cached:
+- **Menu Mandelbrot**: Render once at startup to 640×360 surface. Update zoom every 2-3s
+- **Unit shapes**: Pre-compute per (type, rank) as 32×32/48×48 surfaces. Re-render on zoom change (quantized to 0.1 steps)
+- **Building L-systems**: Pre-render at each depth (0-4). Cache 5 surfaces per type
+- **Terrain tiles**: Render to tile atlas on map generation. Never recompute unless tiles change
+- **Koch borders**: Cache per (width, height, depth, color) tuple. Invalidate on resize
+- **Fractal font**: Cache per (character, size, color) tuple. ~80 glyphs × 5 sizes = 400 cached surfaces
+
+### 11.2 Pygame Constraints
+
+- No shader support — all math on CPU via Python/numpy
+- `pygame.Surface` with `SRCALPHA` for transparency
+- `pygame.draw` primitives for lines/circles/polygons
+- `pygame.surfarray` for pixel-level Mandelbrot/noise
+- `numpy` for vectorized fractal computation
+
+### 11.3 Zoom Scaling
+
+All shapes defined in unit coordinates (0.0-1.0), scaled at render time via `size * camera.zoom`. Zoomed out: fewer iterations/points. Zoomed in: more detail. Free LOD.
+
+### 11.4 Godot Migration Visual Targets (v14)
+
+| Capability | What It Unlocks Visually |
+|---|---|
+| **GPU shaders** | Real-time Mandelbrot boundary, resonance waveform interference, Julia set Sage shapes |
+| **Particle GPU** | Thousands of resonance sparkles, hex corruption particles, formation singing visualization |
+| **Custom render passes** | Coordinate warp for reality distortion, bloom for harmony, chromatic aberration for dissonance |
+| **Dynamic lighting** | Sentinel glow, resonance scar luminescence, the Trees casting light |
+
+---
+
+## 12. GUI Remake Run — Implementation Plan
+
+This plan turns the current functional-but-flat GUI into the fractal interface described above. Scoped to what's achievable NOW (v10_epsilon), with hooks for future depth-layer gating.
+
+### Phase A: Fractal Font Foundation
+
+| Task | File | Effort |
+|---|---|---|
+| Define `FRACTAL_GLYPHS` dict (A-Z, 0-9, punctuation — ~80 entries) | `fractal_font.py` (new) | 2 sessions |
+| `FractalFont` class with glyph cache + 2-pass rendering (glow + core) | `fractal_font.py` | 1 session |
+| Serif branching system (depth 0/1/2 based on size) | `fractal_font.py` | 0.5 session |
+| Replace `draw_text()` calls in top bar, bottom panel titles, notifications | `gui.py` | 1 session |
+| Benchmark: must stay under 2ms/frame for all text rendering | `fractal_font.py` | 0.5 session |
+
+### Phase B: Koch Border & Panel Overhaul
+
+| Task | File | Effort |
+|---|---|---|
+| `koch_border()` utility function with depth + animation support | `gui.py` or `fractal_ui.py` (new) | 0.5 session |
+| Radial gradient panel backgrounds (replace flat fills) | `gui.py` | 1 session |
+| Koch-bordered buttons with hover bloom (rose corners) | `gui.py` | 1 session |
+| Bottom panel: Koch frame, type-colored accent, shape echo background | `gui.py` | 0.5 session |
+| Top bar: Mandelbrot micro-strip background at 5% alpha | `gui.py` | 0.5 session |
+
+### Phase C: Bars, Selection, Polish
+
+| Task | File | Effort |
+|---|---|---|
+| `fractal_bar()` for HP/progress/train (pre-rendered wave slices) | `gui.py`, `unit.py`, `building.py` | 1 session |
+| Rose/hex/spiral selection rings per unit type | `unit.py` | 1 session |
+| Koch minimap border + golden viewport rectangle | `game.py` | 0.5 session |
+| Notification dissolution animation (serif→border→strokes→dots→gone) | `gui.py` | 0.5 session |
+| Game-over panel: Koch borders, radial gradient, grade rendering | `gui.py` | 0.5 session |
+
+### Phase D: Integration & Performance
+
+| Task | File | Effort |
+|---|---|---|
+| Profile full render pass: must stay under 16ms @ 60 FPS | all | 0.5 session |
+| Glyph surface caching validation (memory < 10MB for full glyph set) | `fractal_font.py` | 0.5 session |
+| Koch border caching (avoid re-rendering static panels every frame) | `gui.py` | 0.5 session |
+| Visual QA pass: readability at all zoom levels, colorblind-safe contrast | all | 1 session |
+| Fallback testing: SysFont graceful degradation for edge cases | `fractal_font.py` | 0.5 session |
+
+### Total Estimate: ~13 sessions across 4 phases
+
+### Implementation Order
+
+```
+Phase A (font) → Phase B (panels) → Phase C (bars/selection) → Phase D (QA)
 ```
 
----
-
-### 4.11 Implementation Plan
-
-#### Phase 4A: Fractal Font
-
-| Task | File | Effort |
-|---|---|---|
-| Define FRACTAL_GLYPHS dict | `fractal_font.py` (new) | 2 sessions |
-| FractalFont class + glyph cache | `fractal_font.py` | 1 session |
-| Serif branching system | `fractal_font.py` | 0.5 session |
-| Replace all `draw_text()` calls | `gui.py`, `entities.py` | 1 session |
-| Benchmark (<2ms/frame) | `fractal_font.py` | 0.5 session |
-
-#### Phase 4B: Panel & Button Overhaul
-
-| Task | File | Effort |
-|---|---|---|
-| `koch_border()` utility | `gui.py` or `fractal_ui.py` (new) | 0.5 session |
-| Radial gradient panel backgrounds | `gui.py` | 1 session |
-| Koch-bordered button system | `gui.py` | 1 session |
-| Button hover bloom (rose corners) | `gui.py` | 0.5 session |
-| Animated panel borders | `gui.py` | 0.5 session |
-
-#### Phase 4C: Bars, Selection, Polish
-
-| Task | File | Effort |
-|---|---|---|
-| `fractal_bar()` HP/progress/train | `gui.py`, `entities.py` | 1 session |
-| Rose/hex/spiral selection rings | `entities.py` | 1 session |
-| Minimap border + viewport | `game.py` | 0.5 session |
-| Notification dissolution | `gui.py` | 0.5 session |
-| Wave timer circular arc | `gui.py` | 0.5 session |
-
-#### Phase 4D: Integration & Performance
-
-| Task | File | Effort |
-|---|---|---|
-| Profile render pass (<16ms @ 60 FPS) | all | 0.5 session |
-| Glyph surface caching | `fractal_font.py` | 0.5 session |
-| Koch border caching | `gui.py` | 0.5 session |
-| Visual QA (readability) | all | 1 session |
-
-**Total estimate: 12-14 sessions**
+Each phase is independently shippable. Phase A alone transforms the game's typographic identity. Phase B makes it feel like a fractal world. Phase C and D polish.
 
 ---
 
-### 4.12 Critical Files
+## The Visual Road Ahead
 
-| File | Changes |
+The VDD, like the game, is a fractal. Every section described here contains three more sections not yet written. The Sentinel glow animations, the Tree of Life root network rendering, the Mandelbrot boundary real-time computation, the hex effect distortion shaders, the procedural audio waveform visualization — all live in the space between these words, waiting for the version that calls them into existence.
+
+What's written here is enough to build the next three versions. What's implied is enough to build the next ten. The math goes deeper than the document can see from here.
+
+And that's exactly the point.
+
+---
+
+## File Reference
+
+| File | Purpose |
 |---|---|
-| `fractal_font.py` (NEW) | FractalFont class, glyph defs, serif system, caching |
-| `fractal_ui.py` (NEW) | koch_border(), radial_gradient(), fractal_bar(), rose_selection() |
-| `gui.py` | Replace all panel/button/bar rendering |
-| `entities.py` | Selection ring, building label rendering |
-| `game.py` | Minimap frame, select box, wave timer |
-| `utils.py` | `draw_text()` → FractalFont, add `draw_text_fractal()` |
-
----
-
-### 4.13 Performance Budget
-
-**Target**: All UI rendering <= 4ms/frame (25% of 16ms budget)
-
-| Component | Budget | Strategy |
-|---|---|---|
-| Fractal font | <= 1.5ms | Cache glyph surfaces per (char, size, color) |
-| Koch borders | <= 0.5ms | Cache border polylines per (rect, depth) |
-| Fractal bars | <= 0.5ms | Pre-render wave pattern, blit slice |
-| Rose selections | <= 0.5ms | 60-point polygon per selected unit |
-| Gradients | <= 0.5ms | Pre-render gradient surfaces at init |
-| Headroom | 0.5ms | Animation parameter updates |
-
----
-
-### 4.14 Visual Reference Summary
-
-| Current Element | v11 Replacement | Math Basis |
-|---|---|---|
-| SysFont text | FractalFont runes | L-system strokes + recursive serifs |
-| Flat rect panels | Koch-bordered gradient panels | Koch curve (depth 1-2) |
-| Flat rect buttons | Koch-bordered bloom buttons | Koch + polar rose corners |
-| Flat HP bars | Sine-wave filled bars | Parametric wave modulation |
-| Circle selection | Rose/hex/spiral selection rings | Polar curves matching unit type |
-| Rect minimap border | Koch-framed minimap | Koch curve depth 2 |
-| Flat notifications | Dissolving rune text | Fractal decomposition |
-| Rect wave timer | Circular rose-arc timer | Polar rose + pie arc |
-| Plain resource icons | Breathing pulse icons | Scale oscillation |
+| `visuals/VDD.md` | This file — visual design authority |
+| `GDD_Roadmap.md` | The mathematical odyssey roadmap (gameplay + systems design) |
+| `GDD_Current_v10.md` | Full spec of currently implemented v10 systems |
+| `UX_Test_Matrix.md` | 3×3 user journey test scenarios |
+| `visuals/*.py` | Visual proof-of-concept scripts |

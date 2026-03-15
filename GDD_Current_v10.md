@@ -14,7 +14,7 @@
 **Resolution:** 1280 x 720 @ 60 FPS
 **Art Style:** Zero-asset — all visuals are algorithmic (polar roses, L-systems, golden spirals, Mandelbrot menus)
 
-**Core Loop:** Gather resources, construct buildings, train units, and survive escalating enemy waves. Workers gain skill XP in 6 specializations with 3 ranks each. Combat units gain XP through 5 military ranks, self-organize into squads, and develop procedural personality traits. Archers fire ballistic arrows with rank-scaled accuracy. All units use utility-scored targeting with live retargeting and threat response. Enemy hordes check local morale and flee when outnumbered. Global command buttons provide AoE2-style macro controls. Town Hall garrisons workers for damage reduction and counter-attack.
+**Core Loop:** Gather resources, construct buildings, train units, and survive escalating enemy waves. Gatherers gain skill XP in 6 specializations with 3 ranks each. Combat units gain XP through 5 military ranks, self-organize into squads, and develop procedural personality traits. Rangers fire ballistic arrows with rank-scaled accuracy. Sentinels project Koch-snowflake resonance fields that damage nearby enemies. All units use utility-scored targeting with live retargeting and threat response. Enemy hordes check local morale and flee when outnumbered. Global command buttons provide AoE2-style macro controls. Tree of Life garrisons Gatherers for damage reduction and counter-attack.
 
 **Version History:**
 - v9.3: Ballistic archery, XP ranks, squads, morale, formations, retargeting, weighted terrain
@@ -35,8 +35,8 @@ Three selectable profiles from the main menu (hotkeys 1/2/3). Each profile tunes
 
 | Parameter | Easy | Medium | Hard |
 |---|---|---|---|
-| Starting Gold / Wood | 300 / 150 | 200 / 100 | 180 / 100 |
-| Starting Workers | 4 | 3 | 3 |
+| Starting Flux / Fiber | 300 / 150 | 200 / 100 | 180 / 100 |
+| Starting Gatherers | 4 | 3 | 3 |
 | First Wave (seconds) | 360 | 330 | 300 |
 | Wave Interval (seconds) | 120 | 90 | 80 |
 | Max Waves | 15 | 20 | 25 |
@@ -49,10 +49,10 @@ Three selectable profiles from the main menu (hotkeys 1/2/3). Each profile tunes
 | Multi-dir Waves (wave) | 14 | 12 | 8 |
 | 3-dir Waves (wave) | 20 | 18 | 14 |
 | Kill Bounty Base | 5 | 4 | 2 |
-| Wave Bonus Gold / Wood / Steel | 30/15/3 | 25/15/3 | 15/8/2 |
+| Wave Bonus Flux / Fiber / Alloy | 30/15/3 | 25/15/3 | 15/8/2 |
 
 **Wave Size Formula:** `count = wave_base + wave_scale * sqrt(wave_number)`
-**Kill Bounty Formula:** `bounty = kill_bounty_base + wave_number` (gold per kill)
+**Kill Bounty Formula:** `bounty = kill_bounty_base + wave_number` (Flux per kill)
 
 ---
 
@@ -65,51 +65,51 @@ Three selectable profiles from the main menu (hotkeys 1/2/3). Each profile tunes
 |---|---|---|---|---|---|---|
 | 0 | Grass | (40, 118, 74) | Yes | Yes | 1.0x | Default terrain |
 | 1 | Water | — | — | — | — | **Reserved** (removed in v10_3, will return in terrain overhaul) |
-| 2 | Tree | (20, 100, 20) | Yes | No | 2.0x | Harvestable (wood) |
-| 3 | Gold | (218, 165, 32) | Yes | No | 1.8x | Harvestable (gold) |
-| 4 | Iron | (140, 140, 155) | Yes | No | 1.8x | Harvestable (iron) |
+| 2 | Tree | (20, 100, 20) | Yes | No | 2.0x | Harvestable → Fiber |
+| 3 | Gold | (218, 165, 32) | Yes | No | 1.8x | Harvestable → Flux |
+| 4 | Iron | (140, 140, 155) | Yes | No | 1.8x | Harvestable → Ore |
 | 5 | Shallow Water | — | — | — | — | **Reserved** |
-| 6 | Stone | (160, 150, 130) | Yes | No | 1.8x | Harvestable (stone) — **v10 new** |
+| 6 | Stone | (160, 150, 130) | Yes | No | 1.8x | Harvestable → Crystal — **v10 new** |
 
 **Passability:**
 - `is_passable(c, r)` — True for any terrain in TERRAIN_MOVE_COST. Out-of-bounds returns -1 (impassable).
 - `is_walkable(c, r)` — True only for grass. Used for building placement.
-- Units can walk through trees, gold, iron, stone — but at reduced speed.
+- Units can walk through trees, Flux, Ore, Crystal tiles — but at reduced speed.
 - Harvesting depletes tiles to grass, creating cleared paths.
 
 **Procedural Generation:**
 - 15-22 tree forests (random walk, 8-30 tiles each)
-- 5-8 gold deposits (3-6 tiles each)
-- 4-7 iron deposits (3-6 tiles each)
-- 3-5 stone deposits (4-8 tiles each) — **v10 new**
+- 5-8 Flux deposits (3-6 tiles each)
+- 4-7 Ore deposits (3-6 tiles each)
+- 3-5 Crystal deposits (4-8 tiles each) — **v10 new**
 - 3 guaranteed tree clusters near start (7-12 tiles, 6-15 tiles each)
-- 2 guaranteed gold deposits near start (8-14 tiles, 3-5 tiles each)
+- 2 guaranteed Flux deposits near start (8-14 tiles, 3-5 tiles each)
 - 9×9 clear zone around map center for starting base
 
 **Resource Capacities:**
 
 | Resource | Capacity | Gather Time | Amount/Trip |
 |---|---|---|---|
-| Tree (wood) | 50 | 2.0s | 10 |
-| Gold | 80 | 3.0s | 10 |
-| Iron | 60 | 3.0s | 15 |
-| Stone | 70 | 3.5s | 10 |
+| Tree → Fiber | 50 | 2.0s | 10 |
+| Gold → Flux | 80 | 3.0s | 10 |
+| Iron → Ore | 60 | 3.0s | 15 |
+| Stone → Crystal | 70 | 3.5s | 10 |
 
 ---
 
 ## 4. Resources
 
-Five resource types managed by `ResourceManager`:
+Five resource types managed by `ResourceManager` (code name → UI name):
 
-| Resource | Icon Color | Primary Source | Secondary Source |
-|---|---|---|---|
-| Gold | (255, 215, 0) | Gold tiles | Kill bounty, wave bonus |
-| Wood | (34, 180, 34) | Tree tiles | Wave bonus |
-| Iron | (170, 170, 185) | Iron tiles | — |
-| Steel | (100, 160, 220) | Refinery (2 iron → 1 steel) | Wave bonus |
-| Stone | (160, 150, 130) | Stone tiles | — |
+| Resource | UI Name | Icon Color | Primary Source | Secondary Source |
+|---|---|---|---|---|
+| gold | **Flux** | (255, 215, 0) | Gold tiles | Kill bounty, wave bonus |
+| wood | **Fiber** | (34, 180, 34) | Tree tiles | Wave bonus |
+| iron | **Ore** | (170, 170, 185) | Iron tiles | — |
+| steel | **Alloy** | (100, 160, 220) | Harmonic Mill (2 Ore → 1 Alloy) | Wave bonus |
+| stone | **Crystal** | (160, 150, 130) | Stone tiles | — |
 
-Iron → Steel pipeline via Refinery. Stone is used for towers and garrison bell cost.
+Ore → Alloy pipeline via Harmonic Mill. Crystal is used for Sentinels and garrison bell cost.
 
 ---
 
@@ -119,44 +119,48 @@ All buildings are player-side only. Built by workers through right-click assignm
 
 ### 5.1 Building Stats
 
-| Building | Gold | Wood | Iron | Steel | Stone | HP | Build Time | Size |
+| Building (code → UI) | Flux | Fiber | Ore | Alloy | Crystal | HP | Build Time | Size |
 |---|---|---|---|---|---|---|---|---|
-| Town Hall | 200 | 120 | 0 | 0 | 0 | 500 | 30s | 2×2 |
-| Barracks | 120 | 80 | 0 | 0 | 0 | 400 | 18s | 2×2 |
-| Refinery | 80 | 60 | 30 | 0 | 0 | 300 | 22s | 2×2 |
-| Tower | 30 | 0 | 15 | 0 | 35 | 220 | 18s | 1×1 |
+| town_hall → **Tree of Life** | 200 | 120 | 0 | 0 | 0 | 500 | 30s | 2×2 |
+| barracks → **Resonance Forge** | 120 | 80 | 0 | 0 | 0 | 400 | 18s | 2×2 |
+| refinery → **Harmonic Mill** | 80 | 60 | 30 | 0 | 0 | 300 | 22s | 2×2 |
+| tower → **Sentinel** | 30 | 0 | 15 | 0 | 35 | 220 | 18s | 1×1 |
 
 ### 5.2 Building Functionality
 
-**Town Hall:**
-- Trains workers (Q key, 50g, 8s)
+**Tree of Life** (`town_hall`):
+- Trains Gatherers (Q key, 50 Flux, 8s)
 - Resource drop-off point
 - Passive healing aura: 2 HP/s within 192px (6 tiles)
-- **v10_2: Garrison** — workers barricade inside (see Section 6.6)
+- **v10_2: Garrison** — Gatherers barricade inside (see Section 6.6)
 
-**Barracks:**
-- Trains soldiers (W key, 75g 8s, 13s train)
-- Trains archers (E key, 55g 25w 4s, 11s train)
+**Resonance Forge** (`barracks`):
+- Trains Wardens (W key, 75 Flux + 8 Alloy, 13s train)
+- Trains Rangers (E key, 55 Flux + 25 Fiber + 4 Alloy, 11s train)
 - Training queue (FIFO)
 
-**Refinery:**
-- Auto-refines: 2 iron → 1 steel every 6s
-- Operates while iron is available
+**Harmonic Mill** (`refinery`):
+- Auto-refines: 2 Ore → 1 Alloy every 6s
+- Operates while Ore is available
 
-**Tower (v10c Cannon Overhaul):**
-- **Level 1 — Cannon Tower:** Fires ballistic cannonballs (not homing)
-  - 45 damage, 3.5s CD, 250 px/s speed, 220px range, 0.10 rad spread
-  - Hit radius 16px, 2.5s max lifetime
-- **Level 2 — Explosive Cannon:** Upgrade costs 15 steel, 12s worker build time
-  - 50 direct damage + 35 AoE splash in 60px radius
-  - Same speed/range/CD as Level 1
-- Target scoring: threat-type bonuses (Elite 1.5×, Siege 1.8×), low-HP finishing (2.0× below 30%)
-- **v10_7: Upgrade Fire Penalty** — fires at 50% rate while upgrading (not silenced)
-- **v10_7: Sentinel's Cry** — when enemies enter tower dead zone (45px min range):
-  - Tower emits expanding blue pulse ring VFX (0.6s duration)
+**Sentinel** (`tower`):
+- **Lattice anchor** — standing stone that defines dihedral symmetry axes for base geometry (see GDD_Roadmap: Sentinel Lattice)
+- **Passive Resonance Field:** Damages enemies within 220px radius via harmonic interference
+  - 12 DPS to enemies inside field, scaling with symmetry order (+25% per completed axis)
+  - No projectiles — damage is continuous aura effect on divergent entities
+  - Visual: Koch snowflake outline at defense range, pulsing
+- **Level 2 — Amplified Resonance:** Upgrade costs 15 Alloy, 12s Gatherer build time
+  - 18 DPS base + 10 DPS AoE burst when enemy dies in field (60px splash)
+  - Field range extends to 260px
+- Target priority: enemies closest to Sentinel center (no targeting AI needed — field hits all)
+- **Harmonic Pulse** (evolved from v10_7 Sentinel's Cry):
+  - Sentinel emits expanding resonance wave (Koch ring VFX, 0.6s duration)
   - All friendly units within 120px get 25% attack speed buff for 3.0s
-  - Dead zone enemies highlighted blue-white
-  - 4.0s cooldown, performance-guarded scan (only checks when ready to fire)
+  - Enemies in pulse take 45 burst damage + briefly stunned (0.3s)
+  - 4.0s cooldown
+- **Lattice Amplification** (v10_zeta+): Sentinels in completed symmetry groups merge fields — unified resonance zone with amplified damage and ally buffs
+
+> **Migration note:** Code currently uses `tower` internally. The rename `tower` → `sentinel` is pending. Tower cannon/cannonball mechanics are replaced by resonance field — no projectiles fired.
 
 ### 5.3 Building Ruin System
 
@@ -164,7 +168,7 @@ When a completed player building reaches 0 HP:
 - Becomes a ruin (`ruined = True`), retains residual HP
 - Training/refining halted, rendered at 1/3 brightness
 - Enemies deprioritize ruins (15% of base priority)
-- Garrisoned workers ejected on ruin transition
+- Garrisoned Gatherers ejected on ruin transition
 - Right-click workers to rebuild at 40% of original cost
 
 ---
@@ -173,11 +177,11 @@ When a completed player building reaches 0 HP:
 
 ### 6.1 Player Units
 
-| Unit | Gold | Wood | Steel | HP | Speed | ATK | Range | CD | Train |
+| Unit | Flux | Fiber | Alloy | HP | Speed | ATK | Range | CD | Train |
 |---|---|---|---|---|---|---|---|---|---|
-| Worker | 50 | 0 | 0 | 50 | 80 | 4 | 40 | 1.0s | 8s |
-| Soldier | 75 | 0 | 8 | 140 | 70 | 14 | 40 | 1.0s | 13s |
-| Archer | 55 | 25 | 4 | 75 | 75 | 9 | 170 | 1.4s | 11s |
+| Gatherer (`worker`) | 50 | 0 | 0 | 50 | 80 | 4 | 40 | 1.0s | 8s |
+| Warden (`soldier`) | 75 | 0 | 8 | 140 | 70 | 14 | 40 | 1.0s | 13s |
+| Ranger (`archer`) | 55 | 25 | 4 | 75 | 75 | 9 | 170 | 1.4s | 11s |
 
 ### 6.2 Enemy Units (Base Stats, Before Wave Scaling)
 
@@ -210,36 +214,36 @@ Enemy units that survive across wave boundaries evolve:
 |---|---|
 | `idle` | No task. Combat units auto-aggro within range+64px |
 | `moving` | Following A* path |
-| `gathering` | Worker harvesting resource tile |
-| `returning` | Worker carrying resources to TH |
-| `building` | Worker constructing/rebuilding |
+| `gathering` | Gatherer harvesting resource tile |
+| `returning` | Gatherer carrying resources to TH |
+| `building` | Gatherer constructing/rebuilding |
 | `attacking` | Engaged with target, retargets every 1.5s |
-| `repairing` | Worker repairing damaged building |
-| `fleeing` | Worker/enemy fleeing threats |
-| `garrisoned` | **v10_2:** Worker inside Town Hall, hidden from rendering |
+| `repairing` | Gatherer repairing damaged building |
+| `fleeing` | Gatherer/enemy fleeing threats |
+| `garrisoned` | **v10_2:** Gatherer inside Tree of Life, hidden from rendering |
 
-### 6.4 Worker Behaviors
+### 6.4 Gatherer Behaviors
 
-**Gathering:** Walk to tile → harvest over time → carry to nearest TH → auto-resume. Remembers last gather type for resume after interruption.
+**Gathering:** Walk to tile → harvest over time → carry to nearest Tree of Life → auto-resume. Remembers last gather type for resume after interruption.
 
-**Building:** Right-click unbuilt/ruined building. Must be within 2.5 tiles. Multiple workers can build simultaneously.
+**Building:** Right-click unbuilt/ruined building. Must be within 2.5 tiles. Multiple Gatherers can build simultaneously.
 
-**Repairing:** Right-click damaged building. 15 HP/s per worker. Costs 15% of building's full cost.
+**Repairing:** Right-click damaged building. 15 HP/s per Gatherer. Costs 15% of building's full cost.
 
 **Fleeing:** Triggers when enemy within 160px. Saves task state, paths 6 tiles away, resumes after 2.0s safety.
 
-### 6.5 Worker Skill XP System (v10)
+### 6.5 Gatherer Skill XP System (v10)
 
-Workers gain XP in the specific skill they are actively using. Six skill tracks:
+Gatherers gain XP in the specific skill they are actively using. Six skill tracks:
 
 | Skill | Activity | Color |
 |---|---|---|
-| Lumberjack | Harvesting trees | Green |
-| Gold Miner | Harvesting gold | Gold |
-| Iron Miner | Harvesting iron | Silver |
-| Stone Mason | Harvesting stone | Sandstone |
+| Lumberjack | Harvesting Fiber (trees) | Green |
+| Flux Miner | Harvesting Flux (gold deposits) | Gold |
+| Ore Miner | Harvesting Ore (iron veins) | Silver |
+| Crystal Mason | Harvesting Crystal (stone quarries) | Sandstone |
 | Builder | Constructing/repairing | Cyan |
-| Smelter | (Future: refinery boost) | Steel Blue |
+| Smelter | (Future: Harmonic Mill boost) | Steel Blue |
 
 **Three ranks per skill:**
 
@@ -249,29 +253,29 @@ Workers gain XP in the specific skill they are actively using. Six skill tracks:
 | 1 | Foreman | 80 | +15% |
 | 2 | Master | 200 | +30% |
 
-XP is per-skill, not global. A Gold Miner Foreman switching to trees works at Novice speed. Builder XP accrues at 0.5 XP/s during build/repair work.
+XP is per-skill, not global. A Flux Miner Foreman switching to trees gathers at Novice speed. Builder XP accrues at 0.5 XP/s during build/repair work.
 
-### 6.6 Town Hall Garrison (v10_2)
+### 6.6 Tree of Life Garrison (v10_2)
 
-Workers can be garrisoned inside the Town Hall for defense:
+Gatherers can be garrisoned inside the Tree of Life for defense:
 
 | Parameter | Value |
 |---|---|
-| Max workers | 10 |
-| Armor per worker | 5% damage reduction (caps at 50%) |
-| Stone-hurling damage | 3 per worker per tick |
+| Max Gatherers | 10 |
+| Armor per Gatherer | 5% damage reduction (caps at 50%) |
+| Crystal-hurling damage | 3 per Gatherer per tick |
 | Attack cooldown | 2.0s |
 | Attack range | 120px |
-| Bell cost | 20 wood, 5 iron, 10 stone |
+| Bell cost | 20 Fiber, 5 Ore, 10 Crystal |
 
 **Mechanics:**
-- Town Bell global button recalls all workers into nearest TH (costs resources)
-- Garrisoned workers are hidden from rendering and skip all behavior updates
-- Workers auto-deposit carried resources on entering garrison
-- TH damage reduced by `5% × num_workers` (max 50%)
-- Garrisoned workers collectively hurl stones at nearest enemy within 120px
-- Workers ejected on TH ruin transition
-- Resume Work global button ungarisons all and resumes gathering
+- Town Bell global button recalls all Gatherers into nearest Tree of Life (costs resources)
+- Garrisoned Gatherers are hidden from rendering and skip all behavior updates
+- Gatherers auto-deposit carried resources on entering garrison
+- Tree of Life damage reduced by `5% × num_Gatherers` (max 50%)
+- Garrisoned Gatherers collectively hurl crystals at nearest enemy within 120px
+- Gatherers ejected on ruin transition
+- Resume Work global button ungarrisons all and resumes gathering
 
 ### 6.7 Unit Separation & Squad Cohesion
 
@@ -281,7 +285,7 @@ Workers can be garrisoned inside the Town Hall for defense:
 
 ### 6.8 Formation Hints (v9.2)
 
-Soldiers pushed forward (+30px), archers pushed back (-35px) relative to squad front. Lower ranks pushed further forward (+5px per rank difference). Force: 25 px/s.
+Wardens pushed forward (+30px), Rangers pushed back (-35px) relative to squad front. Lower ranks pushed further forward (+5px per rank difference). Force: 25 px/s.
 
 ---
 
@@ -291,15 +295,15 @@ Every unit rolls 0-2 traits at creation (40% zero, 45% one, 15% two). Traits are
 
 | Trait | Rarity | Effect | Allowed Types |
 |---|---|---|---|
-| Brave | Common | +50% morale resistance | Soldier, Archer, Enemies |
-| Cowardly | Common | -30% morale resistance | Soldier, Archer, Enemies |
-| Aggressive | Common | +40% aggro range, +30% targeting noise | Soldier, Archer, Enemies |
-| Cautious | Common | -30% aggro range, +30% low-HP bonus | Soldier, Archer, Enemies |
-| Loyal | Uncommon | 2× squad cohesion | Soldier, Archer, Enemies |
-| Lone Wolf | Uncommon | +15% ATK when alone | Soldier, Archer, Enemies |
-| Sharpshooter | Rare | -40% arrow spread | Archer only |
-| Berserker | Rare | +25% ATK below 50% HP | Soldier only |
-| Inspiring | Very Rare | Morale leader at any rank | Soldier, Archer, Enemies |
+| Brave | Common | +50% morale resistance | Warden, Ranger, Enemies |
+| Cowardly | Common | -30% morale resistance | Warden, Ranger, Enemies |
+| Aggressive | Common | +40% aggro range, +30% targeting noise | Warden, Ranger, Enemies |
+| Cautious | Common | -30% aggro range, +30% low-HP bonus | Warden, Ranger, Enemies |
+| Loyal | Uncommon | 2× squad cohesion | Warden, Ranger, Enemies |
+| Lone Wolf | Uncommon | +15% ATK when alone | Warden, Ranger, Enemies |
+| Sharpshooter | Rare | -40% arrow spread | Ranger only |
+| Berserker | Rare | +25% ATK below 50% HP | Warden only |
+| Inspiring | Very Rare | Morale leader at any rank | Warden, Ranger, Enemies |
 | Nimble | Common | +15% terrain speed bonus | All combat |
 
 **Conflicts (mutually exclusive):** Brave/Cowardly, Aggressive/Cautious, Loyal/Lone Wolf
@@ -317,7 +321,7 @@ Every unit rolls 0-2 traits at creation (40% zero, 45% one, 15% two). Traits are
 | Dealing a hit | +1 | +1 |
 | Killing a target | +3 bonus | +2 bonus |
 
-Workers do NOT gain combat XP.
+Gatherers do NOT gain combat XP.
 
 ### 8.2 Military Ranks
 
@@ -335,17 +339,19 @@ HP ratio preserved on rank-up. Rank colors: Gray → Bronze → Silver → Gold 
 
 ## 9. Ballistic Archery
 
-Archers fire real projectiles with accuracy spread. Towers fire ballistic cannonballs (also non-homing as of v10c).
+Rangers fire real projectiles with accuracy spread. Sentinels use resonance fields (no projectiles — see Section 5.2).
 
-| Property | Arrows | Cannonballs |
-|---|---|---|
-| Speed | 350 px/s | 250 px/s |
-| Max flight | 2.0s | 2.5s |
-| Hit radius | 12px | 16px |
-| Base spread | 0.18 rad (Recruit) | 0.10 rad |
-| Min spread | 0.03 rad (Captain) | — |
+| Property | Arrows |
+|---|---|
+| Speed | 350 px/s |
+| Max flight | 2.0s |
+| Hit radius | 12px |
+| Base spread | 0.18 rad (Recruit) |
+| Min spread | 0.03 rad (Captain) |
 
 **Arrow lifecycle:** Fire → straight-line flight with spread → hit detection (12px) → damage + XP → or miss → ground arrow (8s persist, max 50).
+
+> **Legacy note:** Cannonball projectile code remains in `projectiles.py` but is no longer spawned. The spirograph trail math is repurposed for Sentinel dissonance absorption VFX (contracting trails from enemy death to nearest Sentinel).
 
 ---
 
@@ -367,7 +373,7 @@ Archers fire real projectiles with accuracy spread. Towers fire ballistic cannon
 | Koch Snowflake | F4 | Units on Koch curve perimeter | Guard/defensive perimeter |
 
 - Slot-based positioning: units pull toward assigned formation slot after 2.0s out of combat
-- Formation shapes match unit/building shapes (polar rose = soldier, golden spiral = archer, sierpinski = barracks, koch = tower)
+- Formation shapes match unit/building shapes (polar rose = Warden, golden spiral = Ranger, sierpinski = Resonance Forge, koch = Sentinel)
 
 ### 10.2 Stance System (v10_6)
 
@@ -416,10 +422,10 @@ Edges of map, multi-directional after threshold wave. Spawn seeks walkable tile 
 
 ### 13.2 Adaptive Composition
 Base probabilities across 9 enemy types (soldier minimum 15%). Counter-pick adaptations:
-- Many towers, no mobile army → +sappers
+- Many Sentinels, no mobile army → +sappers
 - Player clumps units → +warlocks
-- Strong economy (many workers) → +raiders
-- Heavy archer meta → +shieldbearers
+- Strong economy (many Gatherers) → +raiders
+- Heavy Ranger meta → +shieldbearers
 - High player kill rate → +healers
 
 ### 13.3 Enemy Flee & Veteran Return
@@ -434,7 +440,7 @@ Tracks "pressure" per wave: `pressure = (buildings_lost × 3 + units_lost × 2 +
 | Dominating | Last 3 waves < 0.1 pressure | +15% enemy count, compress interval 5s, unlock enemies 2 waves early |
 | Struggling | Any of last 3 waves > 0.5 | -10% enemy count, expand interval 5s |
 
-Escalation modifier clamped to [0.5, 2.0]. Smart multi-direction spawning biases toward less tower-defended edges.
+Escalation modifier clamped to [0.5, 2.0]. Smart multi-direction spawning biases toward less Sentinel-defended edges.
 
 ### 13.5 Straggler Processing (v10_7)
 
@@ -450,14 +456,14 @@ When no unit or building is selected, 4 macro buttons appear:
 
 | Button | Action |
 |---|---|
-| **Defend Base** | All combat units move to area between TH and nearest tower, enable hold ground |
+| **Defend Base** | All combat units move to area between Tree of Life and nearest Sentinel, enable hold ground |
 | **Hunt Enemies** | All combat units attack-move to nearest enemy, or map center if none visible |
-| **Town Bell** | Pay 20w/5i/10s, all workers garrison in nearest TH |
-| **Resume Work** | Ungarrison all workers, resume previous gathering task |
+| **Town Bell** | Pay 20 Fiber/5 Ore/10 Crystal, all Gatherers garrison in nearest Tree of Life |
+| **Resume Work** | Ungarrison all Gatherers, resume previous gathering task |
 
 ### 14.1 Unit Command Buttons (v10_2)
 
-When soldiers/archers selected, command buttons appear:
+When Wardens/Rangers selected, command buttons appear:
 - **Attack Move** — enter attack-move mode (click to set destination, engage enemies en route)
 - **Hold Ground** — stop and fight in range, never chase (toggleable)
 
@@ -471,7 +477,7 @@ When soldiers/archers selected, command buttons appear:
 |---|---|
 | Grass | 1.0× |
 | Tree | 2.0× |
-| Gold / Iron / Stone | 1.8× |
+| Flux / Ore / Crystal tiles | 1.8× |
 
 - Heuristic: Chebyshev distance
 - Node limit: 4000
@@ -491,7 +497,7 @@ When soldiers/archers selected, command buttons appear:
 
 **Right-Click Context:**
 
-| Target | Worker | Combat Unit |
+| Target | Gatherer | Combat Unit |
 |---|---|---|
 | Enemy | Attack | Attack |
 | Resource tile | Gather | Move |
@@ -500,7 +506,7 @@ When soldiers/archers selected, command buttons appear:
 | Damaged building | Repair | Move |
 | Empty ground | Move | Move |
 
-**Hotkeys:** 1-4 place buildings (worker), Q/W/E train units (building), U upgrade tower, F10 surrender.
+**Hotkeys:** 1-4 place buildings (Gatherer), Q/W/E train units (building), U upgrade Sentinel, F10 surrender.
 
 ---
 
@@ -511,7 +517,7 @@ When soldiers/archers selected, command buttons appear:
 | Region | Position | Content |
 |---|---|---|
 | Top Bar | y=0, h=40 | Resources (icons+values), population, wave timer bar, enemy estimate |
-| Game Area | y=40, h=550 | Map, units, buildings, arrows, cannonballs, explosions |
+| Game Area | y=40, h=550 | Map, units, buildings, arrows, resonance fields |
 | Bottom Panel | y=590, h=130 | Selection info, action buttons, global commands |
 | Minimap | Upper-right, 160×160 | Terrain, units, buildings, camera rect, combat heat |
 
@@ -520,8 +526,8 @@ When soldiers/archers selected, command buttons appear:
 - **Nothing selected, no enemy inspected:** 4 global command buttons + help text
 - **Enemy inspected (v10_2):** Read-only panel with enemy type, rank, traits, HP, stats, state
 - **Building selected:** Icon, name, HP bar, status, action buttons (train/upgrade)
-- **Single unit:** Icon, name+rank, traits, HP bar, stats+state, XP bar, skill info (worker), build/command buttons
-- **Multi-unit:** Count by type with rank distribution, aggregate HP, build buttons (all workers) or command buttons (all combat)
+- **Single unit:** Icon, name+rank, traits, HP bar, stats+state, XP bar, skill info (Gatherer), build/command buttons
+- **Multi-unit:** Count by type with rank distribution, aggregate HP, build buttons (all Gatherers) or command buttons (all combat)
 
 ### 17.3 Minimap
 
@@ -538,9 +544,9 @@ When soldiers/archers selected, command buttons appear:
 ## 18. Visual Rendering
 
 ### 18.1 Algorithmic Unit Shapes (v10f)
-- **Workers:** Hexagonal shape with resource-colored carry indicator
-- **Soldiers:** Polar rose pattern with shield element
-- **Archers:** Fibonacci spiral with bow element
+- **Gatherers:** Hexagonal shape with resource-colored carry indicator
+- **Wardens:** Polar rose pattern with shield element
+- **Rangers:** Fibonacci spiral with bow element
 - **Siege:** Large octagonal shape
 - **Elite:** Star pattern
 
@@ -549,7 +555,7 @@ All drawn with `pygame.draw` — no sprite assets. Visual pips (rank/trait indic
 ### 18.2 Map Rendering (v10_4)
 - **Terrain surface cached** — only rebuilt when tiles change (gather/build) or camera zoom changes
 - Dirty flag system: `_map_dirty` for tile changes, `_minimap_dirty` for minimap
-- Tree/gold/iron/stone decorations drawn on cached surface
+- Tree/Flux/Ore/Crystal tile decorations drawn on cached surface
 - Grid lines at zoom ≥ 0.7×
 
 ### 18.3 Unit Rendering (v10_4)
@@ -597,8 +603,8 @@ CSV-based logging to `logs/` directory. Events:
 | TRAINING_STARTED | Unit type |
 | RESOURCE_DEPOSIT | Resource type, amount |
 | RANK_UP | Unit type, new rank, owner |
-| WORKER_RANK_UP | Worker skill, new rank |
-| TOWER_UPGRADE | Tower level |
+| WORKER_RANK_UP | Gatherer skill, new rank |
+| TOWER_UPGRADE | Sentinel level |
 | ENEMY_ESCAPED | Enemy type, XP carried |
 | SURRENDER | — |
 | GAME_SUMMARY | Outcome, kills, losses, bounty, buildings, resources |
@@ -624,10 +630,10 @@ rts/
   utils.py           — dist, clamp, tile_center, pos_to_tile, draw_text, ruin_rebuild_cost
   game_map.py        — Procedural terrain gen, harvest, passability
   camera.py          — Pan/zoom/clamp/transforms
-  resources.py       — ResourceManager (gold, wood, iron, steel, stone)
+  resources.py       — ResourceManager (Flux, Fiber, Ore, Alloy, Crystal, Sap)
   entity_base.py     — Entity base class (v10_5 split from entities.py)
   unit.py            — Unit class: combat, gathering, stances, formations, metamorphosis
-  building.py        — Building class: construction, tower, garrison, Sentinel's Cry
+  building.py        — Building class: construction, Sentinel, garrison, Sentinel's Cry
   building_shapes.py — Algorithmic building shape drawing functions
   projectiles.py     — Arrow and Cannonball with parabolic arcs + lead aiming
   entities.py        — Re-export facade (imports from split modules for backward compat)
@@ -645,8 +651,8 @@ Entity (eid, x, y, hp, max_hp, owner, alive, last_attacker, frontal_armor)
   ├── Unit (state machine, commands, combat, gathering, building,
   │         fleeing, XP/rank, traits, arrow firing, squad behavior,
   │         target scoring, retargeting, morale, fractal formations,
-  │         stances, worker skills, garrison, attack-move,
+  │         stances, Gatherer skills, garrison, attack-move,
   │         sentinel cry buff, rooting, metamorphosis)
-  └── Building (construction, training queue, refinery, tower cannon,
+  └── Building (construction, training queue, Harmonic Mill, resonance field,
                 ruin system, garrison, rally point, Sentinel's Cry)
 ```

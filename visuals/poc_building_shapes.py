@@ -222,37 +222,75 @@ def koch_snowflake(cx, cy, size, depth):
     return all_points
 
 
-def draw_tower(surf, cx, cy, size, build_pct=1.0, level=1):
-    """Draw tower as Koch snowflake. Level 2 = more detail + orange."""
-    depth = max(0, min(3, int(build_pct * 3 + 0.5)))
-    if level >= 2:
-        depth = min(4, depth + 1)  # extra detail for upgraded tower
+def _draw_sentinel_poc(surf, cx, cy, size, build_pct=1.0, level=1, time_acc=0.0):
+    """Draw Sentinel: standing stone + Koch resonance field aura."""
+    import random as _rng
+    SENTINEL_STONE_C = (140, 130, 100)
+    SENTINEL_GOLD_C = (218, 165, 32)
+    RESONANCE_GLOW_C = (180, 160, 255)
 
-    if depth == 0:
-        # Foundation: square outline
-        half = size * 0.35
-        pygame.draw.rect(surf, TOWER_STONE,
+    # Koch resonance field (drawn behind stone)
+    if build_pct > 0.3:
+        field_depth = min(level, 2)
+        field_pct = min(1.0, (build_pct - 0.3) / 0.7)
+        field_r = size * 0.42 * field_pct
+        if field_r > 5:
+            points = koch_snowflake(cx, cy, field_r * 2, field_depth)
+            int_pts = [(int(p[0]), int(p[1])) for p in points]
+            if len(int_pts) >= 3:
+                field_surf = pygame.Surface((int(size * 1.2), int(size * 1.2)), pygame.SRCALPHA)
+                shifted = [(int(p[0] - cx + size * 0.6), int(p[1] - cy + size * 0.6))
+                           for p in points]
+                fill_alpha = int(18 * field_pct) if level == 1 else int(28 * field_pct)
+                pygame.draw.polygon(field_surf, (*RESONANCE_GLOW_C, fill_alpha), shifted)
+                border_c = RESONANCE_GLOW_C if level == 1 else SENTINEL_GOLD_C
+                border_alpha = int(50 * field_pct) if level == 1 else int(90 * field_pct)
+                pygame.draw.polygon(field_surf, (*border_c, border_alpha), shifted,
+                                    max(1, size // 40))
+                surf.blit(field_surf, (int(cx - size * 0.6), int(cy - size * 0.6)))
+
+    # Standing stone body
+    if build_pct < 0.1:
+        # Foundation: just base outline
+        half = size * 0.15
+        pygame.draw.rect(surf, SENTINEL_STONE_C,
                          (cx - half, cy - half, half * 2, half * 2), 2)
         return
 
-    points = koch_snowflake(cx, cy, size, depth)
-    int_points = [(int(p[0]), int(p[1])) for p in points]
+    w_s = int(size * 0.3 * min(1.0, build_pct * 1.5))
+    h_s = int(size * 0.7 * min(1.0, build_pct * 1.3))
+    body = [(cx - w_s // 2, cy + h_s // 3),
+            (cx - w_s // 3, cy - h_s // 3),
+            (cx, cy - h_s // 2),
+            (cx + w_s // 3, cy - h_s // 3),
+            (cx + w_s // 2, cy + h_s // 3)]
+    stone_c = SENTINEL_STONE_C if level == 1 else (160, 148, 115)
+    pygame.draw.polygon(surf, stone_c, body)
+    pygame.draw.polygon(surf, (0, 0, 0), body, 2)
 
-    if len(int_points) >= 3:
-        color = TOWER_STONE if level == 1 else (180, 160, 120)
-        pygame.draw.polygon(surf, color, int_points)
+    # Voronoi dots
+    _r = _rng.Random(137)
+    for _ in range(max(3, size // 15)):
+        ox = _r.randint(-w_s // 3, w_s // 3)
+        oy = _r.randint(-h_s // 3, h_s // 4)
+        dot_c = tuple(min(255, c + _r.randint(-12, 12)) for c in stone_c)
+        pygame.draw.circle(surf, dot_c, (cx + ox, cy + oy), max(1, size // 30))
 
-        # Border
-        border = (200, 200, 180) if level == 1 else FORGE_ORANGE
-        pygame.draw.polygon(surf, border, int_points, max(1, size // 30))
+    # Level 2: golden energy dots
+    if level >= 2:
+        for _ in range(4):
+            ox = _r.randint(-w_s // 4, w_s // 4)
+            oy = _r.randint(-h_s // 4, h_s // 5)
+            pygame.draw.circle(surf, SENTINEL_GOLD_C, (cx + ox, cy + oy),
+                               max(1, size // 22))
 
-    # Level 2: orange glow dots on Koch tips
-    if level >= 2 and len(points) > 10:
-        step = max(1, len(points) // 12)
-        for i in range(0, len(points), step):
-            pygame.draw.circle(surf, FORGE_ORANGE,
-                               (int(points[i][0]), int(points[i][1])),
-                               max(2, size // 20))
+    # Golden aura
+    aura = pygame.Surface((size, size), pygame.SRCALPHA)
+    for ri in range(3):
+        alpha = 25 - ri * 7
+        pygame.draw.circle(aura, (*SENTINEL_GOLD_C, max(0, alpha)),
+                           (size // 2, size // 2), int(size * 0.25) + ri * 5)
+    surf.blit(aura, (cx - size // 2, cy - size // 2))
 
 
 # =========================================================
@@ -274,8 +312,12 @@ def main():
     time_acc = 0.0
 
     building_types = ["Town Hall", "Barracks", "Refinery",
-                      "Tower Lv.1", "Tower Lv.2"]
+                      "Sentinel Lv.1", "Sentinel Lv.2"]
     current_type = 0
+
+    # Sentinel drawing
+    SENTINEL_STONE = (140, 130, 100)
+    SENTINEL_GOLD = (218, 165, 32)
 
     running = True
     while running:
@@ -323,10 +365,12 @@ def main():
             elif current_type == 2:  # Refinery
                 draw_refinery(screen, cx, cy, size, build_pct,
                               rotation=time_acc * 0.3)
-            elif current_type == 3:  # Tower Lv.1
-                draw_tower(screen, cx, cy, size, build_pct, level=1)
-            elif current_type == 4:  # Tower Lv.2
-                draw_tower(screen, cx, cy, size, build_pct, level=2)
+            elif current_type == 3:  # Sentinel Lv.1
+                _draw_sentinel_poc(screen, cx, cy, size, build_pct, level=1,
+                                   time_acc=time_acc)
+            elif current_type == 4:  # Sentinel Lv.2
+                _draw_sentinel_poc(screen, cx, cy, size, build_pct, level=2,
+                                   time_acc=time_acc)
 
             # Size label
             label = f"{size}px"

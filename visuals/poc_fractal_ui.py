@@ -1,18 +1,19 @@
 """
 Proof-of-Concept: Fractal UI Elements for Resonance
-Phase 4 — The Fractal Interface
+Phase 4 — The Fractal Interface (Chromatic Heptarchy Edition)
 
 Demonstrates:
   1. Fractal Typography (L-System Rune glyphs)
-  2. Koch Border Panels
+  2. Koch Border Panels with tone-colored accents
   3. Polar Rose Bloom Buttons
-  4. Fibonacci Resource Display
+  4. Fibonacci/Binary/Voronoi Resource Icons (7 types)
   5. Spirograph HP / Progress Bars
+  6. Harmony quality color spectrum
 
 Controls:
   Mouse hover  — button bloom effects
   Click        — visual press feedback
-  1/2/3        — change displayed unit type
+  1-7          — change displayed unit tone
   UP/DOWN      — adjust HP bar value
   LEFT/RIGHT   — adjust resource amounts
   T            — cycle text/font size demos
@@ -31,18 +32,37 @@ import pygame
 COL_BG = (20, 20, 30)
 COL_GUI_BG = (30, 30, 45)
 COL_GUI_BORDER = (80, 80, 100)
-COL_GOLD = (218, 165, 32)
+COL_GOLD = (218, 165, 32)       # Earth Gold (system)
 COL_BRIGHT_GOLD = (240, 220, 110)
 COL_DIM_GOLD = (200, 185, 80)
-COL_DISABLED_GOLD = (80, 75, 60)
-GLOW_WHITE = (240, 235, 220)
-HP_GREEN = (0, 200, 0)
+COL_DISABLED_GOLD = (80, 75, 60) # Ghost Stone
+GLOW_WHITE = (240, 235, 220)     # Boundary White
+HP_GREEN = (0, 200, 80)
 HP_YELLOW = (220, 200, 0)
 HP_RED = (200, 40, 40)
 COL_BUILD_BLUE = (0, 180, 255)
+
+# Chromatic Heptarchy Tone Colors (VDD Section 8)
+TONE_GATHERER = (50, 130, 220)   # Do — Worker Blue
+TONE_SOLDIER = (200, 60, 60)     # Re — Military Red
+TONE_ARCHER = (140, 100, 200)    # Mi — Precision Purple
+TONE_SHIELD = (160, 150, 130)    # Fa — Stone Tan
+TONE_KNIGHT = (218, 165, 32)     # Sol — Earth Gold
+TONE_HEALER = (46, 139, 87)      # La — Life Green
+TONE_SAGE = (100, 50, 150)       # Ti — Void Violet
+
+# Resource colors (VDD Section 9.5)
 COL_STONE = (160, 160, 170)
 COL_IRON = (120, 180, 220)
 COL_WOOD = (100, 180, 60)
+COL_SAP = (90, 140, 70)
+COL_RESONANCE = (180, 160, 255)
+
+# Harmony quality spectrum (VDD Section 8.4)
+HARMONY_WEAK = (120, 80, 80)
+HARMONY_THIN = (160, 160, 140)
+HARMONY_RICH = (180, 160, 255)
+HARMONY_PERFECT = (255, 230, 80)
 
 SCREEN_W, SCREEN_H = 1280, 720
 
@@ -456,12 +476,21 @@ def main():
     hp_ratio = 0.75
     build_ratio = 0.4
     resources = {"GOLD": 350, "STONE": 120, "IRON": 45, "WOOD": 210}
-    unit_types = ["SOLDIER", "ARCHER", "WORKER"]
+    unit_types = ["GATHERER", "SOLDIER", "ARCHER", "SHIELD", "KNIGHT", "HEALER", "SAGE"]
+    unit_colors = {
+        "GATHERER": TONE_GATHERER, "SOLDIER": TONE_SOLDIER, "ARCHER": TONE_ARCHER,
+        "SHIELD": TONE_SHIELD, "KNIGHT": TONE_KNIGHT, "HEALER": TONE_HEALER,
+        "SAGE": TONE_SAGE,
+    }
     unit_idx = 0
     unit_stats = {
+        "GATHERER": {"hp": 40, "atk": 2, "def": 2, "spd": 4},
         "SOLDIER": {"hp": 100, "atk": 12, "def": 8, "spd": 2},
         "ARCHER": {"hp": 60, "atk": 18, "def": 3, "spd": 3},
-        "WORKER": {"hp": 40, "atk": 2, "def": 2, "spd": 4},
+        "SHIELD": {"hp": 150, "atk": 4, "def": 18, "spd": 1},
+        "KNIGHT": {"hp": 80, "atk": 15, "def": 6, "spd": 5},
+        "HEALER": {"hp": 50, "atk": 1, "def": 4, "spd": 3},
+        "SAGE": {"hp": 45, "atk": 8, "def": 2, "spd": 2},
     }
     text_demo_mode = 0
     text_demos = [
@@ -497,12 +526,8 @@ def main():
             elif ev.type == pygame.KEYDOWN:
                 if ev.key == pygame.K_ESCAPE:
                     running = False
-                elif ev.key == pygame.K_1:
-                    unit_idx = 0
-                elif ev.key == pygame.K_2:
-                    unit_idx = 1
-                elif ev.key == pygame.K_3:
-                    unit_idx = 2
+                elif pygame.K_1 <= ev.key <= pygame.K_7:
+                    unit_idx = min(ev.key - pygame.K_1, len(unit_types) - 1)
                 elif ev.key == pygame.K_UP:
                     hp_ratio = min(1.0, hp_ratio + 0.05)
                 elif ev.key == pygame.K_DOWN:
@@ -573,18 +598,21 @@ def main():
         panel_rect = (60, SCREEN_H - 260, 500, 230)
         panel_depth_f = 1.0 + 0.5 * math.sin(t_time * 0.3)
         panel_depth = int(panel_depth_f + 0.5)
-        koch_panel(screen, panel_rect, panel_depth, COL_GUI_BORDER, 200)
-
         uname = unit_types[unit_idx]
         stats = unit_stats[uname]
+        panel_color = unit_colors.get(uname, COL_GUI_BORDER)
+        koch_panel(screen, panel_rect, panel_depth, panel_color, 200)
+
         font_panel.render_text(screen, uname, panel_rect[0] + 20, panel_rect[1] + 12)
 
-        # unit rose icon in panel
+        # unit rose icon in panel (tone-colored)
         rose_cx = panel_rect[0] + panel_rect[2] - 60
         rose_cy = panel_rect[1] + 55
-        k_vals = {"SOLDIER": 2.5, "ARCHER": 3, "WORKER": 4}
+        k_vals = {"GATHERER": 3, "SOLDIER": 2.5, "ARCHER": 3.5, "SHIELD": 2,
+                  "KNIGHT": 4, "HEALER": 5, "SAGE": 3.5}
+        rose_color = unit_colors.get(uname, COL_GOLD)
         draw_polar_rose(screen, rose_cx, rose_cy, 30, k_vals[uname], 80,
-                        COL_GOLD, t_time * 0.5, 2)
+                        rose_color, t_time * 0.5, 2)
 
         # stats
         stat_y = panel_rect[1] + 50
@@ -636,7 +664,7 @@ def main():
         # === CONTROLS HINT ===
         hint_y = SCREEN_H - 22
         hint_f2 = FractalFont(13, (90, 85, 70))
-        hint_f2.render_text(screen, "1/2/3:UNIT  UP/DN:HP  L/R:RES  T:FONT  ESC:QUIT", 10, hint_y)
+        hint_f2.render_text(screen, "1-7:TONE  UP/DN:HP  L/R:RES  T:FONT  ESC:QUIT", 10, hint_y)
 
         pygame.display.flip()
 

@@ -81,6 +81,8 @@ class EnemyAI:
 
         # Narrative text (read by GUI)
         self.narrative_text = NARRATIVE_CALM
+        self.pending_spawn_edges: list[str] = []  # Phase 5: exposed for UI alerts
+        self.last_spawn_edges: list[str] = []     # Phase 2: for minimap flash
 
         # Last outcome (for cooldown computation)
         self.last_outcome = "won"
@@ -159,6 +161,9 @@ class EnemyAI:
             self._enter_state(STATE_IMMINENT)
             assert self.current_incident_data is not None
             self.narrative_text = self.current_incident_data["narrative_imminent"]
+            # Phase 5: pre-compute spawn edges for UI alert
+            directions = self.current_incident_data.get("directions", 1)
+            self.pending_spawn_edges = self._pick_edges_n(directions)
             game.add_notification(self.current_incident_data["narrative_imminent"],
                                   2.5, (255, 100, 50))
 
@@ -313,9 +318,14 @@ class EnemyAI:
         # Build composition from catalogue ratios
         types = self._build_composition(data, count, game)
 
-        # Edges
-        directions = data.get("directions", 1)
-        edges = self._pick_edges_n(directions)
+        # Edges — use pre-computed from IMMINENT phase if available
+        if self.pending_spawn_edges:
+            edges = self.pending_spawn_edges
+        else:
+            directions = data.get("directions", 1)
+            edges = self._pick_edges_n(directions)
+        self.last_spawn_edges = edges
+        self.pending_spawn_edges = []
 
         # Reset incident tracking
         self.incident_enemies_spawned = len(types)

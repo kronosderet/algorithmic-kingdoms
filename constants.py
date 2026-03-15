@@ -128,6 +128,50 @@ DIFFICULTY_PROFILES = {
 }
 
 # ---------------------------------------------------------------------------
+# Game-over tips & grades (Phase 1 UX overhaul)
+# ---------------------------------------------------------------------------
+INCIDENT_ALERT_COLOR = (255, 80, 60)
+TENSION_PULSE_SPEED = 3.0  # oscillation speed for foreboding pulse
+ATTACK_ARROW_COLOR = (255, 60, 40)
+ATTACK_ARROW_SIZE = 20
+MINIMAP_FLASH_DURATION = 2.0  # seconds
+
+GAME_OVER_TIPS_DEFEAT = [
+    "Build Sentinels near economy buildings for early defence.",
+    "Train Wardens before the first incident hits.",
+    "Use Gatherers to collect resources — idle Gatherers waste time.",
+    "Rangers outrange melee enemies. Mix them into your army.",
+    "Move 3+ military units together to discover formations.",
+    "Squads in formation deal bonus resonance damage.",
+    "Keep training Gatherers — more income means a bigger army.",
+    "Watch the tension meter — it warns when enemies are coming.",
+]
+GAME_OVER_TIPS_VICTORY = [
+    "Try a higher difficulty for more incidents and tighter resources.",
+    "Experiment with different formations for resonance bonuses.",
+    "Can you win with zero buildings lost?",
+    "Try rushing S-rank: zero losses, all incidents cleared fast.",
+]
+
+# ---------------------------------------------------------------------------
+# Difficulty menu descriptions (Phase 3 UX overhaul)
+# ---------------------------------------------------------------------------
+DIFFICULTY_DESCRIPTIONS = {
+    "easy": [
+        "Gentle pace — learn the game",
+        "300 Flux, 4 Gatherers, 7 incidents",
+    ],
+    "medium": [
+        "The intended challenge",
+        "200 Flux, 3 Gatherers, 14 incidents",
+    ],
+    "hard": [
+        "For seasoned commanders",
+        "180 Flux, 3 Gatherers, 21 incidents",
+    ],
+}
+
+# ---------------------------------------------------------------------------
 # v10_9: Incident Director — Dramaturgic Threat Engine
 # ---------------------------------------------------------------------------
 
@@ -367,7 +411,7 @@ BUILDING_COLORS = {
 }
 
 BUILDING_LABELS = {
-    "town_hall": "TL", "barracks": "WN", "refinery": "CR", "tower": "SN",
+    "town_hall": "TL", "barracks": "RF", "refinery": "HM", "tower": "SN",
     "goldmine_hut": "GN", "lumber_camp": "GT", "quarry_hut": "QN",
     "iron_depot": "IN", "scaffold": "LT",
     "sawmill": "TS", "goldmine": "GS", "stoneworks": "SS",
@@ -377,12 +421,12 @@ BUILDING_LABELS = {
 # v10_7: Thematic display names — Resonance identity
 DISPLAY_NAMES = {
     # Buildings
-    "town_hall": "Tree of Life", "barracks": "War Nexus", "refinery": "Crucible",
+    "town_hall": "Tree of Life", "barracks": "Resonance Forge", "refinery": "Harmonic Mill",
     "tower": "Sentinel",
-    "goldmine_hut": "Gold Node", "lumber_camp": "Grove Tap",
-    "quarry_hut": "Stone Node", "iron_depot": "Iron Node", "scaffold": "Lattice",
-    "sawmill": "Timber Spire", "goldmine": "Gold Spire",
-    "stoneworks": "Stone Spire", "iron_works": "Iron Spire", "forge": "Fractal Forge",
+    "goldmine_hut": "Flux Node", "lumber_camp": "Grove Tap",
+    "quarry_hut": "Crystal Node", "iron_depot": "Ore Node", "scaffold": "Lattice",
+    "sawmill": "Fiber Spire", "goldmine": "Flux Spire",
+    "stoneworks": "Crystal Spire", "iron_works": "Ore Spire", "forge": "Fractal Forge",
     # Player units
     "worker": "Gatherer", "soldier": "Warden", "archer": "Ranger",
     # Enemy units — The Dark 7: one corrupted mirror per player tone
@@ -391,14 +435,14 @@ DISPLAY_NAMES = {
     # Mi (3) Ranger    →  Fade Ranger     — scattered suppression from the void
     # Fa (4) Shield    →  Ironbark        — living armor wall, shields the dark
     # Sol(5) Knight    →  Thornknight     — fast deadly charge, decisive strike
-    # La (6) Healer    →  Marrowmend      — sinister healer, sustains the dark
+    # La (6) Healer    →  Bloodtithe      — sacrifices allies, collapses dissonant formations for inverted harmonics
     # Ti (7) Sage      →  Hexweaver       — corrupts resonance, weaves anti-harmonics
     "enemy_raider": "Blight Reaper",
     "enemy_soldier": "Hollow Warden",
     "enemy_archer": "Fade Ranger",
     "enemy_shieldbearer": "Ironbark",
     "enemy_elite": "Thornknight",
-    "enemy_healer": "Marrowmend",
+    "enemy_healer": "Bloodtithe",
     "enemy_siege": "Hexweaver",
     "entrenched": "Entrenched Titan",
 }
@@ -406,6 +450,12 @@ DISPLAY_NAMES = {
 def display_name(key: str) -> str:
     """Get thematic display name for a building or unit type."""
     return DISPLAY_NAMES.get(key, key.replace("_", " ").title())
+
+# VDD Section 1.5: Resource display names (code name → UI name)
+RESOURCE_DISPLAY_NAMES: dict[str, str] = {
+    "gold": "Flux", "wood": "Fiber", "iron": "Ore",
+    "steel": "Alloy", "stone": "Crystal", "sap": "Sap",
+}
 
 # Unit definitions: (gold, wood, steel, hp, speed, attack, attack_range, attack_cd, train_time)
 UNIT_DEFS = {
@@ -427,7 +477,7 @@ UNIT_COLORS = {  # Rainbow scheme: 7 colors for 7 unit types (ROYGBIV reversed)
 
 UNIT_LABELS = {"worker": "G", "soldier": "W", "archer": "R",
                "enemy_soldier": "HW", "enemy_archer": "FR", "enemy_raider": "BR",
-               "enemy_shieldbearer": "IB", "enemy_elite": "TK", "enemy_healer": "MM",
+               "enemy_shieldbearer": "IB", "enemy_elite": "TK", "enemy_healer": "BT",
                "enemy_siege": "HX"}
 UNIT_RADIUS = {"worker": 10, "soldier": 12, "archer": 11,
                "enemy_soldier": 12, "enemy_archer": 11, "enemy_siege": 14, "enemy_elite": 12,
@@ -451,7 +501,7 @@ ENEMY_COLORS = {  # The Dark 7 — desaturated/darkened hues
     "enemy_raider":       (45, 15, 35),   # Blight Reaper (anti-Gatherer) — dark magenta
     "enemy_shieldbearer": (40, 40, 45),   # Ironbark (anti-Shield) — dark steel
     "enemy_elite":        (50, 10, 25),   # Thornknight (anti-Knight) — dark crimson
-    "enemy_healer":       (15, 40, 20),   # Marrowmend (anti-Healer) — dark green
+    "enemy_healer":       (55, 10, 15),   # Bloodtithe (anti-Healer) — dark blood red
     "enemy_siege":        (30, 10, 45),   # Hexweaver (anti-Sage) — dark purple
 }
 
@@ -652,8 +702,8 @@ RUIN_REBUILD_FRACTION = 0.40  # fraction of original cost to rebuild from ruins
 # v10: Worker Skill XP System
 # ---------------------------------------------------------------------------
 WORKER_SKILL_NAMES = {
-    "lumberjack": "Lumberjack", "gold_miner": "Gold Miner",
-    "iron_miner": "Iron Miner", "stone_mason": "Stone Mason",
+    "lumberjack": "Lumberjack", "gold_miner": "Flux Miner",
+    "iron_miner": "Ore Miner", "stone_mason": "Crystal Mason",
     "builder": "Builder", "smelter": "Smelter",
 }
 WORKER_RANKS = ["Novice", "Foreman", "Master"]
@@ -856,13 +906,13 @@ TUTORIAL_HINTS = [
      (180, 220, 255)),
     ("train_worker",  "selected_th",  "Press Q or click 'Train Gatherer' to create workers",
      (180, 220, 255)),
-    ("gather_res",    "has_workers",   "Right-click trees or gold to gather resources",
+    ("gather_res",    "has_workers",   "Right-click trees or Flux deposits to gather resources",
      (255, 220, 80)),
-    ("build_barracks", "has_gold",     "Select workers, then press 2 to build a War Nexus",
+    ("build_barracks", "has_gold",     "Select Gatherers, then press 2 to build a Resonance Forge",
      (140, 200, 255)),
-    ("train_military", "has_barracks", "Click the War Nexus, press T for Wardens, E for Rangers",
+    ("train_military", "has_barracks", "Click the Resonance Forge, press T for Wardens, E for Rangers",
      (140, 200, 255)),
-    ("defend",        "has_military",  "Right-click enemies to attack! Build towers (4) for defense",
+    ("defend",        "has_military",  "Right-click enemies to attack! Build Sentinels (4) for defense",
      (255, 140, 80)),
     ("move_units",    "first_attack",  "Right-click ground to move units. Shift+click to queue",
      (180, 180, 200)),
@@ -1093,11 +1143,11 @@ TOOLTIP_PADDING = 6
 # Tooltip text dictionary — keyed by element identifier
 TOOLTIP_DATA = {
     # --- Resources ---
-    "res_gold": "Gold — Primary currency.\nUsed for buildings, units, and upgrades.",
-    "res_wood": "Wood — Building material.\nGathered from trees. Used for structures.",
-    "res_iron": "Iron — Advanced material.\nMined from ore. Refined into Steel.",
-    "res_steel": "Steel — Refined metal.\nForged from Iron + Stone. Needed for military.",
-    "res_stone": "Stone — Construction material.\nQuarried from deposits. Used for towers & forges.",
+    "res_gold": "Flux — Primary currency.\nUsed for buildings, units, and upgrades.",
+    "res_wood": "Fiber — Building material.\nGathered from trees. Used for structures.",
+    "res_iron": "Ore — Advanced material.\nMined from veins. Refined into Alloy.",
+    "res_steel": "Alloy — Refined metal.\nForged from Ore + Crystal. Needed for military.",
+    "res_stone": "Crystal — Construction material.\nQuarried from deposits. Used for Sentinels & forges.",
     # --- Population ---
     "pop": "Population — Total living units.\nIncludes workers and military.",
     # --- Tension ---
@@ -1138,19 +1188,19 @@ TOOLTIP_DATA = {
     "trait_nimble": "Nimble — +15% speed on rough terrain.\nMoves faster through trees and hills.",
     # --- Buildings ---
     "bld_town_hall": "Tree of Life — Main structure.\nTrains Gatherers. Heals nearby units.\nGarrison workers for defense.",
-    "bld_barracks": "War Nexus — Military hub.\nTrains Wardens and Rangers.\nUnlocks Sentinel construction.",
-    "bld_refinery": "Crucible — Iron smelter.\nConverts 2 Iron → 1 Steel.\nUpgrades to Fractal Forge.",
-    "bld_tower": "Sentinel — Defensive tower.\nFires cannonballs at enemies.\nUpgrades to explosive AoE.",
-    "bld_goldmine_hut": "Gold Node — Drop-off for gold.\nReduces worker travel time.\nUnlocked by Gold Miner Foreman.",
-    "bld_lumber_camp": "Grove Tap — Drop-off for wood.\nReduces worker travel time.\nUnlocked by Lumberjack Foreman.",
-    "bld_quarry_hut": "Stone Node — Drop-off for stone.\nReduces worker travel time.\nUnlocked by Stone Mason Foreman.",
-    "bld_iron_depot": "Iron Node — Drop-off for iron.\nReduces worker travel time.\nUnlocked by Iron Miner Foreman.",
+    "bld_barracks": "Resonance Forge — Military hub.\nTrains Wardens and Rangers.\nUnlocks Sentinel construction.",
+    "bld_refinery": "Harmonic Mill — Ore processor.\nConverts 2 Ore → 1 Alloy.\nUpgrades to Fractal Forge.",
+    "bld_tower": "Sentinel — Lattice anchor.\nResonance field damages nearby enemies.\nKoch snowflake aura, passive + pulse.",
+    "bld_goldmine_hut": "Flux Node — Drop-off for Flux.\nReduces worker travel time.\nUnlocked by Flux Miner Foreman.",
+    "bld_lumber_camp": "Grove Tap — Drop-off for Fiber.\nReduces worker travel time.\nUnlocked by Lumberjack Foreman.",
+    "bld_quarry_hut": "Crystal Node — Drop-off for Crystal.\nReduces worker travel time.\nUnlocked by Crystal Mason Foreman.",
+    "bld_iron_depot": "Ore Node — Drop-off for Ore.\nReduces worker travel time.\nUnlocked by Ore Miner Foreman.",
     "bld_scaffold": "Lattice — Builder's scaffold.\n+25% build/repair speed nearby.\nUnlocked by Builder Foreman.",
-    "bld_sawmill": "Timber Spire — Wood production.\nPassive wood + worker-boosted output.\nUpgraded from Grove Tap.",
-    "bld_goldmine": "Gold Spire — Gold production.\nPassive gold + worker-boosted output.\nUpgraded from Gold Node.",
-    "bld_stoneworks": "Stone Spire — Stone production.\nPassive stone + worker-boosted output.\nUpgraded from Stone Node.",
-    "bld_iron_works": "Iron Spire — Iron production.\nPassive iron + worker-boosted output.\nUpgraded from Iron Node.",
-    "bld_forge": "Fractal Forge — Advanced smelter.\n2 Stone + 1 Iron → 1 Steel (faster).\nUpgraded from Crucible.",
+    "bld_sawmill": "Fiber Spire — Fiber production.\nPassive Fiber + worker-boosted output.\nUpgraded from Grove Tap.",
+    "bld_goldmine": "Flux Spire — Flux production.\nPassive Flux + worker-boosted output.\nUpgraded from Flux Node.",
+    "bld_stoneworks": "Crystal Spire — Crystal production.\nPassive Crystal + worker-boosted output.\nUpgraded from Crystal Node.",
+    "bld_iron_works": "Ore Spire — Ore production.\nPassive Ore + worker-boosted output.\nUpgraded from Ore Node.",
+    "bld_forge": "Fractal Forge — Advanced processor.\n2 Crystal + 1 Ore → 1 Alloy (faster).\nUpgraded from Harmonic Mill.",
     # --- Unit Types ---
     "unit_worker": "Gatherer — Economic backbone.\nGathers resources, builds, repairs.\nGains skill XP per resource type.",
     "unit_soldier": "Warden — Melee fighter.\n140 HP, 14 ATK, short range.\nTough frontline with high HP.",
@@ -1161,7 +1211,7 @@ TOOLTIP_DATA = {
     "enemy_enemy_raider": "Blight Reaper — Anti-Gatherer (Do).\nDestroys what Gatherers build.",
     "enemy_enemy_shieldbearer": "Ironbark — Anti-Shield (Fa).\n50% frontal armor. Flank to bypass!",
     "enemy_enemy_elite": "Thornknight — Anti-Knight (Sol).\nFast, deadly charge. Hard to kill.",
-    "enemy_enemy_healer": "Marrowmend — Anti-Healer (La).\nHeals 5 HP/s to nearby enemies.",
+    "enemy_enemy_healer": "Bloodtithe — Anti-Healer (La).\nSacrifices allies to collapse dissonant formations.\nGains inverted harmonics power from each sacrifice.",
     "enemy_enemy_siege": "Hexweaver — Anti-Sage (Ti).\nCorrupts resonance. 2x building damage.\nWeaves anti-harmonics from dissonant fields.",
     # --- Global Buttons ---
     "btn_Defend Base": "Rally all military to defend\nthe nearest Town Hall.",
@@ -1169,8 +1219,8 @@ TOOLTIP_DATA = {
     "btn_Town Bell": "Ring the bell — all idle workers\ngarrison inside the Town Hall.",
     "btn_Resume Work": "Ungarrison workers and send them\nback to their previous tasks.",
     # --- Gather ---
-    "btn_Wood": "Send selected workers to gather\nwood from the nearest trees.",
-    "btn_Gold": "Send selected workers to gather\ngold from the nearest deposit.",
-    "btn_Iron": "Send selected workers to gather\niron from the nearest ore vein.",
-    "btn_Stone": "Send selected workers to gather\nstone from the nearest quarry.",
+    "btn_Wood": "Send selected workers to gather\nFiber from the nearest trees.",
+    "btn_Gold": "Send selected workers to gather\nFlux from the nearest deposit.",
+    "btn_Iron": "Send selected workers to gather\nOre from the nearest vein.",
+    "btn_Stone": "Send selected workers to gather\nCrystal from the nearest quarry.",
 }

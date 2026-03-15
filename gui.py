@@ -19,11 +19,11 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, TOP_BAR_H, BOTTOM_PANEL_H,
                        FOREMAN_BUILDINGS, DROPOFF_BUILDING_TYPES,
                        UPGRADE_PATH, PRODUCTION_RATES,
                        PRODUCTION_TICK_INTERVAL, BUILD_PROXIMITY,
-                       FORGE_TIME, SMELTER_REFINERY_BONUS,
+                       FORGE_TIME, SMELTER_REFINERY_BONUS, RESOURCE_DISPLAY_NAMES,
                        STANCE_AGGRESSIVE, STANCE_NAMES, STANCE_COLORS,
                        FORMATION_POLAR_ROSE, FORMATION_GOLDEN_SPIRAL,
                        FORMATION_SIERPINSKI, FORMATION_KOCH,
-                       FORMATION_NAMES,
+                       FORMATION_NAMES, FORMATION_MIN_VIABLE,
                        RESONANCE_COLORS,
                        DISCOVERY_HINTS,
                        TOOLTIP_DATA, TOOLTIP_HOVER_DELAY, TOOLTIP_MAX_WIDTH,
@@ -31,6 +31,28 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, TOP_BAR_H, BOTTOM_PANEL_H,
                        MSG_LOG_FADE, GAME_AREA_Y, GAME_AREA_H)
 from utils import draw_text, ruin_rebuild_cost
 from entities import Building, Unit
+from fractal_font import fractal_font
+from fractal_ui import (koch_border, radial_gradient, draw_resource_icon, fractal_bar)
+
+# Pre-rendered panel backgrounds (created once on first use)
+_panel_bg_cache: dict[str, pygame.Surface] = {}
+
+# Font size cache: id(font_obj) → pixel height
+_font_size_cache: dict[int, int] = {}
+
+
+def ftext(surf: pygame.Surface, text: str, x: int, y: int,
+          font: pygame.font.Font, color: tuple[int, ...] = COL_TEXT,
+          center: bool = False) -> pygame.Rect:
+    """Fractal font draw — drop-in replacement for draw_text.
+
+    Maps pygame font objects to fractal font sizes via get_height().
+    """
+    fid = id(font)
+    if fid not in _font_size_cache:
+        _font_size_cache[fid] = font.get_height()
+    size = _font_size_cache[fid]
+    return fractal_font.draw(surf, str(text), x, y, size, color, center)
 
 
 class GUI:
@@ -41,6 +63,7 @@ class GUI:
         self.font_xs: pygame.font.Font = None  # type: ignore[assignment]
         self.font_lg: pygame.font.Font = None  # type: ignore[assignment]
         self.buttons = []  # list of (rect, label, callback, enabled)
+        self._form_squad_btn_rect = None  # Phase 4: "Form Squad (F)" button
         # Tooltip state
         self._tooltip_zones = []  # list of (rect, tooltip_key) — rebuilt each frame
         self._hover_key = None    # currently hovered tooltip key
@@ -59,17 +82,21 @@ class GUI:
         """Draw text truncated with '...' if it exceeds max_width."""
         if color is None:
             color = COL_TEXT
-        rendered = font.render(text, True, color)
-        if rendered.get_width() <= max_width:
-            surf.blit(rendered, (x, y))
+        fid = id(font)
+        if fid not in _font_size_cache:
+            _font_size_cache[fid] = font.get_height()
+        size = _font_size_cache[fid]
+        w, _h = fractal_font.size(text, size)
+        if w <= max_width:
+            fractal_font.draw(surf, text, x, y, size, color)
         else:
             while len(text) > 1:
                 text = text[:-1]
-                rendered = font.render(text + "..", True, color)
-                if rendered.get_width() <= max_width:
-                    surf.blit(rendered, (x, y))
+                w, _h = fractal_font.size(text + "..", size)
+                if w <= max_width:
+                    fractal_font.draw(surf, text + "..", x, y, size, color)
                     return
-            surf.blit(font.render("..", True, color), (x, y))
+            fractal_font.draw(surf, "..", x, y, size, color)
 
     def _register_tooltip(self, rect, key):
         """Register a rectangular zone with a tooltip key for this frame."""
@@ -109,20 +136,25 @@ class GUI:
 
         mx, my = self._last_mx, self._last_my
         lines = text.split("\n")
-        font = self.font_xs
-        if not font:
-            return
 
-        # Measure text
-        line_h = font.get_height() + 2
-        pad = TOOLTIP_PADDING
+        # Fractal font — compact and crisp at small sizes
+        title_sz = 13
+        body_sz = 11
+        title_line_h = title_sz + 3
+        body_line_h = body_sz + 3
+        pad = 6
+
+        # Measure text width and total height
         max_w = 0
-        for line in lines:
-            w = font.size(line)[0]
+        total_h = pad * 2
+        for i, line in enumerate(lines):
+            sz = title_sz if i == 0 else body_sz
+            w, _h = fractal_font.size(line, sz)
             if w > max_w:
                 max_w = w
-        card_w = min(max_w + pad * 2, TOOLTIP_MAX_WIDTH + pad * 2)
-        card_h = len(lines) * line_h + pad * 2
+            total_h += title_line_h if i == 0 else body_line_h
+        card_w = max_w + pad * 2
+        card_h = total_h
 
         # Position: prefer below-right of cursor, clamp to screen
         tx = mx + 14
@@ -132,17 +164,21 @@ class GUI:
         if ty + card_h > SCREEN_HEIGHT - 4:
             ty = my - card_h - 4
 
-        # Draw card background (with alpha via surface)
+        # Draw card background
         card_surf = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
         card_surf.fill(TOOLTIP_BG)
         surf.blit(card_surf, (tx, ty))
-        pygame.draw.rect(surf, TOOLTIP_BORDER, (tx, ty, card_w, card_h), 1, border_radius=3)
+        koch_border(surf, (tx, ty, card_w, card_h), 1, (100, 90, 60))
 
         # Draw text lines
-        # First line is title (brighter), rest are description
+        ly = ty + pad
         for i, line in enumerate(lines):
-            col = (240, 240, 250) if i == 0 else (180, 180, 195)
-            draw_text(surf, line, tx + pad, ty + pad + i * line_h, font, col)
+            if i == 0:
+                fractal_font.draw(surf, line, tx + pad, ly, title_sz, (240, 240, 250))
+                ly += title_line_h
+            else:
+                fractal_font.draw(surf, line, tx + pad, ly, body_sz, (180, 180, 195))
+                ly += body_line_h
 
     @staticmethod
     def cost_str(gold=0, wood=0, iron=0, steel=0, stone=0):
@@ -174,63 +210,37 @@ class GUI:
     # Inline HP bar helper (used by both player + enemy panels)
     # ------------------------------------------------------------------
     def _draw_hp_bar(self, surf, x, y, w, h, hp, max_hp, color_fill, color_bg=(40, 10, 10)):
-        """Draw a filled HP bar with numeric overlay."""
+        """Draw a fractal-styled HP bar with numeric overlay."""
         ratio = max(0.0, min(1.0, hp / max_hp)) if max_hp > 0 else 0
-        pygame.draw.rect(surf, color_bg, (x, y, w, h))
-        fill_w = int(w * ratio)
-        if fill_w > 0:
-            pygame.draw.rect(surf, color_fill, (x, y, fill_w, h))
-        pygame.draw.rect(surf, COL_GUI_BORDER, (x, y, w, h), 1)
+        fractal_bar(surf, x, y, w, h, ratio, color_fill, border=True)
         hp_text = f"{int(hp)}/{max_hp}"
-        draw_text(surf, hp_text, x + w // 2, y + h // 2, self.font_xs, (255, 255, 255), center=True)
+        ftext(surf, hp_text, x + w // 2, y + h // 2, self.font_xs, (255, 255, 255), center=True)
 
     # ------------------------------------------------------------------
     # Resource icon shapes (VDD: distinct per resource)
     # ------------------------------------------------------------------
     @staticmethod
+    @staticmethod
     def _draw_res_icon(surf, cx, cy, res_type):
-        """Draw a small distinctive shape per resource type."""
-        if res_type == "gold":
-            # diamond
-            pts = [(cx, cy - 7), (cx + 6, cy), (cx, cy + 7), (cx - 6, cy)]
-            pygame.draw.polygon(surf, COL_GOLD, pts)
-            pygame.draw.polygon(surf, (180, 150, 0), pts, 1)
-        elif res_type == "wood":
-            # triangle (tree)
-            pts = [(cx, cy - 7), (cx + 6, cy + 6), (cx - 6, cy + 6)]
-            pygame.draw.polygon(surf, COL_WOOD, pts)
-            pygame.draw.polygon(surf, (20, 120, 20), pts, 1)
-        elif res_type == "iron":
-            # pentagon
-            import math
-            pts = []
-            for i in range(5):
-                a = math.radians(90 + 72 * i)
-                pts.append((cx + int(7 * math.cos(a)), cy - int(7 * math.sin(a))))
-            pygame.draw.polygon(surf, COL_IRON_C, pts)
-            pygame.draw.polygon(surf, (130, 130, 145), pts, 1)
-        elif res_type == "steel":
-            # hexagon
-            import math
-            pts = []
-            for i in range(6):
-                a = math.radians(60 * i)
-                pts.append((cx + int(7 * math.cos(a)), cy - int(7 * math.sin(a))))
-            pygame.draw.polygon(surf, COL_STEEL, pts)
-            pygame.draw.polygon(surf, (70, 120, 180), pts, 1)
-        elif res_type == "stone":
-            # square rotated 45°
-            s = 5
-            pts = [(cx, cy - s), (cx + s, cy), (cx, cy + s), (cx - s, cy)]
-            pygame.draw.polygon(surf, COL_STONE, pts)
-            pygame.draw.polygon(surf, (120, 110, 100), pts, 1)
+        """Draw a mathematical resource icon (Fibonacci spiral, binary tree, etc.)."""
+        color_map = {
+            "gold": COL_GOLD, "wood": COL_WOOD, "iron": COL_IRON_C,
+            "steel": COL_STEEL, "stone": COL_STONE,
+        }
+        color = color_map.get(res_type, COL_TEXT)
+        draw_resource_icon(surf, res_type, cx, cy, 7, color)
 
     # ------------------------------------------------------------------
     # TOP BAR
     # ------------------------------------------------------------------
     def draw_top_bar(self, surf, resources, enemy_ai, player_units):
-        pygame.draw.rect(surf, COL_GUI_BG, (0, 0, SCREEN_WIDTH, TOP_BAR_H))
-        pygame.draw.line(surf, COL_GUI_BORDER, (0, TOP_BAR_H), (SCREEN_WIDTH, TOP_BAR_H))
+        # Radial gradient background
+        if "top_bar" not in _panel_bg_cache:
+            _panel_bg_cache["top_bar"] = radial_gradient(
+                SCREEN_WIDTH, TOP_BAR_H, (35, 32, 50), (20, 18, 30))
+        surf.blit(_panel_bg_cache["top_bar"], (0, 0))
+        # Koch depth-1 border
+        koch_border(surf, (0, 0, SCREEN_WIDTH, TOP_BAR_H), 1, (80, 75, 55))
 
         # --- Resources (left side) ---
         res_list = [
@@ -243,7 +253,7 @@ class GUI:
         x = 12
         for res_type, amount, color in res_list:
             self._draw_res_icon(surf, x + 8, 20, res_type)
-            draw_text(surf, str(int(amount)), x + 20, 12, self.font, color)
+            ftext(surf, str(int(amount)), x + 20, 12, self.font, color)
             self._register_tooltip(pygame.Rect(x, 2, 76, 36), f"res_{res_type}")
             x += 80
 
@@ -254,7 +264,7 @@ class GUI:
         # --- Population (compact) ---
         pop = len(player_units)
         pop_x = sep_x + 12
-        draw_text(surf, f"Pop {pop}", pop_x, 12, self.font, (180, 200, 255))
+        ftext(surf, f"Pop {pop}", pop_x, 12, self.font, (180, 200, 255))
         self._register_tooltip(pygame.Rect(pop_x, 4, 60, 30), "pop")
 
         # --- v10_9: Tension meter + incident state (right side) ---
@@ -263,7 +273,7 @@ class GUI:
 
         # Incident counter
         inc_str = f"{enemy_ai.incident_number}/{enemy_ai.incidents_required}"
-        draw_text(surf, inc_str, tension_x, 4, self.font_sm, COL_TEXT)
+        ftext(surf, inc_str, tension_x, 4, self.font_sm, COL_TEXT)
         self._register_tooltip(pygame.Rect(tension_x, 2, 48, 18), "incident_counter")
 
         # Tension bar (120px wide)
@@ -286,7 +296,15 @@ class GUI:
         fill_w = max(1, int(bar_w * t))
         if t > 0.01:
             pygame.draw.rect(surf, bar_col, (bar_x, bar_y, fill_w, bar_h))
-        pygame.draw.rect(surf, COL_GUI_BORDER, (bar_x, bar_y, bar_w, bar_h), 1)
+        # Phase 5: pulse border red during foreboding
+        if enemy_ai.state == "foreboding":
+            import math
+            from constants import TENSION_PULSE_SPEED
+            pulse = 0.4 + 0.6 * abs(math.sin(enemy_ai.state_timer * TENSION_PULSE_SPEED))
+            pulse_col = (int(255 * pulse), int(40 * pulse), int(40 * pulse))
+            pygame.draw.rect(surf, pulse_col, (bar_x - 1, bar_y - 1, bar_w + 2, bar_h + 2), 2)
+        else:
+            pygame.draw.rect(surf, COL_GUI_BORDER, (bar_x, bar_y, bar_w, bar_h), 1)
         self._register_tooltip(pygame.Rect(bar_x, bar_y, bar_w, bar_h), "tension_bar")
 
         # State text (narrative)
@@ -300,15 +318,20 @@ class GUI:
             "aftermath": (150, 200, 150),
         }
         state_col = state_colors.get(enemy_ai.state, COL_TEXT)
-        draw_text(surf, state_text, bar_x, bar_y + bar_h + 2, self.font_xs, state_col)
+        ftext(surf, state_text, bar_x, bar_y + bar_h + 2, self.font_xs, state_col)
 
     # ------------------------------------------------------------------
     # BOTTOM PANEL
     # ------------------------------------------------------------------
     def draw_bottom_panel(self, surf, selected, game, inspected_enemy=None):
         py = SCREEN_HEIGHT - BOTTOM_PANEL_H
-        pygame.draw.rect(surf, COL_GUI_BG, (0, py, SCREEN_WIDTH, BOTTOM_PANEL_H))
-        pygame.draw.line(surf, COL_GUI_BORDER, (0, py), (SCREEN_WIDTH, py))
+        # Radial gradient background
+        if "bottom" not in _panel_bg_cache:
+            _panel_bg_cache["bottom"] = radial_gradient(
+                SCREEN_WIDTH, BOTTOM_PANEL_H, (35, 32, 50), (20, 18, 30))
+        surf.blit(_panel_bg_cache["bottom"], (0, py))
+        # Koch depth-1 border
+        koch_border(surf, (0, py, SCREEN_WIDTH, BOTTOM_PANEL_H), 1, COL_GUI_BORDER)
 
         self.buttons.clear()
 
@@ -354,7 +377,7 @@ class GUI:
 
         squads = [s for s in game.player_squad_mgr.squad_list if s.alive_count > 0]
         if not squads:
-            draw_text(surf, "No squads (train Rank 1+ units to form squads)",
+            ftext(surf, "No squads (train Rank 1+ units to form squads)",
                       10, py + 6, self.font_xs, (80, 80, 100))
             return
 
@@ -388,9 +411,9 @@ class GUI:
             idx_label = str(i + 1)
             fname = FORMATION_NAMES[fmt][:4]  # Rose, Spir, Sier, Koch
             cnt = squad.alive_count
-            draw_text(surf, idx_label, x + 3, py + 5, self.font_xs, (200, 200, 220))
-            draw_text(surf, fname, x + 14, py + 5, self.font_xs, res_color)
-            draw_text(surf, f"x{cnt}", x + card_w - 18, py + 5, self.font_xs, (160, 160, 180))
+            ftext(surf, idx_label, x + 3, py + 5, self.font_xs, (200, 200, 220))
+            ftext(surf, fname, x + 14, py + 5, self.font_xs, res_color)
+            ftext(surf, f"x{cnt}", x + card_w - 18, py + 5, self.font_xs, (160, 160, 180))
 
             # clickable: select this squad
             def _click_squad(sq=squad):
@@ -424,18 +447,18 @@ class GUI:
         pygame.draw.circle(surf, bright, (40, py + 40), 20)
         pygame.draw.circle(surf, (200, 60, 60), (40, py + 40), 20, 2)
         label = UNIT_LABELS.get(e.unit_type, "?")
-        draw_text(surf, label, 40, py + 40, self.font_lg, (255, 255, 255), center=True)
+        ftext(surf, label, 40, py + 40, self.font_lg, (255, 255, 255), center=True)
         self._register_tooltip(pygame.Rect(20, py + 20, 40, 40), f"enemy_{e.unit_type}")
 
         # "ENEMY" tag
-        draw_text(surf, "ENEMY", 80, py + 8, self.font_xs, (255, 80, 80))
+        ftext(surf, "ENEMY", 80, py + 8, self.font_xs, (255, 80, 80))
 
         # name + rank
         name = display_name(e.unit_type)
         if e.rank > 0 and e.rank < len(MILITARY_RANKS):
             rank_name = MILITARY_RANKS[e.rank]
             name += f" [{rank_name}]"
-        draw_text(surf, name, 115, py + 7, self.font, COL_TEXT)
+        ftext(surf, name, 115, py + 7, self.font, COL_TEXT)
 
         # traits
         trait_y = py + 22
@@ -450,30 +473,30 @@ class GUI:
         self._draw_hp_bar(surf, 80, py + 38, 160, 14, e.hp, e.max_hp, (200, 50, 50))
 
         # stats line
-        draw_text(surf, f"ATK: {e.attack_power}   SPD: {e.speed}   RNG: {e.attack_range}",
+        ftext(surf, f"ATK: {e.attack_power}   SPD: {e.speed}   RNG: {e.attack_range}",
                   80, py + 58, self.font_sm, (200, 180, 180))
 
         # state
         state_str = e.state
         if e.state == "fleeing":
             state_str = "fleeing!"
-        draw_text(surf, f"State: {state_str}", 80, py + 76, self.font_sm, (180, 120, 120))
+        ftext(surf, f"State: {state_str}", 80, py + 76, self.font_sm, (180, 120, 120))
 
         # XP / rank info
         if e.rank > 0:
             rank_col = RANK_COLORS.get(e.rank, (180, 180, 180))
-            draw_text(surf, f"Rank {e.rank} — XP: {e.xp}", 80, py + 94, self.font_xs, rank_col)
+            ftext(surf, f"Rank {e.rank} — XP: {e.xp}", 80, py + 94, self.font_xs, rank_col)
 
         # special info for Dark 7 types
         ability_y = py + 108
         if e.unit_type == "enemy_siege":
-            draw_text(surf, "Hexweaver: 2x building dmg, corrupts resonance", 80, ability_y, self.font_xs, (160, 80, 200))
+            ftext(surf, "Hexweaver: 2x building dmg, corrupts resonance", 80, ability_y, self.font_xs, (160, 80, 200))
         elif e.unit_type == "enemy_shieldbearer":
-            draw_text(surf, f"Frontal Armor: {int(e.frontal_armor*100)}% — flank to bypass!", 80, ability_y, self.font_xs, (140, 160, 200))
+            ftext(surf, f"Frontal Armor: {int(e.frontal_armor*100)}% — flank to bypass!", 80, ability_y, self.font_xs, (140, 160, 200))
         elif e.unit_type == "enemy_healer":
-            draw_text(surf, f"Healer: {e.heal_rate:.0f} HP/s to allies", 80, ability_y, self.font_xs, (80, 220, 120))
+            ftext(surf, "Bloodtithe: sacrifices allies for inverted harmonics", 80, ability_y, self.font_xs, (180, 50, 60))
         elif e.unit_type == "enemy_raider":
-            draw_text(surf, "Raider: targets workers & economy", 80, ability_y, self.font_xs, (220, 100, 150))
+            ftext(surf, "Raider: targets workers & economy", 80, ability_y, self.font_xs, (220, 100, 150))
 
         # v10_8: dissonance tag
         dis_fmt = getattr(e, 'dissonant_formation', -1)
@@ -481,11 +504,11 @@ class GUI:
             from constants import RESONANCE_DISSONANCE_COLORS
             fmt_names = {0: "Rose", 1: "Spiral", 2: "Sierpinski", 3: "Koch"}
             dis_col = RESONANCE_DISSONANCE_COLORS.get(dis_fmt, (150, 50, 50))
-            draw_text(surf, f"Dissonant (anti-{fmt_names.get(dis_fmt, '?')})",
+            ftext(surf, f"Dissonant (anti-{fmt_names.get(dis_fmt, '?')})",
                       80, ability_y + 14, self.font_xs, dis_col)
 
         # right-side hint
-        draw_text(surf, "Right-click with units to attack", SCREEN_WIDTH - 250, py + 100,
+        ftext(surf, "Right-click with units to attack", SCREEN_WIDTH - 250, py + 100,
                   self.font_xs, (100, 80, 80))
 
     # ------------------------------------------------------------------
@@ -499,7 +522,7 @@ class GUI:
         pygame.draw.rect(surf, color, (15, py + 10, 50, 50), border_radius=4)
         pygame.draw.rect(surf, COL_GUI_BORDER, (15, py + 10, 50, 50), 1, border_radius=4)
         label = BUILDING_LABELS.get(b.building_type, "??")
-        draw_text(surf, label, 40, py + 35, self.font_lg, (255, 255, 255), center=True)
+        ftext(surf, label, 40, py + 35, self.font_lg, (255, 255, 255), center=True)
         self._register_tooltip(pygame.Rect(15, py + 10, 50, 50), f"bld_{b.building_type}")
 
         # name
@@ -511,7 +534,7 @@ class GUI:
                 name = "Arc Sentinel (Lv.2)"
             else:
                 name = "Sentinel (Lv.1)"
-        draw_text(surf, name, 80, py + 10, self.font)
+        ftext(surf, name, 80, py + 10, self.font)
 
         # HP bar (visual instead of text)
         hp_col = (60, 60, 60) if b.ruined else (0, 170, 0)
@@ -531,7 +554,7 @@ class GUI:
             pygame.draw.rect(surf, (30, 30, 50), (bar_x, bar_y, bar_w, bar_h))
             pygame.draw.rect(surf, (0, 140, 255), (bar_x, bar_y, int(bar_w * pct / 100), bar_h))
             pygame.draw.rect(surf, COL_GUI_BORDER, (bar_x, bar_y, bar_w, bar_h), 1)
-            draw_text(surf, f"Building {pct}%", bar_x + bar_w + 8, bar_y - 1, self.font_xs, (0, 180, 255))
+            ftext(surf, f"Building {pct}%", bar_x + bar_w + 8, bar_y - 1, self.font_xs, (0, 180, 255))
             return
 
         # status line (training / refinery / tower stats)
@@ -543,10 +566,10 @@ class GUI:
             pygame.draw.rect(surf, (200, 180, 0), (bar_x, status_y, int(bar_w * pct / 100), bar_h))
             pygame.draw.rect(surf, COL_GUI_BORDER, (bar_x, status_y, bar_w, bar_h), 1)
             unit_name = display_name(b.train_queue[0])
-            draw_text(surf, f"{unit_name} ({pct}%)", bar_x + bar_w + 8, status_y - 1,
+            ftext(surf, f"{unit_name} ({pct}%)", bar_x + bar_w + 8, status_y - 1,
                       self.font_xs, (255, 200, 0))
             if len(b.train_queue) > 1:
-                draw_text(surf, f"+{len(b.train_queue) - 1} queued", bar_x + bar_w + 8, status_y + 12,
+                ftext(surf, f"+{len(b.train_queue) - 1} queued", bar_x + bar_w + 8, status_y + 12,
                           self.font_xs, (160, 150, 80))
 
         elif b.building_type == "refinery":
@@ -556,36 +579,37 @@ class GUI:
                 pygame.draw.rect(surf, (30, 30, 50), (bar_x, status_y, bar_w, bar_h))
                 pygame.draw.rect(surf, (100, 160, 220), (bar_x, status_y, int(bar_w * pct / 100), bar_h))
                 pygame.draw.rect(surf, COL_GUI_BORDER, (bar_x, status_y, bar_w, bar_h), 1)
-                draw_text(surf, f"Refining {pct}%", bar_x + bar_w + 8, status_y - 1,
+                ftext(surf, f"Refining {pct}%", bar_x + bar_w + 8, status_y - 1,
                           self.font_xs, (100, 160, 220))
             else:
-                draw_text(surf, "Idle — needs 2 Iron", 80, status_y, self.font_sm, (100, 100, 120))
+                ftext(surf, "Idle — needs 2 Ore", 80, status_y, self.font_sm, (100, 100, 120))
 
         elif b.building_type == "tower":
             if b.tower_upgrading:
                 pct = int(100 * b.tower_upgrade_progress / TOWER_UPGRADE_TIME)
-                draw_text(surf, f"Upgrading... {pct}%", 80, status_y, self.font_sm, (255, 140, 40))
+                ftext(surf, f"Upgrading... {pct}%", 80, status_y, self.font_sm, (255, 140, 40))
             else:
                 dmg = TOWER_EXPLOSIVE_DIRECT if b.tower_level >= 2 else TOWER_CANNON_DAMAGE
                 tag = "AoE" if b.tower_level >= 2 else "Single"
-                draw_text(surf, f"DMG {dmg} ({tag})  CD {TOWER_CANNON_CD:.1f}s",
+                ftext(surf, f"DMG {dmg} ({tag})  CD {TOWER_CANNON_CD:.1f}s",
                           80, status_y, self.font_sm, (180, 180, 160))
 
         # v10.2: drop-off building status
         elif b.building_type in DROPOFF_BUILDING_TYPES:
-            res = DROPOFF_BUILDING_TYPES[b.building_type].title()
-            draw_text(surf, f"{res} Drop-off Point", 80, status_y, self.font_sm, (160, 180, 140))
+            res_code = DROPOFF_BUILDING_TYPES[b.building_type]
+            res = RESOURCE_DISPLAY_NAMES.get(res_code, res_code.title())
+            ftext(surf, f"{res} Drop-off Point", 80, status_y, self.font_sm, (160, 180, 140))
             if b.upgrading_to:
                 pct = int(100 * b.upgrade_progress / b.upgrade_time) if b.upgrade_time > 0 else 0
-                draw_text(surf, f"Upgrading... {pct}%", 80, status_y + 16, self.font_sm, (255, 140, 40))
+                ftext(surf, f"Upgrading... {pct}%", 80, status_y + 16, self.font_sm, (255, 140, 40))
 
         # v10.2: production building status
         elif b.building_type in PRODUCTION_RATES:
             pconfig = PRODUCTION_RATES[b.building_type]
             n_workers = len(b.stationed_workers)
             rate = pconfig["base_rate"] + pconfig["worker_rate"] * n_workers
-            res_name = pconfig["resource"].title()
-            draw_text(surf, f"Producing {res_name}: {rate:.1f}/{PRODUCTION_TICK_INTERVAL:.0f}s  Workers: {n_workers}/{pconfig['max_workers']}",
+            res_name = RESOURCE_DISPLAY_NAMES.get(pconfig["resource"], pconfig["resource"].title())
+            ftext(surf, f"Producing {res_name}: {rate:.1f}/{PRODUCTION_TICK_INTERVAL:.0f}s  Workers: {n_workers}/{pconfig['max_workers']}",
                       80, status_y, self.font_sm, (180, 200, 160))
 
         # v10.2: forge status (like refinery)
@@ -596,13 +620,13 @@ class GUI:
                 pygame.draw.rect(surf, (30, 30, 50), (bar_x, status_y, bar_w, bar_h))
                 pygame.draw.rect(surf, (180, 100, 50), (bar_x, status_y, int(bar_w * pct / 100), bar_h))
                 pygame.draw.rect(surf, COL_GUI_BORDER, (bar_x, status_y, bar_w, bar_h), 1)
-                draw_text(surf, f"Forging {pct}%", bar_x + bar_w + 8, status_y - 1,
+                ftext(surf, f"Forging {pct}%", bar_x + bar_w + 8, status_y - 1,
                           self.font_xs, (180, 100, 50))
             else:
-                draw_text(surf, "Idle — needs 2 Stone + 1 Iron", 80, status_y, self.font_sm, (100, 100, 120))
+                ftext(surf, "Idle — needs 2 Crystal + 1 Ore", 80, status_y, self.font_sm, (100, 100, 120))
             n_workers = len(b.stationed_workers)
             if n_workers > 0:
-                draw_text(surf, f"Workers: {n_workers}", 80, status_y + 16, self.font_sm, (160, 140, 100))
+                ftext(surf, f"Workers: {n_workers}", 80, status_y + 16, self.font_sm, (160, 140, 100))
 
         # action buttons (moved further right for cleaner spacing)
         btn_x = 360
@@ -618,7 +642,7 @@ class GUI:
             # v10_2: garrison display + ungarrison button
             if b.garrison:
                 g_count = len(b.garrison)
-                draw_text(surf, f"Garrison: {g_count}/{GARRISON_MAX_WORKERS}",
+                ftext(surf, f"Garrison: {g_count}/{GARRISON_MAX_WORKERS}",
                           btn_x, btn_y + btn_h + 8, self.font_sm, (220, 180, 80))
                 self._add_button(surf, btn_x + btn_w + 8, btn_y, btn_w, btn_h,
                                  "Ungarrison",
@@ -656,7 +680,7 @@ class GUI:
                              can_afford and can_expand,
                              cost_text=self.building_cost_str(upgrade_type))
             if not can_expand and can_afford:
-                draw_text(surf, "No space!", btn_x, btn_y + btn_h + 4,
+                ftext(surf, "No space!", btn_x, btn_y + btn_h + 4,
                           self.font_xs, (220, 80, 80))
 
         # v10.2: production building — station/unstation buttons
@@ -665,7 +689,7 @@ class GUI:
                 n = len(b.stationed_workers)
                 pconfig = PRODUCTION_RATES.get(b.building_type, {})
                 max_w = pconfig.get("max_workers", 3)
-                draw_text(surf, f"Stationed: {n}/{max_w}",
+                ftext(surf, f"Stationed: {n}/{max_w}",
                           btn_x, btn_y + 4, self.font_sm, (220, 180, 80))
                 self._add_button(surf, btn_x + btn_w + 8, btn_y, btn_w, btn_h,
                                  "Unstation",
@@ -712,7 +736,7 @@ class GUI:
         pygame.draw.circle(surf, color, (cx, cy), portrait_r)
         pygame.draw.circle(surf, COL_GUI_BORDER, (cx, cy), portrait_r, 1)
         label = UNIT_LABELS.get(u.unit_type, "?")
-        draw_text(surf, label, cx, cy, self.font_lg, (255, 255, 255), center=True)
+        ftext(surf, label, cx, cy, self.font_lg, (255, 255, 255), center=True)
         self._register_tooltip(pygame.Rect(cx - portrait_r, cy - portrait_r,
                                portrait_r * 2, portrait_r * 2), f"unit_{u.unit_type}")
 
@@ -739,15 +763,15 @@ class GUI:
         if u.unit_type != "worker" and u.rank < len(MILITARY_RANKS):
             rank_name = MILITARY_RANKS[u.rank]
             rank_col = RANK_COLORS.get(u.rank, COL_TEXT)
-            draw_text(surf, name, ix, py + 4, self.font, rank_col)
+            ftext(surf, name, ix, py + 4, self.font, rank_col)
             # rank badge
             badge_x = ix + self.font.size(name)[0] + 6
             badge_w = self.font_xs.size(rank_name)[0] + 8
             pygame.draw.rect(surf, rank_col, (badge_x, py + 5, badge_w, 14), border_radius=3)
-            draw_text(surf, rank_name, badge_x + 4, py + 5, self.font_xs, (10, 10, 10))
+            ftext(surf, rank_name, badge_x + 4, py + 5, self.font_xs, (10, 10, 10))
             self._register_tooltip(pygame.Rect(badge_x, py + 5, badge_w, 14), f"rank_{u.rank}")
         elif u.unit_type == "worker":
-            draw_text(surf, name, ix, py + 4, self.font, COL_TEXT)
+            ftext(surf, name, ix, py + 4, self.font, COL_TEXT)
             # worker specialty badge
             primary_skill, primary_rank = u.get_primary_skill()
             if primary_skill and primary_rank > 0:
@@ -758,10 +782,10 @@ class GUI:
                 badge_x = ix + self.font.size(name)[0] + 6
                 badge_w = self.font_xs.size(badge_text)[0] + 8
                 pygame.draw.rect(surf, (*sc, 180), (badge_x, py + 5, badge_w, 14), border_radius=3)
-                draw_text(surf, badge_text, badge_x + 4, py + 5, self.font_xs, (255, 255, 255))
+                ftext(surf, badge_text, badge_x + 4, py + 5, self.font_xs, (255, 255, 255))
                 self._register_tooltip(pygame.Rect(badge_x, py + 5, badge_w, 14), f"wrank_{rank_name}")
         else:
-            draw_text(surf, name, ix, py + 4, self.font, rank_col)
+            ftext(surf, name, ix, py + 4, self.font, rank_col)
 
         # Row 2: Trait dots (colored circles with tooltip-like labels)
         if u.traits:
@@ -771,22 +795,19 @@ class GUI:
                 tc = td.get("color", (140, 140, 140))
                 pygame.draw.circle(surf, tc, (tx + 5, py + 24), 4)
                 trait_label = t.replace("_", " ").title()[:8]
-                draw_text(surf, trait_label, tx + 12, py + 19, self.font_xs, tc)
+                ftext(surf, trait_label, tx + 12, py + 19, self.font_xs, tc)
                 tw = self.font_xs.size(trait_label)[0] + 18
                 self._register_tooltip(pygame.Rect(tx, py + 17, tw, 14), f"trait_{t}")
                 tx += tw
                 if tx > 340:
                     break
 
-        # Row 3: HP bar (wider, with number overlay)
+        # Row 3: HP bar (wider, fractal-styled)
         hp_bar_x, hp_bar_y = ix, py + 33
         hp_bar_w, hp_bar_h = 200, 10
-        pygame.draw.rect(surf, (30, 30, 40), (hp_bar_x, hp_bar_y, hp_bar_w, hp_bar_h), border_radius=2)
         hp_col = (0, 200, 50) if hp_ratio > 0.5 else (220, 180, 0) if hp_ratio > 0.25 else (220, 50, 50)
-        fill_w = int(hp_bar_w * hp_ratio)
-        if fill_w > 0:
-            pygame.draw.rect(surf, hp_col, (hp_bar_x, hp_bar_y, fill_w, hp_bar_h), border_radius=2)
-        draw_text(surf, f"{int(u.hp)}/{int(u.max_hp)}", hp_bar_x + hp_bar_w + 6, hp_bar_y - 1, self.font_xs, hp_col)
+        fractal_bar(surf, hp_bar_x, hp_bar_y, hp_bar_w, hp_bar_h, hp_ratio, hp_col, border=True)
+        ftext(surf, f"{int(u.hp)}/{int(u.max_hp)}", hp_bar_x + hp_bar_w + 6, hp_bar_y - 1, self.font_xs, hp_col)
 
         # Row 4: Stats line with state indicator
         state_str = u.state
@@ -817,16 +838,16 @@ class GUI:
         tag_w = self.font_xs.size(state_str)[0] + 8
         pygame.draw.rect(surf, (*state_col[:3], 60), (ix, py + 47, tag_w, 14), border_radius=3)
         pygame.draw.rect(surf, state_col, (ix, py + 47, tag_w, 14), 1, border_radius=3)
-        draw_text(surf, state_str, ix + 4, py + 48, self.font_xs, state_col)
+        ftext(surf, state_str, ix + 4, py + 48, self.font_xs, state_col)
 
         # stats after state tag
         stat_x = ix + tag_w + 8
         if u.stance != STANCE_AGGRESSIVE:
             stance_col = STANCE_COLORS.get(u.stance, (180, 220, 255))
             stance_name = STANCE_NAMES[u.stance]
-            draw_text(surf, stance_name, stat_x, py + 48, self.font_xs, stance_col)
+            ftext(surf, stance_name, stat_x, py + 48, self.font_xs, stance_col)
             stat_x += self.font_xs.size(stance_name)[0] + 8
-        draw_text(surf, f"ATK:{u.attack_power}  SPD:{u.speed}", stat_x, py + 48, self.font_xs, (150, 150, 170))
+        ftext(surf, f"ATK:{u.attack_power}  SPD:{u.speed}", stat_x, py + 48, self.font_xs, (150, 150, 170))
 
         # Row 5: XP / Carrying / Skills
         row5_y = py + 65
@@ -843,10 +864,10 @@ class GUI:
                 fill_col = RANK_COLORS.get(next_rank, (180, 180, 100))
                 pygame.draw.rect(surf, (40, 40, 50), (ix, row5_y, 160, 5), border_radius=2)
                 pygame.draw.rect(surf, fill_col, (ix, row5_y, int(160 * xp_ratio), 5), border_radius=2)
-                draw_text(surf, f"XP {u.xp}/{next_threshold}", ix + 166, row5_y - 2,
+                ftext(surf, f"XP {u.xp}/{next_threshold}", ix + 166, row5_y - 2,
                           self.font_xs, (140, 140, 160))
             else:
-                draw_text(surf, "MAX RANK", ix, row5_y - 2, self.font_xs, (255, 215, 0))
+                ftext(surf, "MAX RANK", ix, row5_y - 2, self.font_xs, (255, 215, 0))
 
         elif u.unit_type == "worker":
             # Carrying indicator (colored resource icon + amount)
@@ -854,7 +875,7 @@ class GUI:
             if u.carry_amount > 0:
                 cc = carry_colors.get(u.carry_type, COL_GOLD)
                 pygame.draw.rect(surf, cc, (ix, row5_y, 8, 8), border_radius=2)
-                draw_text(surf, f"{u.carry_amount} {u.carry_type}", ix + 12, row5_y - 1, self.font_xs, cc)
+                ftext(surf, f"{u.carry_amount} {u.carry_type}", ix + 12, row5_y - 1, self.font_xs, cc)
 
             # skill XP inline badges
             active_skills = [(s, u.skill_xp[s], u.skill_ranks[s])
@@ -878,14 +899,14 @@ class GUI:
                     ratio = 1.0
                 pygame.draw.rect(surf, (30, 30, 40), (skill_x, row5_y, bw, 12), border_radius=2)
                 pygame.draw.rect(surf, (*sc[:3], 80), (skill_x, row5_y, int(bw * ratio), 12), border_radius=2)
-                draw_text(surf, badge_text, skill_x + 3, row5_y, self.font_xs, sc)
+                ftext(surf, badge_text, skill_x + 3, row5_y, self.font_xs, sc)
                 skill_x += bw + 4
                 if skill_x > 340:
                     break
 
         # Row 6: Gather hint for idle workers
         if u.unit_type == "worker" and u.state == "idle":
-            draw_text(surf, "RClick resource or use gather buttons →", ix, py + 80,
+            ftext(surf, "RClick resource or use gather buttons →", ix, py + 80,
                       self.font_xs, (100, 100, 130))
 
         # === ACTION COLUMN (right side) ===
@@ -948,10 +969,10 @@ class GUI:
         r3y = r2y + btn_h + 4
         gather_w = 52
         res_defs = [
-            ("wood",  COL_WOOD,   "Wood"),
-            ("gold",  COL_GOLD,   "Gold"),
-            ("iron",  COL_IRON_C, "Iron"),
-            ("stone", COL_STONE,  "Stone"),
+            ("wood",  COL_WOOD,   "Fiber"),
+            ("gold",  COL_GOLD,   "Flux"),
+            ("iron",  COL_IRON_C, "Ore"),
+            ("stone", COL_STONE,  "Crystal"),
         ]
         for i, (rtype, rcol, rlabel) in enumerate(res_defs):
             gx = btn_x + i * (gather_w + 3)
@@ -959,7 +980,7 @@ class GUI:
                              lambda rt=rtype: game.command_gather_nearest_selected(rt))
             # colored underline
             pygame.draw.line(surf, rcol, (gx + 2, r3y + 21), (gx + gather_w - 2, r3y + 21), 2)
-        draw_text(surf, "Gather:", btn_x - 45, r3y + 4, self.font_xs, (120, 120, 140))
+        ftext(surf, "Gather:", btn_x - 45, r3y + 4, self.font_xs, (120, 120, 140))
 
         # Foreman buildings (if applicable)
         foreman_skills = set()
@@ -997,7 +1018,7 @@ class GUI:
             by_type.setdefault(u.unit_type, []).append(u)
 
         # Total count header
-        draw_text(surf, f"{len(selected)} units", 20, py + 4, self.font, COL_TEXT)
+        ftext(surf, f"{len(selected)} units", 20, py + 4, self.font, COL_TEXT)
 
         # Aggregate HP bar
         total_hp = sum(u.hp for u in selected)
@@ -1005,7 +1026,7 @@ class GUI:
         hp_ratio = total_hp / total_max if total_max > 0 else 0
         hp_col = (0, 200, 50) if hp_ratio > 0.5 else (220, 180, 0) if hp_ratio > 0.25 else (220, 50, 50)
         self._draw_hp_bar(surf, 100, py + 7, 100, 8, total_hp, total_max, hp_col)
-        draw_text(surf, f"{int(hp_ratio * 100)}%", 206, py + 4, self.font_xs, hp_col)
+        ftext(surf, f"{int(hp_ratio * 100)}%", 206, py + 4, self.font_xs, hp_col)
 
         # Type cards — each gets a mini row with icon, count, state breakdown bar
         card_y = py + 20
@@ -1024,7 +1045,7 @@ class GUI:
             # icon circle
             pygame.draw.circle(surf, color, (30, card_y + 8), 8)
             label = UNIT_LABELS.get(utype, "?")
-            draw_text(surf, label, 30, card_y + 8, self.font_xs, (255, 255, 255), center=True)
+            ftext(surf, label, 30, card_y + 8, self.font_xs, (255, 255, 255), center=True)
 
             # count + rank summary
             rank_counts = {}
@@ -1036,7 +1057,7 @@ class GUI:
                 count_text = f"x{cnt} ({' '.join(parts)})"
             else:
                 count_text = f"x{cnt}"
-            draw_text(surf, count_text, 42, card_y + 2, self.font_xs, COL_TEXT)
+            ftext(surf, count_text, 42, card_y + 2, self.font_xs, COL_TEXT)
 
             # state distribution bar (stacked horizontal)
             bar_x, bar_w, bar_h = 120, 100, 6
@@ -1054,7 +1075,7 @@ class GUI:
             # state legend (most common state)
             top_state = max(states, key=lambda k: states[k]) if states else "idle"
             scol = state_colors.get(top_state, (100, 100, 100))
-            draw_text(surf, f"{states.get(top_state, 0)} {top_state}", bar_x + bar_w + 6,
+            ftext(surf, f"{states.get(top_state, 0)} {top_state}", bar_x + bar_w + 6,
                       card_y + 6, self.font_xs, scol)
 
             card_y += 22
@@ -1063,7 +1084,7 @@ class GUI:
         combat = [u for u in selected if u.unit_type in ("soldier", "archer")]
         if combat:
             total_dps = sum(u.attack_power / max(0.5, getattr(u, 'attack_cooldown', 1.0)) for u in combat)
-            draw_text(surf, f"~{total_dps:.0f} DPS", 20, card_y + 2, self.font_xs, (220, 160, 80))
+            ftext(surf, f"~{total_dps:.0f} DPS", 20, card_y + 2, self.font_xs, (220, 160, 80))
 
         # v10_epsilon: Chord preview — show harmony quality per discovered formation
         # Only for free (non-squad) combat units
@@ -1071,15 +1092,16 @@ class GUI:
         archers = [u for u in selected if u.unit_type == "archer"]
         s_count = len(soldiers)
         a_count = len(archers)
+        free_combat = []
+        chord_y = card_y + 20
         if (s_count + a_count) >= 2 and hasattr(game, 'discovered_formations'):
             free_combat = [u for u in selected
                            if u.unit_type in ("soldier", "archer")
                            and game.player_squad_mgr.is_free(u)]
-            if len(free_combat) >= 2:
+            if len(free_combat) >= 2 and game.discovered_formations:
                 from squads import compute_harmony
                 from constants import HARMONY_LABELS, RESONANCE_COLORS, FORMATION_NAMES
-                chord_y = card_y + 20
-                draw_text(surf, f"{s_count}S {a_count}A", 20, chord_y,
+                ftext(surf, f"{s_count}S {a_count}A", 20, chord_y,
                           self.font_xs, (180, 180, 200))
                 chord_y += 14
                 for fmt_idx in sorted(game.discovered_formations):
@@ -1102,16 +1124,50 @@ class GUI:
                         qual = "weak"
                         q_col = (120, 80, 80)
                     # Compact display: "Rose ♪ 100% octave [████████]"
-                    draw_text(surf, fname, 20, chord_y, self.font_xs, res_col)
-                    draw_text(surf, f"{h_pct}%", 60, chord_y, self.font_xs, q_col)
+                    ftext(surf, fname, 20, chord_y, self.font_xs, res_col)
+                    ftext(surf, f"{h_pct}%", 60, chord_y, self.font_xs, q_col)
                     # Mini harmony bar
                     bar_x, bar_w, bar_h = 92, 60, 5
                     pygame.draw.rect(surf, (30, 30, 40), (bar_x, chord_y + 4, bar_w, bar_h), border_radius=2)
                     fill_w = max(1, int(bar_w * max(0, h - 0.3) / 0.7))
                     pygame.draw.rect(surf, q_col, (bar_x, chord_y + 4, fill_w, bar_h), border_radius=2)
                     if label:
-                        draw_text(surf, label, bar_x + bar_w + 4, chord_y, self.font_xs, (140, 140, 160))
+                        ftext(surf, label, bar_x + bar_w + 4, chord_y, self.font_xs, (140, 140, 160))
                     chord_y += 13
+
+                # 4c: "Form Squad (F)" button when formations discovered + enough free
+                if len(free_combat) >= FORMATION_MIN_VIABLE:
+                    chord_y += 4
+                    btn_w, btn_h = 120, 18
+                    btn_rect = pygame.Rect(20, chord_y, btn_w, btn_h)
+                    self._form_squad_btn_rect = pygame.Rect(20, py + chord_y, btn_w, btn_h)
+                    pygame.draw.rect(surf, (40, 60, 40), btn_rect, border_radius=3)
+                    pygame.draw.rect(surf, (80, 200, 80), btn_rect, 1, border_radius=3)
+                    ftext(surf, "Form Squad (F)", 24, chord_y + 2,
+                              self.font_xs, (120, 255, 120))
+                    chord_y += 22
+                else:
+                    self._form_squad_btn_rect = None
+            else:
+                self._form_squad_btn_rect = None
+
+            # 4a: Discovery hint when not all formations discovered yet
+            if len(game.discovered_formations) < 4 and len(free_combat) >= 3:
+                hint_col = (180, 160, 80)
+                if len(game.discovered_formations) == 0:
+                    ftext(surf, "Move 3+ military units together", 20, chord_y,
+                              self.font_xs, hint_col)
+                    chord_y += 13
+                    ftext(surf, "to discover formations!", 20, chord_y,
+                              self.font_xs, hint_col)
+                else:
+                    ftext(surf, "Move units together to discover", 20, chord_y,
+                              self.font_xs, hint_col)
+                    chord_y += 13
+                    ftext(surf, "more formations", 20, chord_y,
+                              self.font_xs, hint_col)
+        else:
+            self._form_squad_btn_rect = None
 
         # Action buttons on right side
         all_workers = all(u.unit_type == "worker" for u in selected)
@@ -1169,7 +1225,7 @@ class GUI:
             hint = "LClick: select  RClick: command  1-9: squad  Tab: cycle  A+click: atk-move  P: pause"
         else:
             hint = "LClick: select  RClick: command  Shift+click: add  P: pause"
-        draw_text(surf, hint, 20, hint_y, self.font_xs, (70, 70, 90))
+        ftext(surf, hint, 20, hint_y, self.font_xs, (70, 70, 90))
 
     # ------------------------------------------------------------------
     def _draw_command_buttons(self, surf, py, game):
@@ -1195,9 +1251,9 @@ class GUI:
 
         # No squad yet — show hint instead of formation buttons
         if not primary_squad:
-            draw_text(surf, "Units need Rank 1+ to form squads and unlock formations",
+            ftext(surf, "Units need Rank 1+ to form squads and unlock formations",
                       btn_x, btn_y_start + 6, self.font_xs, (100, 100, 140))
-            draw_text(surf, "X+click: attack-move", btn_x, btn_y_start + 22,
+            ftext(surf, "X+click: attack-move", btn_x, btn_y_start + 22,
                       self.font_xs, (70, 70, 90))
             return
 
@@ -1217,7 +1273,7 @@ class GUI:
                 hint = DISCOVERY_HINTS.get(fmt_idx, "?")
                 pygame.draw.rect(surf, (30, 30, 40), (fx, btn_y_start, fmt_w, 24), border_radius=3)
                 pygame.draw.rect(surf, (50, 50, 60), (fx, btn_y_start, fmt_w, 24), 1, border_radius=3)
-                draw_text(surf, hint, fx + 4, btn_y_start + 6,
+                ftext(surf, hint, fx + 4, btn_y_start + 6,
                           self.font_xs, (60, 60, 80))
                 self._register_tooltip(pygame.Rect(fx, btn_y_start, fmt_w, 24), f"fmt_{fname}")
                 shown_fmts += 1
@@ -1260,13 +1316,13 @@ class GUI:
                 res_col = RESONANCE_COLORS.get(fmt_idx, (100, 100, 100))
                 is_active = (fmt_idx == cur_fmt)
                 col = res_col if is_active else (80, 80, 80)
-                draw_text(surf, label_map[fmt_idx], lx + 2, btn_y_start + 24, self.font_xs, col)
+                ftext(surf, label_map[fmt_idx], lx + 2, btn_y_start + 24, self.font_xs, col)
                 # Show harmony quality when this formation is active
                 if is_active:
                     harmony = compute_harmony(fmt_idx, s_count, a_count)
                     h_pct = int(harmony * 100)
                     h_col = (255, 230, 80) if h_pct >= 100 else res_col
-                    draw_text(surf, f"{h_pct}%", lx + fmt_w - 22, btn_y_start + 24,
+                    ftext(surf, f"{h_pct}%", lx + fmt_w - 22, btn_y_start + 24,
                               self.font_xs, h_col)
                     self._register_tooltip(pygame.Rect(lx, btn_y_start + 24, fmt_w, 12), "harmony")
 
@@ -1291,7 +1347,7 @@ class GUI:
                     hint = "Rank 2"
                 else:
                     hint = "Wave 3"
-                draw_text(surf, hint, sx + 10, stance_y + 6, self.font_xs, (60, 60, 80))
+                ftext(surf, hint, sx + 10, stance_y + 6, self.font_xs, (60, 60, 80))
                 self._register_tooltip(pygame.Rect(sx, stance_y, stance_w, 24), f"stance_{sname}")
                 shown_stances += 1
                 continue
@@ -1311,10 +1367,10 @@ class GUI:
         # Hint: contextual based on game state
         hint_y = stance_y + 28
         if not unlocks["has_squad"]:
-            draw_text(surf, "Train units to Rank 1 to unlock squads and formations",
+            ftext(surf, "Train units to Rank 1 to unlock squads and formations",
                       btn_x, hint_y, self.font_xs, (100, 120, 80))
         else:
-            draw_text(surf, "X+click: attack-move", btn_x, hint_y,
+            ftext(surf, "X+click: attack-move", btn_x, hint_y,
                       self.font_xs, (70, 70, 90))
 
     def _set_formation(self, game, fmt_idx):
@@ -1349,8 +1405,8 @@ class GUI:
         rect = pygame.Rect(x, y, w, h)
         pygame.draw.rect(surf, (25, 25, 35), rect, border_radius=4)
         pygame.draw.rect(surf, (45, 45, 55), rect, 1, border_radius=4)
-        draw_text(surf, label, x + w // 2, y + h // 2 - 5, self.font_sm, (55, 55, 70), center=True)
-        draw_text(surf, hint, x + w // 2, y + h // 2 + 7, self.font_xs, (70, 60, 50), center=True)
+        ftext(surf, label, x + w // 2, y + h // 2 - 5, self.font_sm, (55, 55, 70), center=True)
+        ftext(surf, hint, x + w // 2, y + h // 2 + 7, self.font_xs, (70, 60, 50), center=True)
 
     def _add_button(self, surf, x, y, w, h, label, callback, enabled=True, cost_text=None):
         rect = pygame.Rect(x, y, w, h)
@@ -1365,11 +1421,11 @@ class GUI:
         text_col = COL_BTN_TEXT if enabled else (80, 80, 90)
 
         if cost_text:
-            draw_text(surf, label, x + w // 2, y + h // 2 - 7, self.font_sm, text_col, center=True)
+            ftext(surf, label, x + w // 2, y + h // 2 - 7, self.font_sm, text_col, center=True)
             cost_col = (180, 180, 100) if enabled else (70, 70, 60)
-            draw_text(surf, cost_text, x + w // 2, y + h // 2 + 9, self.font_xs, cost_col, center=True)
+            ftext(surf, cost_text, x + w // 2, y + h // 2 + 9, self.font_xs, cost_col, center=True)
         else:
-            draw_text(surf, label, x + w // 2, y + h // 2, self.font_sm, text_col, center=True)
+            ftext(surf, label, x + w // 2, y + h // 2, self.font_sm, text_col, center=True)
 
         self.buttons.append((rect, label, callback, enabled))
         # Auto-register tooltip for buttons with matching keys
@@ -1402,9 +1458,9 @@ class GUI:
 
         # header
         header_col = (100, 100, 130) if not game.show_message_log else (160, 160, 200)
-        draw_text(surf, "Messages", log_x + pad, log_y + pad, self.font_xs, header_col)
+        ftext(surf, "Messages", log_x + pad, log_y + pad, self.font_xs, header_col)
         if len(log) > n_show:
-            draw_text(surf, f"({len(log)})", log_x + 62, log_y + pad,
+            ftext(surf, f"({len(log)})", log_x + 62, log_y + pad,
                       self.font_xs, (70, 70, 90))
 
         # recent messages
@@ -1429,7 +1485,7 @@ class GUI:
             y += line_h
 
         if not recent:
-            draw_text(surf, "-- No messages --", log_x + pad + 2, y,
+            ftext(surf, "-- No messages --", log_x + pad + 2, y,
                       self.font_xs, (60, 60, 80))
 
     def draw_message_log_full(self, surf, game):
@@ -1459,13 +1515,13 @@ class GUI:
         pygame.draw.rect(surf, (80, 80, 110), (log_x, log_y, log_w, log_h), 2)
 
         # header
-        draw_text(surf, "Message Log", log_x + pad, log_y + pad,
+        ftext(surf, "Message Log", log_x + pad, log_y + pad,
                   self.font_sm, (200, 200, 220))
-        draw_text(surf, f"{len(log)} messages -- click or [L] to close",
+        ftext(surf, f"{len(log)} messages -- click or [L] to close",
                   log_x + log_w - pad - 220, log_y + pad + 2, self.font_xs, (100, 100, 130))
 
         if not log:
-            draw_text(surf, "No messages yet.", log_x + pad, log_y + 40,
+            ftext(surf, "No messages yet.", log_x + pad, log_y + 40,
                       self.font_sm, (80, 80, 100))
             return
 
@@ -1483,7 +1539,7 @@ class GUI:
             mins = int(msg_time) // 60
             secs = int(msg_time) % 60
             ts = f"{mins:02d}:{secs:02d}"
-            draw_text(surf, ts, log_x + pad, y, self.font_xs, (70, 70, 90))
+            ftext(surf, ts, log_x + pad, y, self.font_xs, (70, 70, 90))
             # message
             max_tw = log_w - 60
             txt_surf = self.font_xs.render(str(text), True, faded)
@@ -1499,8 +1555,132 @@ class GUI:
         # check message log mini-panel click
         if hasattr(self, '_msg_log_rect') and self._msg_log_rect.collidepoint(pos):
             return "toggle_log"
+        # Phase 4: "Form Squad (F)" button
+        if self._form_squad_btn_rect and self._form_squad_btn_rect.collidepoint(pos):
+            return "form_squad"
         for rect, label, callback, enabled in self.buttons:
             if rect.collidepoint(pos) and enabled:
                 callback()
                 return True
         return False
+
+    # ------------------------------------------------------------------
+    # GAME-OVER STATS PANEL (Phase 1 UX overhaul)
+    # ------------------------------------------------------------------
+    def draw_game_over_panel(self, screen, game):
+        """Render a stats-rich game-over overlay instead of the bare label."""
+        import random
+        from constants import (GAME_OVER_TIPS_DEFEAT, GAME_OVER_TIPS_VICTORY,
+                               FORMATION_NAMES)
+
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 170))
+        screen.blit(overlay, (0, 0))
+
+        cx = SCREEN_WIDTH // 2
+        logger = game.logger
+
+        # Koch-bordered stats card with radial gradient
+        card_x, card_y, card_w, card_h = cx - 200, 100, 400, 500
+        if "game_over" not in _panel_bg_cache:
+            _panel_bg_cache["game_over"] = radial_gradient(card_w, card_h, (35, 30, 45), (15, 12, 20))
+        screen.blit(_panel_bg_cache["game_over"], (card_x, card_y))
+
+        # Title
+        if game.game_won:
+            title = "VICTORY!"
+            title_col = (50, 200, 50)
+        elif game.game_surrendered:
+            title = "SURRENDERED"
+            title_col = (200, 160, 50)
+        else:
+            title = "DEFEAT"
+            title_col = (200, 50, 50)
+        ftext(screen, title, cx, 140, self.font_lg, title_col, center=True)
+
+        # Koch border around stats card (color matches outcome)
+        koch_border(screen, (card_x, card_y, card_w, card_h), 2, title_col)
+
+        # Stats
+        y = 185
+        incidents_req = game.difficulty_profile.get("incidents_required", 7)
+        waves = logger._waves_survived
+        kills = logger._counts["kills"]
+        losses = logger._counts["player_units_lost"]
+        bldg_placed = logger._counts["buildings_placed"]
+        bldg_lost = logger._counts["buildings_lost"]
+        duration = logger._game_duration
+
+        mins = int(duration) // 60
+        secs = int(duration) % 60
+        time_str = f"{mins}:{secs:02d}"
+
+        stat_col = (180, 180, 200)
+        val_col = (220, 220, 240)
+
+        stats = [
+            (f"Time: {time_str}", f"Incidents: {waves}/{incidents_req}"),
+            (f"Kills: {kills}", f"Losses: {losses}"),
+            (f"Buildings: {bldg_placed} built, {bldg_lost} lost", ""),
+            (f"Peak army: {game.peak_army_size} units", ""),
+        ]
+
+        # Formations discovered
+        if hasattr(game, 'discovered_formations') and game.discovered_formations:
+            fmt_names = [FORMATION_NAMES[i] for i in sorted(game.discovered_formations)
+                         if i < len(FORMATION_NAMES)]
+            stats.append((f"Formations: {', '.join(fmt_names)}", ""))
+
+        for left, right in stats:
+            ftext(screen, left, cx - 120, y, self.font_sm, stat_col)
+            if right:
+                ftext(screen, right, cx + 40, y, self.font_sm, val_col)
+            y += 20
+
+        # Victory grade
+        if game.game_won:
+            y += 5
+            if bldg_lost == 0 and losses < 5:
+                grade, g_col = "S", (255, 230, 80)
+            elif bldg_lost <= 1 and losses < 10:
+                grade, g_col = "A", (100, 255, 100)
+            elif bldg_lost <= 2 and losses < 20:
+                grade, g_col = "B", (100, 180, 255)
+            else:
+                grade, g_col = "C", (180, 180, 180)
+            kill_rate = int(kills / max(1, kills + losses) * 100)
+            ftext(screen, f"Efficiency: {kill_rate}% kill rate", cx - 120, y,
+                      self.font_sm, stat_col)
+            y += 22
+            ftext(screen, f"Grade: {grade}", cx, y, self.font_lg, g_col, center=True)
+            y += 30
+
+        # Divider
+        pygame.draw.line(screen, (80, 80, 100), (cx - 130, y), (cx + 130, y), 1)
+        y += 10
+
+        # Tip
+        if game.game_won:
+            tips = GAME_OVER_TIPS_VICTORY
+        else:
+            tips = GAME_OVER_TIPS_DEFEAT
+        # Deterministic tip based on game duration to avoid flicker
+        tip_idx = int(duration * 10) % len(tips)
+        tip = tips[tip_idx]
+        ftext(screen, tip, cx, y, self.font_xs, (180, 160, 80), center=True)
+        y += 18
+
+        # Difficulty suggestion on defeat at medium/hard
+        if not game.game_won and game.difficulty in ("medium", "hard") and waves < 4:
+            ftext(screen, "Try Easy difficulty to learn the basics",
+                      cx, y, self.font_xs, (100, 200, 100), center=True)
+            y += 18
+
+        # Divider
+        y += 5
+        pygame.draw.line(screen, (80, 80, 100), (cx - 130, y), (cx + 130, y), 1)
+        y += 12
+
+        # Controls
+        ftext(screen, "[R] Restart    [ESC] Menu", cx, y,
+                  self.font_sm, (150, 150, 170), center=True)

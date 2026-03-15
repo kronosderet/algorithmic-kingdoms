@@ -27,7 +27,8 @@ FORGE_ORANGE = (255, 140, 40)
 STEEL_BLUE = (100, 160, 220)
 RUIN_GRAY = (80, 75, 65)
 RUIN_DARK = (50, 45, 40)
-REPAIR_GOLD = (218, 165, 32)
+REPAIR_GOLD = (218, 165, 32)   # Earth Gold (system color)
+SENTINEL_STONE = (140, 130, 100)
 
 W, H = 1280, 720
 
@@ -240,38 +241,96 @@ def draw_refinery(surf, cx, cy, size, hp_pct=1.0, flash=0.0, repairing=False):
                            int(size * 0.5), 1)
 
 
-def draw_tower(surf, cx, cy, size, hp_pct=1.0, level=1, flash=0.0, repairing=False):
-    half = int(size * 0.45)
-    foundation = pygame.Surface((half * 2, half * 2), pygame.SRCALPHA)
-    foundation.fill((15, 15, 20, 80))
-    surf.blit(foundation, (cx - half, cy - half))
+def draw_sentinel(surf, cx, cy, size, hp_pct=1.0, level=1, flash=0.0, repairing=False):
+    """Sentinel lifecycle: Voronoi fracture on damage, Koch aura degrades, repair retuning."""
+    SENTINEL_STONE_C = (140, 130, 100)
+    RESONANCE_GLOW_C = (180, 160, 255)
+    SENTINEL_GOLD_C = (218, 165, 32)
 
-    depth = max(0, int(hp_pct * 3 + 0.5))
-    if level >= 2:
-        depth = min(4, depth + 1)
-    if depth == 0:
-        # ruin: just scattered lines
+    half = int(size * 0.45)
+
+    # Koch resonance field — degrades with HP
+    if hp_pct > 0.15:
+        koch_depth = 2 if hp_pct > 0.66 else (1 if hp_pct > 0.33 else 0)
+        if level >= 2:
+            koch_depth = min(3, koch_depth + 1)
+        field_r = size * 0.42 * max(0.3, hp_pct)
+        if koch_depth > 0 and field_r > 5:
+            points = koch_snowflake(cx, cy, field_r * 2, koch_depth)
+            if len(points) >= 3:
+                field_surf = pygame.Surface((int(size * 1.2), int(size * 1.2)), pygame.SRCALPHA)
+                shifted = [(int(p[0] - cx + size * 0.6), int(p[1] - cy + size * 0.6))
+                           for p in points]
+                alpha = int(50 * hp_pct)
+                pygame.draw.polygon(field_surf, (*RESONANCE_GLOW_C, max(5, alpha // 3)), shifted)
+                pygame.draw.polygon(field_surf, (*RESONANCE_GLOW_C, max(10, alpha)), shifted,
+                                    max(1, size // 40))
+                surf.blit(field_surf, (int(cx - size * 0.6), int(cy - size * 0.6)))
+
+    # Ruin state: cracked monolith leaning
+    if hp_pct <= 0.0:
+        lean = 15  # degrees
+        rng = random.Random(42)
         for _ in range(5):
-            rx = cx + random.randint(-half, half)
-            ry = cy + random.randint(-half // 2, half // 2)
+            rx = cx + rng.randint(-half // 2, half // 2)
+            ry = cy + rng.randint(-half // 3, half // 3)
             pygame.draw.line(surf, RUIN_GRAY, (rx, ry),
-                             (rx + random.randint(-10, 10), ry + random.randint(-10, 10)), 2)
+                             (rx + rng.randint(-8, 8), ry + rng.randint(-8, 8)), 2)
+        # Residual glow at base
+        glow_surf = pygame.Surface((40, 40), pygame.SRCALPHA)
+        pygame.draw.circle(glow_surf, (*SENTINEL_GOLD_C, 15), (20, 20), 18)
+        surf.blit(glow_surf, (cx - 20, cy + half // 3 - 20))
         return
 
-    points = koch_snowflake(cx, cy, size, depth)
-    int_pts = [(int(p[0]), int(p[1])) for p in points]
-    if len(int_pts) >= 3:
-        fill = TW_STONE if level == 1 else (180, 160, 120)
-        if flash:
-            fill = lerp_c(fill, (255, 255, 255), flash)
-        if hp_pct < 0.5:
-            fill = lerp_c(fill, RUIN_GRAY, (0.5 - hp_pct) * 1.5)
-        pygame.draw.polygon(surf, fill, int_pts)
-        border = (200, 200, 180) if level == 1 else FORGE_ORANGE
-        pygame.draw.polygon(surf, border, int_pts, max(1, size // 30))
+    # Standing stone body
+    w_s = int(size * 0.3)
+    h_s = int(size * 0.7)
+    body = [(cx - w_s // 2, cy + h_s // 3),
+            (cx - w_s // 3, cy - h_s // 3),
+            (cx, cy - h_s // 2),
+            (cx + w_s // 3, cy - h_s // 3),
+            (cx + w_s // 2, cy + h_s // 3)]
+    stone_c = SENTINEL_STONE_C if level == 1 else (160, 148, 115)
+    if flash:
+        stone_c = lerp_c(stone_c, (255, 255, 255), flash)
+    if hp_pct < 0.5:
+        stone_c = lerp_c(stone_c, RUIN_GRAY, (0.5 - hp_pct) * 1.5)
+    pygame.draw.polygon(surf, stone_c, body)
+    pygame.draw.polygon(surf, (0, 0, 0), body, 2)
+
+    # Voronoi dots — crack apart as damage increases
+    rng = random.Random(137)
+    crack_spread = (1.0 - hp_pct) * 4  # cells drift apart
+    for _ in range(7):
+        ox = rng.randint(-w_s // 3, w_s // 3) + int(rng.uniform(-crack_spread, crack_spread))
+        oy = rng.randint(-h_s // 3, h_s // 4) + int(rng.uniform(-crack_spread, crack_spread))
+        dot_c = tuple(min(255, c + rng.randint(-12, 12)) for c in stone_c)
+        pygame.draw.circle(surf, dot_c, (cx + ox, cy + oy), max(1, size // 25))
+    # Crack lines between cells
+    if hp_pct < 0.75:
+        n_cracks = int((1.0 - hp_pct) * 5)
+        for _ in range(n_cracks):
+            cx1 = cx + rng.randint(-w_s // 3, w_s // 3)
+            cy1 = cy + rng.randint(-h_s // 3, h_s // 4)
+            cx2 = cx1 + rng.randint(-8, 8)
+            cy2 = cy1 + rng.randint(-8, 8)
+            pygame.draw.line(surf, (8, 5, 3), (cx1, cy1), (cx2, cy2), 1)
+
+    # Golden aura
+    aura_alpha = int(25 * hp_pct)
+    aura = pygame.Surface((size, size), pygame.SRCALPHA)
+    for ri in range(3):
+        a = max(0, aura_alpha - ri * 7)
+        pygame.draw.circle(aura, (*SENTINEL_GOLD_C, a),
+                           (size // 2, size // 2), int(size * 0.25) + ri * 5)
+    surf.blit(aura, (cx - size // 2, cy - size // 2))
+
+    # Repair: gold flash at seams
     if repairing:
-        pygame.draw.circle(surf, REPAIR_GOLD, (int(cx), int(cy)),
-                           int(size * 0.5), 1)
+        repair_surf = pygame.Surface((size, size), pygame.SRCALPHA)
+        pygame.draw.circle(repair_surf, (*SENTINEL_GOLD_C, 30),
+                           (size // 2, size // 2), int(size * 0.35), 1)
+        surf.blit(repair_surf, (cx - size // 2, cy - size // 2))
 
 
 # ── main ─────────────────────────────────────────────────────
@@ -284,7 +343,7 @@ def main():
     font_lg = pygame.font.SysFont(None, 36)
     font_sm = pygame.font.SysFont(None, 20)
 
-    building_names = ["Town Hall", "Barracks", "Refinery", "Tower Lv.1", "Tower Lv.2"]
+    building_names = ["Town Hall", "Barracks", "Refinery", "Sentinel Lv.1", "Sentinel Lv.2"]
     current = 0
     hp_pct = 1.0
     preset_idx = 0
@@ -364,9 +423,9 @@ def main():
         elif current == 2:
             draw_refinery(screen, cx, cy, size, hp_pct, flash, repairing)
         elif current == 3:
-            draw_tower(screen, cx, cy, size, hp_pct, level=1, flash=flash, repairing=repairing)
+            draw_sentinel(screen, cx, cy, size, hp_pct, level=1, flash=flash, repairing=repairing)
         elif current == 4:
-            draw_tower(screen, cx, cy, size, hp_pct, level=2, flash=flash, repairing=repairing)
+            draw_sentinel(screen, cx, cy, size, hp_pct, level=2, flash=flash, repairing=repairing)
 
         # debris
         for d in debris_list:

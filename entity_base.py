@@ -6,6 +6,7 @@ from constants import (COL_HEALTH_BG, COL_HEALTH, COL_ENEMY_HEALTH,
                        ENEMY_XP_PER_HIT, ENEMY_XP_KILL_BONUS,
                        MSG_COL_ATTACK, display_name)
 from utils import pos_to_tile
+from fractal_ui import fractal_bar_simple
 
 
 # ---------------------------------------------------------------------------
@@ -133,5 +134,4 @@ class Entity:
         bh = max(2, int(4 * z))
         ratio = self.hp / self.max_hp
         col = COL_HEALTH if self.owner == "player" else COL_ENEMY_HEALTH
-        pygame.draw.rect(surf, COL_HEALTH_BG, (bx, by, w, bh))
-        pygame.draw.rect(surf, col, (bx, by, int(w * ratio), bh))
+        fractal_bar_simple(surf, bx, by, w, bh, ratio, col)

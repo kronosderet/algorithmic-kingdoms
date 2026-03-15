@@ -18,19 +18,21 @@ import math
 import random
 import sys
 
-# --- palette ---
+# --- Chromatic Heptarchy Palette (VDD Section 8) ---
 COL_BG = (20, 20, 30)
-WORKER_BLUE = (50, 130, 220)
-SOLDIER_RED = (200, 60, 60)
-ARCHER_GREEN = (50, 190, 50)
+# Player tone colors
+WORKER_BLUE = (50, 130, 220)    # Do — Gatherer
+SOLDIER_RED = (200, 60, 60)     # Re — Soldier
+ARCHER_GREEN = (140, 100, 200)  # Mi — Archer (now Precision Purple)
 RANK_COLORS = {
     0: (140, 140, 140), 1: (205, 127, 50), 2: (192, 192, 210),
     3: (255, 215, 0), 4: (80, 180, 255),
 }
-ENEMY_WORKER = (25, 35, 55)
-ENEMY_SOLDIER = (35, 12, 12)
-ENEMY_ARCHER = (35, 10, 30)
-GLOW_WHITE = (240, 235, 220)
+# Dark 7 enemy colors
+ENEMY_WORKER = (20, 80, 20)     # Blight Reaper
+ENEMY_SOLDIER = (80, 80, 100)   # Hollow Warden
+ENEMY_ARCHER = (140, 0, 140)    # Fade Ranger
+GLOW_WHITE = (240, 235, 220)    # Boundary White
 
 W, H = 1280, 720
 
@@ -408,8 +410,8 @@ def main():
                                 f"Enemy: {units[0].enemy}", True, sc), (20, 55))
 
         # labels
-        labels = ["WORKER", "SOLDIER", "ARCHER"]
-        colors = [WORKER_BLUE, SOLDIER_RED, ARCHER_GREEN]
+        labels = ["GATHERER", "SOLDIER", "ARCHER"]
+        colors = [WORKER_BLUE, SOLDIER_RED, ARCHER_GREEN]  # Do, Re, Mi
         for i, u in enumerate(units):
             lx = u.x
             c = colors[i] if i == selected else (100, 100, 120)

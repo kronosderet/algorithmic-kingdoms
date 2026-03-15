@@ -1,6 +1,7 @@
 import pygame
 import math
-from constants import SCREEN_WIDTH, SCREEN_HEIGHT, COL_BG, COL_TEXT, FPS
+from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, COL_BG, COL_TEXT, FPS,
+                       DIFFICULTY_DESCRIPTIONS)
 
 # --- Fractal palette (game-palette Mandelbrot) ---
 _FRACTAL_DEEP   = (10, 8, 25)
@@ -207,7 +208,7 @@ class MainMenu:
     # Difficulty buttons at h/phi² — second golden subdivision
     _BTN_Y = int(SCREEN_HEIGHT / (_PHI ** 2))             # ≈275
     _BTN_W = 180
-    _BTN_H = 80
+    _BTN_H = 105
     _BTN_GAP = 10
     _EXIT_PAD = 30  # corner padding for quit button
 
@@ -249,7 +250,7 @@ class MainMenu:
         return None
 
     def _draw_diff_button(self, rect, name, desc, key, color_accent, mx, my,
-                          leaf_k=2.5):
+                          leaf_k=2.5, desc_lines=None, recommended=False):
         hovered = rect.collidepoint(mx, my)
         cx, cy = rect.centerx, rect.centery
 
@@ -292,13 +293,24 @@ class MainMenu:
         text_surf = self.font_btn.render(name, True, color_accent)
         self.screen.blit(text_surf, text_surf.get_rect(centerx=cx, top=rect.top + 9))
 
-        # description
-        desc_surf = self.font_desc.render(desc, True, (150, 150, 170))
-        self.screen.blit(desc_surf, desc_surf.get_rect(centerx=cx, top=rect.top + 40))
+        # description lines
+        lines = desc_lines if desc_lines else [desc]
+        line_y = rect.top + 35
+        for line in lines:
+            desc_surf = self.font_desc.render(line, True, (150, 150, 170))
+            self.screen.blit(desc_surf, desc_surf.get_rect(centerx=cx, top=line_y))
+            line_y += 16
 
-        # key hint in a small hex ring
+        # recommended tag
+        if recommended:
+            tag_surf = self.font_desc.render("Recommended for first game", True,
+                                             (218, 165, 32))
+            self.screen.blit(tag_surf, tag_surf.get_rect(centerx=cx, top=line_y))
+            line_y += 16
+
+        # key hint
         key_surf = self.font_desc.render(f"[{key}]", True, (100, 100, 120))
-        self.screen.blit(key_surf, key_surf.get_rect(centerx=cx, top=rect.top + 58))
+        self.screen.blit(key_surf, key_surf.get_rect(centerx=cx, top=line_y))
 
     def _draw_button(self, rect, text, mx, my):
         hovered = rect.collidepoint(mx, my)
@@ -391,13 +403,17 @@ class MainMenu:
         # --- difficulty buttons (3/5/7 leaf polar roses) ---
         self._draw_diff_button(self._get_easy_btn_rect(),
                                "Easy", "Gentle pace, ample resources", "1",
-                               (80, 200, 80), mx, my, leaf_k=1.5)
+                               (80, 200, 80), mx, my, leaf_k=1.5,
+                               desc_lines=DIFFICULTY_DESCRIPTIONS["easy"],
+                               recommended=True)
         self._draw_diff_button(self._get_medium_btn_rect(),
                                "Medium", "The intended challenge", "2",
-                               (218, 165, 32), mx, my, leaf_k=2.5)
+                               (218, 165, 32), mx, my, leaf_k=2.5,
+                               desc_lines=DIFFICULTY_DESCRIPTIONS["medium"])
         self._draw_diff_button(self._get_hard_btn_rect(),
                                "Hard", "For seasoned commanders", "3",
-                               (200, 60, 60), mx, my, leaf_k=3.5)
+                               (200, 60, 60), mx, my, leaf_k=3.5,
+                               desc_lines=DIFFICULTY_DESCRIPTIONS["hard"])
 
         # --- exit button ---
         self._draw_button(self._get_exit_btn_rect(), "Exit", mx, my)

@@ -24,6 +24,7 @@ from constants import (UNIT_DEFS, BUILDING_DEFS, BUILDING_COLORS,
                        SENTINEL_CRY_BUFF_DURATION, SENTINEL_CRY_PULSE_DURATION,
                        MSG_COL_ECONOMY, display_name)
 from entity_base import Entity
+from fractal_ui import fractal_bar_simple
 from building_shapes import (_l_system_expand, _l_system_render, _sierpinski,
                              _koch_snowflake,
                              _TH_BROWN, _TH_GREEN, _BK_MAROON,
@@ -723,8 +724,7 @@ class Building(Entity):
             ratio = self.build_progress / self.build_time
             bw = px_size - 4
             bh = max(2, int(6 * z))
-            pygame.draw.rect(surf, (40, 40, 40), (sx + 2, sy + px_size - bh - 2, bw, bh))
-            pygame.draw.rect(surf, (0, 180, 255), (sx + 2, sy + px_size - bh - 2, int(bw * ratio), bh))
+            fractal_bar_simple(surf, sx + 2, sy + px_size - bh - 2, bw, bh, ratio, (0, 180, 255))
 
         # health bar
         if self.hp < self.max_hp:
@@ -735,8 +735,7 @@ class Building(Entity):
             ratio = self.train_progress / self.train_time if self.train_time > 0 else 0
             bw = px_size - 4
             bh = max(2, int(4 * z))
-            pygame.draw.rect(surf, (40, 40, 40), (sx + 2, sy + px_size + 2, bw, bh))
-            pygame.draw.rect(surf, (255, 200, 0), (sx + 2, sy + px_size + 2, int(bw * ratio), bh))
+            fractal_bar_simple(surf, sx + 2, sy + px_size + 2, bw, bh, ratio, (255, 200, 0))
 
         # tower upgrade progress bar
         if self.tower_upgrading and self.built:
