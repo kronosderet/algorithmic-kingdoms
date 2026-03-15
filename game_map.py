@@ -1,6 +1,7 @@
 import random
 import math
-from constants import (MAP_COLS, MAP_ROWS, TERRAIN_GRASS,
+import constants
+from constants import (TERRAIN_GRASS,
                        TERRAIN_TREE, TERRAIN_GOLD, TERRAIN_IRON,
                        TERRAIN_STONE,
                        TERRAIN_MOVE_COST, RESOURCE_CAPACITY)
@@ -8,9 +9,9 @@ from utils import clamp
 
 
 class GameMap:
-    def __init__(self):
-        self.cols = MAP_COLS
-        self.rows = MAP_ROWS
+    def __init__(self, cols: int = 0, rows: int = 0):
+        self.cols = cols if cols > 0 else constants.MAP_COLS
+        self.rows = rows if rows > 0 else constants.MAP_ROWS
         self.tiles = [[TERRAIN_GRASS for _ in range(self.cols)] for _ in range(self.rows)]
         self.resource_remaining = {}  # (col, row) -> amount
         self.generate()
@@ -19,56 +20,82 @@ class GameMap:
         # clear area around center for starting base
         center_c, center_r = self.cols // 2, self.rows // 2
 
+        # Scale resource cluster counts with map area (baseline: 128x128)
+        # Use sqrt scaling so small maps keep enough resources to be playable
+        area_ratio = (self.cols * self.rows) / (128 * 128)
+        area_scale = max(0.5, area_ratio ** 0.5)
+        # Exclusion zone scales with map — smaller on small maps
+        excl = max(4, min(6, self.cols // 16))
+
+        def _scaled(lo: int, hi: int) -> int:
+            return random.randint(max(lo, int(lo * area_scale)),
+                                  max(lo + 1, int(hi * area_scale)))
+
         # tree forests
-        for _ in range(random.randint(15, 22)):
+        for _ in range(_scaled(15, 22)):
             c = random.randint(3, self.cols - 4)
             r = random.randint(3, self.rows - 4)
-            if abs(c - center_c) < 6 and abs(r - center_r) < 6:
+            if abs(c - center_c) < excl and abs(r - center_r) < excl:
                 continue
             size = random.randint(8, 30)
             self._place_cluster(c, r, size, TERRAIN_TREE)
 
         # gold deposits
-        for _ in range(random.randint(5, 8)):
+        for _ in range(_scaled(5, 8)):
             c = random.randint(5, self.cols - 6)
             r = random.randint(5, self.rows - 6)
-            if abs(c - center_c) < 6 and abs(r - center_r) < 6:
+            if abs(c - center_c) < excl and abs(r - center_r) < excl:
                 continue
             size = random.randint(3, 6)
             self._place_cluster(c, r, size, TERRAIN_GOLD)
 
         # iron deposits
-        for _ in range(random.randint(4, 7)):
+        for _ in range(_scaled(4, 7)):
             c = random.randint(5, self.cols - 6)
             r = random.randint(5, self.rows - 6)
-            if abs(c - center_c) < 6 and abs(r - center_r) < 6:
+            if abs(c - center_c) < excl and abs(r - center_r) < excl:
                 continue
             size = random.randint(3, 6)
             self._place_cluster(c, r, size, TERRAIN_IRON)
 
         # v10: stone deposits
-        for _ in range(random.randint(3, 5)):
+        for _ in range(_scaled(3, 5)):
             c = random.randint(5, self.cols - 6)
             r = random.randint(5, self.rows - 6)
-            if abs(c - center_c) < 6 and abs(r - center_r) < 6:
+            if abs(c - center_c) < excl and abs(r - center_r) < excl:
                 continue
             size = random.randint(4, 8)
             self._place_cluster(c, r, size, TERRAIN_STONE)
 
-        # ensure some trees and gold near start (but not too close)
+        # ensure trees and gold near start (but not too close)
         for _ in range(3):
             angle = random.uniform(0, 2 * math.pi)
-            d = random.uniform(7, 12)
+            d = random.uniform(7, min(12, self.cols // 6))
             c = int(center_c + math.cos(angle) * d)
             r = int(center_r + math.sin(angle) * d)
             self._place_cluster(c, r, random.randint(6, 15), TERRAIN_TREE)
 
         for _ in range(2):
             angle = random.uniform(0, 2 * math.pi)
-            d = random.uniform(8, 14)
+            d = random.uniform(8, min(14, self.cols // 5))
             c = int(center_c + math.cos(angle) * d)
             r = int(center_r + math.sin(angle) * d)
             self._place_cluster(c, r, random.randint(3, 5), TERRAIN_GOLD)
+
+        # ensure iron and stone near start — critical for economy progression
+        for _ in range(2):
+            angle = random.uniform(0, 2 * math.pi)
+            d = random.uniform(8, min(14, self.cols // 5))
+            c = int(center_c + math.cos(angle) * d)
+            r = int(center_r + math.sin(angle) * d)
+            self._place_cluster(c, r, random.randint(3, 5), TERRAIN_IRON)
+
+        for _ in range(2):
+            angle = random.uniform(0, 2 * math.pi)
+            d = random.uniform(8, min(14, self.cols // 5))
+            c = int(center_c + math.cos(angle) * d)
+            r = int(center_r + math.sin(angle) * d)
+            self._place_cluster(c, r, random.randint(3, 5), TERRAIN_STONE)
 
         # init resource remaining
         for r in range(self.rows):

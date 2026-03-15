@@ -1,7 +1,8 @@
 import pygame
 import math
+import constants
 from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE,
-                       MAP_COLS, MAP_ROWS, TOP_BAR_H, BOTTOM_PANEL_H,
+                       TOP_BAR_H, BOTTOM_PANEL_H,
                        GAME_AREA_Y, GAME_AREA_H, ZOOM_STEP,
                        MINIMAP_SIZE, MINIMAP_MARGIN, MINIMAP_X, MINIMAP_Y,
                        TERRAIN_GRASS, TERRAIN_TREE, TERRAIN_GOLD, TERRAIN_IRON, TERRAIN_STONE,
@@ -75,6 +76,7 @@ class Game:
         self.difficulty_profile = DIFFICULTY_PROFILES[difficulty]
         profile = self.difficulty_profile
 
+        constants.set_map_size(difficulty)
         self.game_map = GameMap()
         self.camera = Camera()
         self.resources = ResourceManager(
@@ -187,7 +189,7 @@ class Game:
 
     def _setup_start(self):
         profile = self.difficulty_profile
-        center_c, center_r = MAP_COLS // 2, MAP_ROWS // 2
+        center_c, center_r = constants.MAP_COLS // 2, constants.MAP_ROWS // 2
         # place town hall
         th = Building(center_c - 1, center_r - 1, "town_hall", "player")
         th.built = True
@@ -1105,7 +1107,7 @@ class Game:
     # ------------------------------------------------------------------
     def global_defend(self):
         """All combat units move to base and hold ground."""
-        th = self.get_nearest_town_hall(MAP_COLS * TILE_SIZE / 2, MAP_ROWS * TILE_SIZE / 2)
+        th = self.get_nearest_town_hall(constants.MAP_COLS * TILE_SIZE / 2, constants.MAP_ROWS * TILE_SIZE / 2)
         if not th:
             return
         # find nearest tower to TH for defense midpoint
@@ -1156,8 +1158,8 @@ class Game:
                 u.command_attack(best, self)
             else:
                 # no enemies visible — attack-move to map center
-                cx = MAP_COLS * TILE_SIZE / 2
-                cy = MAP_ROWS * TILE_SIZE / 2
+                cx = constants.MAP_COLS * TILE_SIZE / 2
+                cy = constants.MAP_ROWS * TILE_SIZE / 2
                 u.command_attack_move(cx, cy, self)
 
     def global_bell(self):
@@ -1740,8 +1742,8 @@ class Game:
         ts = max(1, int(tsf) + 1)  # padded for fill (no gaps between tiles)
         c_min = max(0, int(vr.x // TILE_SIZE))
         r_min = max(0, int(vr.y // TILE_SIZE))
-        c_max = min(MAP_COLS, int((vr.x + vr.width) // TILE_SIZE) + 1)
-        r_max = min(MAP_ROWS, int((vr.y + vr.height) // TILE_SIZE) + 1)
+        c_max = min(constants.MAP_COLS, int((vr.x + vr.width) // TILE_SIZE) + 1)
+        r_max = min(constants.MAP_ROWS, int((vr.y + vr.height) // TILE_SIZE) + 1)
 
         # v10_4: cache map surface — only rebuild on zoom change, large pan, or tile change
         cache_valid = (
@@ -1969,11 +1971,11 @@ class Game:
 
     def _build_minimap_base(self):
         """Build the static terrain layer of the minimap."""
-        scale = MINIMAP_SIZE / max(MAP_COLS, MAP_ROWS)
+        scale = MINIMAP_SIZE / max(constants.MAP_COLS, constants.MAP_ROWS)
         surf = pygame.Surface((MINIMAP_SIZE, MINIMAP_SIZE))
         surf.fill((20, 20, 20))
-        for r in range(MAP_ROWS):
-            for c in range(MAP_COLS):
+        for r in range(constants.MAP_ROWS):
+            for c in range(constants.MAP_COLS):
                 t = self.game_map.tiles[r][c]
                 color = TERRAIN_COLORS.get(t, (40, 118, 74))
                 px = int(c * scale)
@@ -2021,7 +2023,7 @@ class Game:
             self._minimap_dirty = False
 
         mm = self.minimap_surf.copy()
-        scale = MINIMAP_SIZE / max(MAP_COLS, MAP_ROWS)
+        scale = MINIMAP_SIZE / max(constants.MAP_COLS, constants.MAP_ROWS)
         tile_scale = scale / TILE_SIZE  # world coords to minimap coords
 
         # draw player buildings
@@ -2086,7 +2088,7 @@ class Game:
         if not mr.collidepoint(sx, sy):
             return False
         # convert minimap coords to world coords
-        scale = MINIMAP_SIZE / max(MAP_COLS, MAP_ROWS)
+        scale = MINIMAP_SIZE / max(constants.MAP_COLS, constants.MAP_ROWS)
         tile_scale = scale / TILE_SIZE
         wx = (sx - MINIMAP_X) / tile_scale
         wy = (sy - MINIMAP_Y) / tile_scale

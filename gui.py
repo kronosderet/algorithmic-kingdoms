@@ -464,20 +464,16 @@ class GUI:
             rank_col = RANK_COLORS.get(e.rank, (180, 180, 180))
             draw_text(surf, f"Rank {e.rank} — XP: {e.xp}", 80, py + 94, self.font_xs, rank_col)
 
-        # special info for siege and v10_6 types
+        # special info for Dark 7 types
         ability_y = py + 108
         if e.unit_type == "enemy_siege":
-            draw_text(surf, "Siege: 2x damage to buildings", 80, ability_y, self.font_xs, (220, 160, 60))
-        elif e.unit_type == "enemy_sapper":
-            draw_text(surf, f"Sapper: {e.building_mult:.0f}x building dmg, self-destruct", 80, ability_y, self.font_xs, (200, 200, 60))
+            draw_text(surf, "Hexweaver: 2x building dmg, corrupts resonance", 80, ability_y, self.font_xs, (160, 80, 200))
         elif e.unit_type == "enemy_shieldbearer":
             draw_text(surf, f"Frontal Armor: {int(e.frontal_armor*100)}% — flank to bypass!", 80, ability_y, self.font_xs, (140, 160, 200))
         elif e.unit_type == "enemy_healer":
             draw_text(surf, f"Healer: {e.heal_rate:.0f} HP/s to allies", 80, ability_y, self.font_xs, (80, 220, 120))
         elif e.unit_type == "enemy_raider":
             draw_text(surf, "Raider: targets workers & economy", 80, ability_y, self.font_xs, (220, 100, 150))
-        elif e.unit_type == "enemy_warlock":
-            draw_text(surf, f"Warlock: AOE {e.aoe_radius}px splash damage", 80, ability_y, self.font_xs, (180, 100, 220))
 
         # v10_8: dissonance tag
         dis_fmt = getattr(e, 'dissonant_formation', -1)

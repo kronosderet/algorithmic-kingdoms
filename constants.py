@@ -5,7 +5,17 @@ SCREEN_WIDTH, SCREEN_HEIGHT = 1280, 720
 FPS = 60
 
 TILE_SIZE = 32
-MAP_COLS, MAP_ROWS = 128, 128
+MAP_COLS, MAP_ROWS = 128, 128  # default; overwritten by set_map_size()
+
+# Map size by difficulty (cols, rows)
+MAP_SIZES = {"easy": (64, 64), "medium": (128, 128), "hard": (256, 256)}
+
+
+def set_map_size(difficulty: str) -> None:
+    """Set MAP_COLS/MAP_ROWS from difficulty.  Must be called before GameMap()."""
+    global MAP_COLS, MAP_ROWS
+    MAP_COLS, MAP_ROWS = MAP_SIZES.get(difficulty, (128, 128))
+
 CAMERA_SPEED = 400
 EDGE_SCROLL_MARGIN = 25
 ZOOM_MIN = 0.4
@@ -62,7 +72,7 @@ DIFFICULTY_PROFILES = {
         "wave_bonus_gold": 30, "wave_bonus_wood": 15, "wave_bonus_steel": 3,
         "label": "Easy",
         # v10_9: Incident Director
-        "incidents_required": 12,
+        "incidents_required": 7,
         "tension_drift": 0.003,
         "first_incident_time": 300,
         "min_cooldown": 40,
@@ -70,9 +80,9 @@ DIFFICULTY_PROFILES = {
         "incident_hp_scale": 0.04,
         "incident_atk_scale": 0.03,
         "incident_unlock": {
-            "enemy_archer": 2, "enemy_sapper": 5, "enemy_raider": 6,
-            "enemy_siege": 7, "enemy_shieldbearer": 8,
-            "enemy_healer": 10, "enemy_elite": 11, "enemy_warlock": 12,
+            "enemy_archer": 2, "enemy_raider": 3,
+            "enemy_siege": 4, "enemy_shieldbearer": 5,
+            "enemy_healer": 6, "enemy_elite": 7,
         },
     },
     "medium": {
@@ -82,7 +92,7 @@ DIFFICULTY_PROFILES = {
         "wave_bonus_gold": 25, "wave_bonus_wood": 15, "wave_bonus_steel": 3,
         "label": "Medium",
         # v10_9: Incident Director
-        "incidents_required": 16,
+        "incidents_required": 14,
         "tension_drift": 0.005,
         "first_incident_time": 270,
         "min_cooldown": 25,
@@ -90,9 +100,9 @@ DIFFICULTY_PROFILES = {
         "incident_hp_scale": 0.05,
         "incident_atk_scale": 0.04,
         "incident_unlock": {
-            "enemy_archer": 2, "enemy_sapper": 4, "enemy_raider": 5,
+            "enemy_archer": 2, "enemy_raider": 4,
             "enemy_siege": 6, "enemy_shieldbearer": 7,
-            "enemy_healer": 9, "enemy_elite": 10, "enemy_warlock": 13,
+            "enemy_healer": 9, "enemy_elite": 12,
         },
     },
     "hard": {
@@ -102,7 +112,7 @@ DIFFICULTY_PROFILES = {
         "wave_bonus_gold": 15, "wave_bonus_wood": 8, "wave_bonus_steel": 2,
         "label": "Hard",
         # v10_9: Incident Director
-        "incidents_required": 22,
+        "incidents_required": 21,
         "tension_drift": 0.007,
         "first_incident_time": 240,
         "min_cooldown": 15,
@@ -110,9 +120,9 @@ DIFFICULTY_PROFILES = {
         "incident_hp_scale": 0.06,
         "incident_atk_scale": 0.05,
         "incident_unlock": {
-            "enemy_archer": 2, "enemy_sapper": 3, "enemy_raider": 4,
+            "enemy_archer": 2, "enemy_raider": 3,
             "enemy_siege": 5, "enemy_shieldbearer": 6,
-            "enemy_healer": 8, "enemy_elite": 9, "enemy_warlock": 11,
+            "enemy_healer": 9, "enemy_elite": 14,
         },
     },
 }
@@ -232,7 +242,7 @@ INCIDENT_CATALOGUE = {
     },
     "economy_raid": {
         "tier": "medium", "count_range": (6, 10),
-        "composition": {"enemy_raider": 0.4, "enemy_sapper": 0.3, "enemy_soldier": 0.3},
+        "composition": {"enemy_raider": 0.5, "enemy_soldier": 0.3, "enemy_archer": 0.2},
         "behaviour": "economy_target",
         "directions": 1,
         "narrative_foreboding": "Raiders are eyeing our production...",
@@ -265,7 +275,7 @@ INCIDENT_CATALOGUE = {
     },
     "healer_push": {
         "tier": "strong", "count_range": (12, 16),
-        "composition": {"enemy_shieldbearer": 0.25, "enemy_healer": 0.2, "enemy_soldier": 0.35, "enemy_warlock": 0.2},
+        "composition": {"enemy_shieldbearer": 0.3, "enemy_healer": 0.25, "enemy_soldier": 0.45},
         "behaviour": None,
         "directions": 1,
         "narrative_foreboding": "Dark mending energy gathers...",
@@ -274,7 +284,7 @@ INCIDENT_CATALOGUE = {
     # --- DEADLY (tension >= 0.75, count 20-35) ---
     "grand_assault": {
         "tier": "deadly", "count_range": (22, 32),
-        "composition": {"enemy_soldier": 0.25, "enemy_archer": 0.15, "enemy_siege": 0.1, "enemy_elite": 0.1, "enemy_shieldbearer": 0.1, "enemy_healer": 0.1, "enemy_raider": 0.1, "enemy_warlock": 0.1},
+        "composition": {"enemy_soldier": 0.25, "enemy_archer": 0.15, "enemy_siege": 0.15, "enemy_elite": 0.15, "enemy_shieldbearer": 0.1, "enemy_healer": 0.1, "enemy_raider": 0.1},
         "behaviour": None,
         "directions": 3,
         "narrative_foreboding": "The sky darkens. This is it.",
@@ -290,7 +300,7 @@ INCIDENT_CATALOGUE = {
     },
     "dark_resonance": {
         "tier": "deadly", "count_range": (20, 28),
-        "composition": {"enemy_warlock": 0.3, "enemy_elite": 0.25, "enemy_shieldbearer": 0.25, "enemy_healer": 0.2},
+        "composition": {"enemy_elite": 0.35, "enemy_shieldbearer": 0.3, "enemy_healer": 0.35},
         "behaviour": None,
         "directions": 2,
         "dissonance_override": 0.50,  # 50% of enemies get dissonance regardless of normal chance
@@ -375,12 +385,21 @@ DISPLAY_NAMES = {
     "stoneworks": "Stone Spire", "iron_works": "Iron Spire", "forge": "Fractal Forge",
     # Player units
     "worker": "Gatherer", "soldier": "Warden", "archer": "Ranger",
-    # Enemy units
-    "enemy_soldier": "Dark Warden", "enemy_archer": "Shadow Ranger",
-    "enemy_siege": "Siege Golem", "enemy_elite": "Void Knight",
-    "enemy_sapper": "Blight Sapper", "enemy_shieldbearer": "Iron Bulwark",
-    "enemy_healer": "Plague Mender", "enemy_raider": "Rift Raider",
-    "enemy_warlock": "Chaos Warlock",
+    # Enemy units — The Dark 7: one corrupted mirror per player tone
+    # Do (1) Gatherer  →  Blight Reaper   — destroys what Gatherers build
+    # Re (2) Warden    →  Hollow Warden   — melee aggressor, breaks defenses
+    # Mi (3) Ranger    →  Fade Ranger     — scattered suppression from the void
+    # Fa (4) Shield    →  Ironbark        — living armor wall, shields the dark
+    # Sol(5) Knight    →  Thornknight     — fast deadly charge, decisive strike
+    # La (6) Healer    →  Marrowmend      — sinister healer, sustains the dark
+    # Ti (7) Sage      →  Hexweaver       — corrupts resonance, weaves anti-harmonics
+    "enemy_raider": "Blight Reaper",
+    "enemy_soldier": "Hollow Warden",
+    "enemy_archer": "Fade Ranger",
+    "enemy_shieldbearer": "Ironbark",
+    "enemy_elite": "Thornknight",
+    "enemy_healer": "Marrowmend",
+    "enemy_siege": "Hexweaver",
     "entrenched": "Entrenched Titan",
 }
 
@@ -407,13 +426,12 @@ UNIT_COLORS = {  # Rainbow scheme: 7 colors for 7 unit types (ROYGBIV reversed)
 }
 
 UNIT_LABELS = {"worker": "G", "soldier": "W", "archer": "R",
-               "enemy_soldier": "E", "enemy_archer": "E", "enemy_siege": "SG", "enemy_elite": "VK",
-               "enemy_sapper": "SP", "enemy_shieldbearer": "IB", "enemy_healer": "PM",
-               "enemy_raider": "RR", "enemy_warlock": "CW"}
+               "enemy_soldier": "HW", "enemy_archer": "FR", "enemy_raider": "BR",
+               "enemy_shieldbearer": "IB", "enemy_elite": "TK", "enemy_healer": "MM",
+               "enemy_siege": "HX"}
 UNIT_RADIUS = {"worker": 10, "soldier": 12, "archer": 11,
                "enemy_soldier": 12, "enemy_archer": 11, "enemy_siege": 14, "enemy_elite": 12,
-               "enemy_sapper": 11, "enemy_shieldbearer": 14, "enemy_healer": 10,
-               "enemy_raider": 11, "enemy_warlock": 12}
+               "enemy_shieldbearer": 14, "enemy_healer": 10, "enemy_raider": 11}
 
 # Enemy defs (base stats, scaled per wave)
 ENEMY_DEFS = {
@@ -421,25 +439,20 @@ ENEMY_DEFS = {
     "enemy_archer": {"hp": 60, "speed": 50, "attack": 6, "range": 140, "cd": 1.8},
     "enemy_siege": {"hp": 200, "speed": 35, "attack": 20, "range": 40, "cd": 3.0, "building_mult": 2.0},
     "enemy_elite": {"hp": 160, "speed": 60, "attack": 18, "range": 40, "cd": 1.0},
-    # v10_6: New enemy types
-    "enemy_sapper":       {"hp": 80,  "speed": 70, "attack": 5,  "range": 40,  "cd": 2.0, "building_mult": 3.0, "self_destruct": True},
+    # v10_6: Specialist enemy types
     "enemy_shieldbearer": {"hp": 250, "speed": 40, "attack": 8,  "range": 40,  "cd": 1.5, "frontal_armor": 0.50},
     "enemy_healer":       {"hp": 60,  "speed": 45, "attack": 0,  "range": 120, "cd": 0,   "heal_rate": 5.0},
     "enemy_raider":       {"hp": 70,  "speed": 80, "attack": 10, "range": 40,  "cd": 1.0, "economy_only": True},
-    "enemy_warlock":      {"hp": 90,  "speed": 45, "attack": 15, "range": 100, "cd": 3.0, "aoe_radius": 30},
 }
 
-ENEMY_COLORS = {  # Dark mirror of player rainbow — same hue, desaturated/darkened
-    "enemy_soldier":      (30, 5, 55),    # dark indigo (mirrors Warden)
-    "enemy_archer":       (12, 30, 75),   # dark blue (mirrors Ranger)
-    "enemy_siege":        (50, 25, 5),    # dark amber
-    "enemy_elite":        (50, 10, 25),   # dark crimson
-    # v10_6: new enemy type colors
-    "enemy_sapper":       (45, 40, 10),   # dark olive
-    "enemy_shieldbearer": (40, 40, 45),   # dark steel
-    "enemy_healer":       (15, 40, 20),   # dark green
-    "enemy_raider":       (45, 15, 35),   # dark magenta
-    "enemy_warlock":      (30, 10, 45),   # dark purple
+ENEMY_COLORS = {  # The Dark 7 — desaturated/darkened hues
+    "enemy_soldier":      (30, 5, 55),    # Hollow Warden (anti-Warden) — dark indigo
+    "enemy_archer":       (12, 30, 75),   # Fade Ranger (anti-Ranger) — dark blue
+    "enemy_raider":       (45, 15, 35),   # Blight Reaper (anti-Gatherer) — dark magenta
+    "enemy_shieldbearer": (40, 40, 45),   # Ironbark (anti-Shield) — dark steel
+    "enemy_elite":        (50, 10, 25),   # Thornknight (anti-Knight) — dark crimson
+    "enemy_healer":       (15, 40, 20),   # Marrowmend (anti-Healer) — dark green
+    "enemy_siege":        (30, 10, 45),   # Hexweaver (anti-Sage) — dark purple
 }
 
 # Gather config
@@ -492,9 +505,6 @@ SENTINEL_CRY_BUFF_DURATION = 3.0 # seconds the buff lasts
 SENTINEL_CRY_SPEED_BONUS = 0.25  # 25% attack speed bonus for buffed units
 SENTINEL_CRY_PULSE_DURATION = 0.6  # visual pulse ring duration
 
-# v10_7: Sapper sympathetic detonation
-SAPPER_BLAST_RADIUS = 40         # px — AOE damage radius on self-destruct
-
 # v10_7: Straggler Metamorphosis — surviving enemies root and transform
 STRAGGLER_ROOT_WAVES = 1         # root after surviving 1 wave beyond their own
 STRAGGLER_METAMORPH_WAVES = 2    # transform after surviving 2 waves beyond their own
@@ -513,11 +523,9 @@ MOVEMENT_PROFILES = {
     "enemy_archer":   {"accel": 200, "decel": 150, "max_speed": 50},
     "enemy_siege":    {"accel": 60,  "decel": 400, "max_speed": 35},
     "enemy_elite":    {"accel": 250, "decel": 200, "max_speed": 60},
-    "enemy_sapper":   {"accel": 300, "decel": 100, "max_speed": 70},
     "enemy_shieldbearer": {"accel": 80, "decel": 350, "max_speed": 40},
     "enemy_healer":   {"accel": 150, "decel": 180, "max_speed": 45},
     "enemy_raider":   {"accel": 400, "decel": 80,  "max_speed": 80},
-    "enemy_warlock":  {"accel": 140, "decel": 200, "max_speed": 45},
 }
 MOVEMENT_PROFILE_DEFAULT = {"accel": 180, "decel": 200, "max_speed": 60}
 
@@ -579,11 +587,9 @@ ENERGY_PROFILES = {
     "enemy_archer":   {"max": 80,  "regen": 7,  "accel_cost": 8.0,  "cruise_cost": 1.5, "attack_cost": 4.0},
     "enemy_siege":    {"max": 150, "regen": 4,  "accel_cost": 5.0,  "cruise_cost": 1.0, "attack_cost": 10.0},
     "enemy_elite":    {"max": 120, "regen": 6,  "accel_cost": 12.0, "cruise_cost": 2.5, "attack_cost": 8.0},
-    "enemy_sapper":   {"max": 70,  "regen": 5,  "accel_cost": 12.0, "cruise_cost": 2.0, "attack_cost": 8.0},
     "enemy_shieldbearer": {"max": 130, "regen": 5, "accel_cost": 8.0, "cruise_cost": 1.5, "attack_cost": 5.0},
     "enemy_healer":   {"max": 90,  "regen": 9,  "accel_cost": 6.0,  "cruise_cost": 1.0, "attack_cost": 3.0},
     "enemy_raider":   {"max": 70,  "regen": 5,  "accel_cost": 12.0, "cruise_cost": 2.0, "attack_cost": 8.0},
-    "enemy_warlock":  {"max": 100, "regen": 6,  "accel_cost": 8.0,  "cruise_cost": 1.5, "attack_cost": 7.0},
 }
 ENERGY_PROFILE_DEFAULT = {"max": 100, "regen": 8, "accel_cost": 10.0, "cruise_cost": 2.0, "attack_cost": 6.0}
 
@@ -618,7 +624,6 @@ STANCE_GUARD_AGGRO_BONUS = 40       # px — extra aggro range in Guard stance
 LONE_WOLF_ISOLATION_DIST = 80       # px — "alone" threshold for lone wolf trait
 MORALE_CLUSTER_RADIUS = 200         # px — enemy cluster detection radius
 ARROW_FLIGHT_DISTANCE_NORM = 180.0  # px — distance normalization for arrow flight time
-WARLOCK_AOE_EDGE_FACTOR = 0.5       # damage falloff at AOE edge (1.0 center, this at edge)
 HEALER_FOLLOW_RANGE_MULT = 0.7      # fraction of attack_range to chase wounded ally
 REPATH_COOLDOWN = 1.5               # seconds — cooldown after A* fail before retrying
 FORGE_WORKER_SPEED_BONUS = 0.3      # +30% forge speed per worker stationed
@@ -731,10 +736,8 @@ UNIT_PRIORITY = {
     "enemy_soldier": 4.0, "enemy_archer": 4.5,
     "enemy_elite": 6.0, "enemy_siege": 7.0,
     # v10_6: new enemy type priorities
-    "enemy_sapper": 8.0,        # highest — beelines buildings, must intercept
     "enemy_healer": 9.0,        # must focus-fire to break sustain
     "enemy_raider": 7.0,        # economy threat
-    "enemy_warlock": 6.0,       # ranged AOE danger
     "enemy_shieldbearer": 3.0,  # low — tanky, skip if possible
 }
 RUIN_PRIORITY_MULT = 0.15          # ruins are worth much less
@@ -744,7 +747,7 @@ RANK_TARGETING_NOISE = {           # higher rank = less noise = smarter picks
 }
 TOWER_LOW_HP_BONUS = 2.0           # finish off wounded targets
 TOWER_LOW_HP_THRESHOLD = 0.30      # HP fraction for bonus
-TOWER_HIGH_THREAT_TYPES = {"enemy_elite": 1.5, "enemy_siege": 1.8, "enemy_sapper": 2.0, "enemy_warlock": 1.3}
+TOWER_HIGH_THREAT_TYPES = {"enemy_elite": 1.5, "enemy_siege": 1.8}
 LOW_HP_FINISH_BONUS = 1.3          # unit targeting: prefer wounded
 LOW_HP_FINISH_THRESHOLD = 0.40
 ENGAGED_TARGET_BONUS = 1.15        # slight preference for current target
@@ -771,7 +774,7 @@ MORALE_RANK_RESISTANCE = {         # multiplier on flee ratio (higher = braver)
 STANCE_AGGRESSIVE = 0    # Chase targets, auto-engage, break formation
 STANCE_DEFENSIVE = 1     # Hold formation, weapon-range only
 STANCE_GUARD = 2         # Protect building/area, return to post after engagement
-STANCE_HUNT = 3          # Prioritize Sappers/Raiders, ignore frontline
+STANCE_HUNT = 3          # Prioritize Raiders/siege, ignore frontline
 STANCE_NAMES = ["Aggressive", "Defensive", "Guard", "Hunt"]
 STANCE_COLORS = {0: (220, 50, 50), 1: (50, 140, 220), 2: (50, 200, 80), 3: (200, 160, 50)}
 
@@ -988,10 +991,10 @@ TRAIT_POOL = {
     "cautious":     (30, {"soldier", "archer", "enemy_soldier", "enemy_archer", "enemy_healer"}),
     "loyal":        (15, {"soldier", "archer", "enemy_soldier", "enemy_archer", "enemy_shieldbearer"}),
     "lone_wolf":    (15, {"soldier", "archer", "enemy_soldier", "enemy_archer", "enemy_raider"}),
-    "sharpshooter": (8,  {"archer", "enemy_archer", "enemy_warlock"}),
-    "berserker":    (8,  {"soldier", "enemy_soldier", "enemy_elite", "enemy_sapper"}),
+    "sharpshooter": (8,  {"archer", "enemy_archer"}),
+    "berserker":    (8,  {"soldier", "enemy_soldier", "enemy_elite"}),
     "inspiring":    (4,  {"soldier", "archer", "enemy_soldier", "enemy_archer", "enemy_elite", "enemy_shieldbearer"}),
-    "nimble":       (25, {"soldier", "archer", "enemy_soldier", "enemy_archer", "enemy_elite", "enemy_siege", "enemy_raider", "enemy_sapper"}),
+    "nimble":       (25, {"soldier", "archer", "enemy_soldier", "enemy_archer", "enemy_elite", "enemy_siege", "enemy_raider"}),
 }
 
 TRAIT_CONFLICTS = {
@@ -1114,7 +1117,7 @@ TOOLTIP_DATA = {
     "stance_Aggressive": "Aggressive — Chase and engage.\nUnits pursue enemies beyond weapon range.\nHigher aggro range, breaks formation.",
     "stance_Defensive": "Defensive — Hold position.\nOnly attacks within weapon range.\nMaintains formation discipline.",
     "stance_Guard": "Guard — Protect an area.\nEngages nearby threats, returns to post.\nIdeal for base defense.",
-    "stance_Hunt": "Hunt — Priority targeting.\nFocuses Sappers and Raiders first.\nIgnores frontline soldiers.",
+    "stance_Hunt": "Hunt — Priority targeting.\nFocuses Raiders and siege first.\nIgnores frontline soldiers.",
     # --- Formations ---
     "fmt_Rose": "Rose Formation (Polar Rose curve)\nIdeal ratio: 2:1 (octave harmony)\nAura: +DMG% per petal depth.\nBest for raw damage output.",
     "fmt_Spiral": "Spiral Formation (Golden Spiral)\nIdeal ratio: 3:2 (perfect fifth)\nAura: Evasion chance per depth.\nAssault/flanking formation.",
@@ -1152,16 +1155,14 @@ TOOLTIP_DATA = {
     "unit_worker": "Gatherer — Economic backbone.\nGathers resources, builds, repairs.\nGains skill XP per resource type.",
     "unit_soldier": "Warden — Melee fighter.\n140 HP, 14 ATK, short range.\nTough frontline with high HP.",
     "unit_archer": "Ranger — Ranged attacker.\n75 HP, 9 ATK, long range.\nBallistic arrows with rank accuracy.",
-    # --- Enemy Types ---
-    "enemy_enemy_soldier": "Dark Warden — Enemy melee.\nStandard frontline attacker.",
-    "enemy_enemy_archer": "Shadow Ranger — Enemy ranged.\nWeaker arrows but keeps distance.",
-    "enemy_enemy_siege": "Siege Golem — Building destroyer.\n2x damage to buildings. Slow but tough.",
-    "enemy_enemy_elite": "Void Knight — Elite warrior.\nFast, strong, hard to kill.",
-    "enemy_enemy_sapper": "Blight Sapper — Suicide bomber.\n3x building damage. Self-destructs on contact.",
-    "enemy_enemy_shieldbearer": "Iron Bulwark — Armored tank.\n50% frontal armor. Flank to bypass!",
-    "enemy_enemy_healer": "Plague Mender — Enemy healer.\nHeals 5 HP/s to nearby allies.",
-    "enemy_enemy_raider": "Rift Raider — Economy hunter.\nTargets workers and resource buildings.",
-    "enemy_enemy_warlock": "Chaos Warlock — AOE caster.\nSplash damage in 30px radius.",
+    # --- Enemy Types — The Dark 7 (one per player tone) ---
+    "enemy_enemy_soldier": "Hollow Warden — Anti-Warden (Re).\nMelee aggressor that breaks defenses.",
+    "enemy_enemy_archer": "Fade Ranger — Anti-Ranger (Mi).\nScattered suppressive fire from the void.",
+    "enemy_enemy_raider": "Blight Reaper — Anti-Gatherer (Do).\nDestroys what Gatherers build.",
+    "enemy_enemy_shieldbearer": "Ironbark — Anti-Shield (Fa).\n50% frontal armor. Flank to bypass!",
+    "enemy_enemy_elite": "Thornknight — Anti-Knight (Sol).\nFast, deadly charge. Hard to kill.",
+    "enemy_enemy_healer": "Marrowmend — Anti-Healer (La).\nHeals 5 HP/s to nearby enemies.",
+    "enemy_enemy_siege": "Hexweaver — Anti-Sage (Ti).\nCorrupts resonance. 2x building damage.\nWeaves anti-harmonics from dissonant fields.",
     # --- Global Buttons ---
     "btn_Defend Base": "Rally all military to defend\nthe nearest Town Hall.",
     "btn_Hunt Enemies": "Send all military to attack-move\ntoward the nearest enemy threat.",

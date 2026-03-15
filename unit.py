@@ -1,9 +1,10 @@
 import math
 import random
 import pygame
+import constants
 from constants import (UNIT_DEFS, ENEMY_DEFS, UNIT_COLORS, ENEMY_COLORS,
                        UNIT_LABELS, UNIT_RADIUS, BUILDING_DEFS, BUILDING_LABELS,
-                       TILE_SIZE, MAP_COLS, MAP_ROWS,
+                       TILE_SIZE,
                        SCREEN_WIDTH, GAME_AREA_Y, GAME_AREA_H,
                        COL_SELECT, COL_GOLD, COL_WOOD, COL_IRON_C, COL_STONE,
                        TERRAIN_TREE, TERRAIN_GOLD, TERRAIN_IRON,
@@ -43,12 +44,12 @@ from constants import (UNIT_DEFS, ENEMY_DEFS, UNIT_COLORS, ENEMY_COLORS,
                        STANCE_AGGRESSIVE, STANCE_DEFENSIVE, STANCE_GUARD,
                        STANCE_HUNT, STANCE_GUARD_AGGRO_BONUS,
                        FORMATION_SLOT_ARRIVAL, FORMATION_REGROUP_DELAY,
-                       SAPPER_BLAST_RADIUS, SENTINEL_CRY_SPEED_BONUS,
+                       SENTINEL_CRY_SPEED_BONUS,
                        METAMORPH_HP_MULT, METAMORPH_ATK_MULT,
                        METAMORPH_SPEED_MULT,
                        WORKER_FLEE_COOLDOWN,
                        LONE_WOLF_ISOLATION_DIST, MORALE_CLUSTER_RADIUS,
-                       ARROW_FLIGHT_DISTANCE_NORM, WARLOCK_AOE_EDGE_FACTOR,
+                       ARROW_FLIGHT_DISTANCE_NORM,
                        HEALER_FOLLOW_RANGE_MULT, REPATH_COOLDOWN,
                        MOVEMENT_PROFILES, MOVEMENT_PROFILE_DEFAULT,
                        REPULSION_RADIUS, REPULSION_STRENGTH, REPULSION_FALLOFF,
@@ -960,8 +961,8 @@ class Unit(Entity):
         # combat units auto-aggro
         if self.unit_type in ("soldier", "archer", "enemy_soldier", "enemy_archer",
                                "enemy_elite", "enemy_siege",
-                               "enemy_sapper", "enemy_shieldbearer", "enemy_healer",
-                               "enemy_raider", "enemy_warlock"):
+                               "enemy_shieldbearer", "enemy_healer",
+                               "enemy_raider"):
             # v10_6: Healer — heal allies instead of fighting
             if self.unit_type == "enemy_healer":
                 if self._healer_tick(dt, game):
@@ -1002,11 +1003,11 @@ class Unit(Entity):
                 for b in game.player_buildings:
                     if b.alive and dist(self.x, self.y, b.x, b.y) < aggro_range:
                         candidates.append(b)
-            # v10_6: Hunt stance — prioritize sappers and raiders
+            # v10_6: Hunt stance — prioritize raiders and siege
             if self.stance == STANCE_HUNT and candidates:
                 hunt_targets = [e for e in candidates
                                 if getattr(e, 'unit_type', '') in
-                                ("enemy_sapper", "enemy_raider")]
+                                ("enemy_raider", "enemy_siege")]
                 if hunt_targets:
                     candidates = hunt_targets
             if candidates:
@@ -1427,8 +1428,8 @@ class Unit(Entity):
         fx = self.x + (dx / fd) * WORKER_FLEE_DISTANCE
         fy = self.y + (dy / fd) * WORKER_FLEE_DISTANCE
         # clamp to map bounds
-        fx = max(TILE_SIZE, min(fx, (MAP_COLS - 1) * TILE_SIZE))
-        fy = max(TILE_SIZE, min(fy, (MAP_ROWS - 1) * TILE_SIZE))
+        fx = max(TILE_SIZE, min(fx, (constants.MAP_COLS - 1) * TILE_SIZE))
+        fy = max(TILE_SIZE, min(fy, (constants.MAP_ROWS - 1) * TILE_SIZE))
         tc, tr = pos_to_tile(fx, fy)
         self._path_to(tc, tr, game)
         self._flee_start_time = game.game_time
@@ -1480,8 +1481,8 @@ class Unit(Entity):
                         fd = 1
                     fx = self.x + (dx / fd) * WORKER_FLEE_DISTANCE
                     fy = self.y + (dy / fd) * WORKER_FLEE_DISTANCE
-                    fx = max(TILE_SIZE, min(fx, (MAP_COLS - 1) * TILE_SIZE))
-                    fy = max(TILE_SIZE, min(fy, (MAP_ROWS - 1) * TILE_SIZE))
+                    fx = max(TILE_SIZE, min(fx, (constants.MAP_COLS - 1) * TILE_SIZE))
+                    fy = max(TILE_SIZE, min(fy, (constants.MAP_ROWS - 1) * TILE_SIZE))
                     tc, tr = pos_to_tile(fx, fy)
                     self._path_to(tc, tr, game)
         else:
@@ -1641,7 +1642,7 @@ class Unit(Entity):
         # v9.2: check if path ended — decide edge-escape vs regroup-rally
         if not self.path or self.path_index >= len(self.path):
             c, r = self.get_tile()
-            at_edge = (c <= 2 or c >= MAP_COLS - 3 or r <= 2 or r >= MAP_ROWS - 3)
+            at_edge = (c <= 2 or c >= constants.MAP_COLS - 3 or r <= 2 or r >= constants.MAP_ROWS - 3)
             if at_edge:
                 # escaped! add to veteran list with accumulated XP
                 if hasattr(game, 'escaped_enemies'):
@@ -1671,13 +1672,13 @@ class Unit(Entity):
 
     def _nearest_edge(self):
         """Return world coords of nearest map edge."""
-        map_w = MAP_COLS * TILE_SIZE
-        map_h = MAP_ROWS * TILE_SIZE
+        map_w = constants.MAP_COLS * TILE_SIZE
+        map_h = constants.MAP_ROWS * TILE_SIZE
         candidates = [
             (self.x,         (TILE_SIZE, self.y)),                          # left
-            (map_w - self.x, ((MAP_COLS - 2) * TILE_SIZE, self.y)),        # right
+            (map_w - self.x, ((constants.MAP_COLS - 2) * TILE_SIZE, self.y)),        # right
             (self.y,         (self.x, TILE_SIZE)),                          # top
-            (map_h - self.y, (self.x, (MAP_ROWS - 2) * TILE_SIZE)),       # bottom
+            (map_h - self.y, (self.x, (constants.MAP_ROWS - 2) * TILE_SIZE)),       # bottom
         ]
         return min(candidates, key=lambda c: c[0])[1]
 
@@ -1802,14 +1803,6 @@ class Unit(Entity):
             candidates = [e for e in game.enemy_units if e.alive]
         if not candidates:
             return None
-        # v10_6: Sapper — only target buildings
-        if self.self_destruct:
-            buildings = [c for c in candidates if isinstance(c, Building)
-                         and not getattr(c, 'ruined', False)]
-            if not buildings:
-                buildings = [c for c in candidates if isinstance(c, Building)]
-            if buildings:
-                return min(buildings, key=lambda b: dist(self.x, self.y, b.x, b.y))
         # v10_6: Raider — prioritize workers and economy buildings
         if self.economy_only:
             econ_targets = [c for c in candidates
@@ -1861,11 +1854,7 @@ class Unit(Entity):
                 cd = self.attack_cd
                 if self.energy < self.max_energy * ENERGY_EXHAUSTED_THRESHOLD:
                     cd *= ENERGY_TIRED_COOLDOWN_MULT
-                # v10_6: Warlock AOE attack
-                if self.aoe_radius > 0:
-                    self._warlock_aoe(t, game)
-                    self.attack_timer = cd
-                elif self.attack_range > 60:
+                if self.attack_range > 60:
                     # --- ranged: fire ballistic arrow ---
                     self._fire_arrow(t, game)
                 else:
@@ -1892,24 +1881,6 @@ class Unit(Entity):
                         dmg = int(dmg * self.building_mult)
                     t.take_damage(dmg, self)
                     _process_combat_hit(self, t, game, "melee")
-                    # v10_7: Sapper self-destruct — sympathetic detonation AOE
-                    if self.self_destruct:
-                        # AOE blast damages nearby player entities
-                        blast_targets = game.player_units + game.player_buildings
-                        for bt in blast_targets:
-                            if bt.alive and bt is not t:
-                                bd = dist(self.x, self.y, bt.x, bt.y)
-                                if bd <= SAPPER_BLAST_RADIUS:
-                                    falloff = 1.0 - bd / SAPPER_BLAST_RADIUS
-                                    aoe_dmg = max(1, int(self.attack_power * falloff))
-                                    # v10_8: Sierpinski dampening
-                                    sf = getattr(bt, '_sierpinski_aoe_factor', 1.0)
-                                    if sf < 1.0 and not getattr(bt, '_dissonance_nullified', False):
-                                        aoe_dmg = max(1, int(aoe_dmg * sf))
-                                    bt.take_damage(aoe_dmg, self)
-                        self.hp = 0
-                        self.alive = False
-                        return
                 self.attack_timer = cd
         else:
             # v10_6: defensive/guard stance — don't chase, drop target and idle
@@ -1982,24 +1953,6 @@ class Unit(Entity):
         arrow = Arrow(self.x, self.y, aim_x, aim_y, dmg, self.owner,
                       source_unit=self, spread_angle=spread_angle)
         game.arrows.append(arrow)
-
-    def _warlock_aoe(self, target, game):
-        """Warlock: AOE damage centered on target. Falloff from center to edge."""
-        center_x, center_y = target.x, target.y
-        r = self.aoe_radius
-        # hit all player entities within radius
-        for e in game.player_units + game.player_buildings:
-            if not e.alive:
-                continue
-            d = dist(center_x, center_y, e.x, e.y)
-            if d <= r:
-                falloff = 1.0 - WARLOCK_AOE_EDGE_FACTOR * (d / max(1, r))
-                dmg = int(self.attack_power * falloff)
-                # v10_8: Sierpinski resonance AOE dampening
-                aoe_factor = getattr(e, '_sierpinski_aoe_factor', 1.0)
-                if aoe_factor < 1.0 and not getattr(e, '_dissonance_nullified', False):
-                    dmg = max(1, int(dmg * aoe_factor))
-                e.take_damage(max(1, dmg), self)
 
     def _healer_tick(self, dt, game):
         """Healer: find and heal nearest wounded ally. Called from _idle_behavior."""
@@ -2207,16 +2160,6 @@ class Unit(Entity):
         # central glow — muted
         pygame.draw.circle(surf, (180, 40, 140), (sx, sy), max(2, r // 5))
 
-    def _draw_sapper_shape(self, surf, sx, sy, r, z):
-        """Sapper: Cardioid r = 1 + cos(θ) — heart/bomb shape, dark olive."""
-        color = ENEMY_COLORS.get("enemy_sapper", (90, 100, 30))
-        pts = self._polar_points(sx, sy, r * 0.55,
-                                 lambda t: 1.0 + math.cos(t), 36, -math.pi / 2)
-        if len(pts) >= 3:
-            pygame.draw.polygon(surf, color, pts)
-        # fuse spark at top
-        pygame.draw.circle(surf, (255, 200, 50), (sx, sy - r), max(1, int(2 * z)))
-
     def _draw_shieldbearer_shape(self, surf, sx, sy, r, z):
         """Shieldbearer: Thick polar rose with flat front — shield shape, dark steel."""
         color = ENEMY_COLORS.get("enemy_shieldbearer", (80, 90, 110))
@@ -2260,22 +2203,6 @@ class Unit(Entity):
             pygame.draw.polygon(surf, color, pts)
         pygame.draw.circle(surf, (200, 60, 120), (sx, sy), max(1, r // 4))
 
-    def _draw_warlock_shape(self, surf, sx, sy, r, z):
-        """Warlock: Epitrochoid (spirograph) — arcane complexity, dark purple."""
-        color = ENEMY_COLORS.get("enemy_warlock", (70, 20, 100))
-        R_val, r_val, d_val = 5.0, 3.0, 3.0
-        pts = []
-        for i in range(72):
-            t = 2 * math.pi * i / 72
-            px = (R_val - r_val) * math.cos(t) + d_val * math.cos((R_val - r_val) / r_val * t)
-            py = (R_val - r_val) * math.sin(t) - d_val * math.sin((R_val - r_val) / r_val * t)
-            scale = r / 8.0
-            pts.append((int(sx + px * scale), int(sy + py * scale)))
-        if len(pts) >= 3:
-            pygame.draw.polygon(surf, color, pts)
-        # arcane center glow
-        pygame.draw.circle(surf, (160, 80, 200), (sx, sy), max(2, r // 4))
-
     def draw(self, surf, cam):
         sx, sy = cam.world_to_screen(self.x, self.y)
         z = cam.zoom
@@ -2301,16 +2228,12 @@ class Unit(Entity):
             self._draw_siege_shape(surf, sx, sy, r, z, is_enemy=True)
         elif self.unit_type == "enemy_elite":
             self._draw_elite_shape(surf, sx, sy, r, z)
-        elif self.unit_type == "enemy_sapper":
-            self._draw_sapper_shape(surf, sx, sy, r, z)
         elif self.unit_type == "enemy_shieldbearer":
             self._draw_shieldbearer_shape(surf, sx, sy, r, z)
         elif self.unit_type == "enemy_healer":
             self._draw_healer_shape(surf, sx, sy, r, z)
         elif self.unit_type == "enemy_raider":
             self._draw_raider_shape(surf, sx, sy, r, z)
-        elif self.unit_type == "enemy_warlock":
-            self._draw_warlock_shape(surf, sx, sy, r, z)
         else:
             # fallback: simple circle for any unmapped type
             color = UNIT_COLORS.get(self.unit_type) or ENEMY_COLORS.get(self.unit_type, (150, 150, 150))

@@ -4,7 +4,7 @@ Simulates base growth, resource flow, army building, and wave survival
 to model game balance across different strategies and difficulty levels.
 
 v10_7 updates:
-  - 9 enemy types (soldier, archer, siege, elite, sapper, shieldbearer, healer, raider, warlock)
+  - 7 enemy types — The Dark 7 (soldier, archer, siege, elite, shieldbearer, healer, raider)
   - Adaptive difficulty engine (pressure tracking, escalation/de-escalation)
   - Straggler metamorphosis modeling
   - Sentinel's Cry tower buff modeling
@@ -79,19 +79,15 @@ def wave_count(n, difficulty="medium"):
 
 
 def wave_composition(n, count, difficulty="medium"):
-    """v10_7: 9 enemy types with unlock waves and counter-pick probabilities."""
+    """The Dark 7 enemy types with unlock waves and counter-pick probabilities."""
     p = _get_profile(difficulty)
     all_types = ["enemy_soldier", "enemy_archer", "enemy_siege", "enemy_elite",
-                 "enemy_sapper", "enemy_shieldbearer", "enemy_healer", "enemy_raider", "enemy_warlock"]
+                 "enemy_shieldbearer", "enemy_healer", "enemy_raider"]
     comp = {t: 0 for t in all_types}
     for _ in range(count):
         roll = random.random()
         cumul = 0.0
-        # v10_6 new types
-        if n >= p.get("warlock_wave", 99):
-            cumul += 0.06
-            if roll < cumul:
-                comp["enemy_warlock"] += 1; continue
+        # Dark 7 specialist types
         if n >= p.get("healer_wave", 99):
             cumul += 0.06
             if roll < cumul:
@@ -104,11 +100,7 @@ def wave_composition(n, count, difficulty="medium"):
             cumul += 0.08
             if roll < cumul:
                 comp["enemy_raider"] += 1; continue
-        if n >= p.get("sapper_wave", 99):
-            cumul += 0.10
-            if roll < cumul:
-                comp["enemy_sapper"] += 1; continue
-        # original 4 types
+        # core 4 types
         if n >= p["elite_wave"] and roll < cumul + 0.10:
             comp["enemy_elite"] += 1
         elif n >= p["siege_wave"] and roll < cumul + (0.25 if n >= 15 else 0.20):

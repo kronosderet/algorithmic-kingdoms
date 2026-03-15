@@ -1,8 +1,9 @@
 import random
 import math
 from collections import Counter
+import constants
 from constants import (DIFFICULTY_PROFILES, ENEMY_DEFS, ENEMY_VETERAN_BONUS,
-                       MAP_COLS, MAP_ROWS, SPAWN_MARGIN, SPAWN_RETRIES,
+                       SPAWN_MARGIN, SPAWN_RETRIES,
                        STRAGGLER_ROOT_WAVES, STRAGGLER_METAMORPH_WAVES,
                        RESONANCE_DISSONANCE_CHANCE,
                        RESONANCE_HISTORY_WAVES,
@@ -408,14 +409,10 @@ class EnemyAI:
         n = self.incident_number
         unlock = self.incident_unlock
 
-        # Many towers, weak army → boost sappers
-        if "enemy_sapper" in probs and n >= unlock.get("enemy_sapper", 99):
+        # Many towers, weak army → boost Hexweaver (building destroyer)
+        if "enemy_siege" in probs and n >= unlock.get("enemy_siege", 99):
             if tower_count >= 3 and total_military < 5:
-                probs["enemy_sapper"] = probs.get("enemy_sapper", 0) + 0.10
-        # Clumped units → boost warlocks
-        if "enemy_warlock" in probs and n >= unlock.get("enemy_warlock", 99):
-            if total_military >= 6:
-                probs["enemy_warlock"] = probs.get("enemy_warlock", 0) + 0.06
+                probs["enemy_siege"] = probs.get("enemy_siege", 0) + 0.10
         # Strong economy → boost raiders
         if "enemy_raider" in probs and n >= unlock.get("enemy_raider", 99):
             if worker_count >= 6:
@@ -434,14 +431,14 @@ class EnemyAI:
             if most_used == FORMATION_SIERPINSKI:
                 if "enemy_elite" in probs:
                     probs["enemy_elite"] = probs.get("enemy_elite", 0) + 0.06
-            # Koch (defensive ring) → boost sappers to break perimeter
+            # Koch (defensive ring) → boost Hexweaver to break perimeter
             elif most_used == FORMATION_KOCH:
-                if "enemy_sapper" in probs and n >= unlock.get("enemy_sapper", 99):
-                    probs["enemy_sapper"] = probs.get("enemy_sapper", 0) + 0.06
-            # Polar Rose (clumped petals) → boost warlocks for AOE
+                if "enemy_siege" in probs and n >= unlock.get("enemy_siege", 99):
+                    probs["enemy_siege"] = probs.get("enemy_siege", 0) + 0.06
+            # Polar Rose (clumped petals) → boost Thornknight for single-target burst
             elif most_used == FORMATION_POLAR_ROSE:
-                if "enemy_warlock" in probs and n >= unlock.get("enemy_warlock", 99):
-                    probs["enemy_warlock"] = probs.get("enemy_warlock", 0) + 0.06
+                if "enemy_elite" in probs and n >= unlock.get("enemy_elite", 99):
+                    probs["enemy_elite"] = probs.get("enemy_elite", 0) + 0.06
             # Golden Spiral (assault) → boost shieldbearers for frontline
             elif most_used == FORMATION_GOLDEN_SPIRAL:
                 if "enemy_shieldbearer" in probs and n >= unlock.get("enemy_shieldbearer", 99):
@@ -638,10 +635,10 @@ class EnemyAI:
     def _get_spawn_pos(self, edge, game):
         m = SPAWN_MARGIN
         spawn_fn = {
-            "top":    lambda: (random.randint(m, MAP_COLS - m - 1), 1),
-            "bottom": lambda: (random.randint(m, MAP_COLS - m - 1), MAP_ROWS - 2),
-            "left":   lambda: (1, random.randint(m, MAP_ROWS - m - 1)),
-            "right":  lambda: (MAP_COLS - 2, random.randint(m, MAP_ROWS - m - 1)),
+            "top":    lambda: (random.randint(m, constants.MAP_COLS - m - 1), 1),
+            "bottom": lambda: (random.randint(m, constants.MAP_COLS - m - 1), constants.MAP_ROWS - 2),
+            "left":   lambda: (1, random.randint(m, constants.MAP_ROWS - m - 1)),
+            "right":  lambda: (constants.MAP_COLS - 2, random.randint(m, constants.MAP_ROWS - m - 1)),
         }
         for _ in range(SPAWN_RETRIES):
             c, r = spawn_fn[edge]()
@@ -649,8 +646,8 @@ class EnemyAI:
             while not game.game_map.is_walkable(c, r) and attempts < 15:
                 c += random.choice([-1, 0, 1])
                 r += random.choice([-1, 0, 1])
-                c = clamp(c, 1, MAP_COLS - 2)
-                r = clamp(r, 1, MAP_ROWS - 2)
+                c = clamp(c, 1, constants.MAP_COLS - 2)
+                r = clamp(r, 1, constants.MAP_ROWS - 2)
                 attempts += 1
             if game.game_map.is_walkable(c, r):
                 return c, r

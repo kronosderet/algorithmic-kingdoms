@@ -13,7 +13,8 @@ from constants import (ARROW_SPEED, ARROW_MAX_LIFETIME, ARROW_HIT_RADIUS,
                        CRATER_RADIUS_EXPLOSIVE,
                        CRATER_BURN_PARTICLES, CRATER_BURN_DURATION,
                        IMPACT_SHAKE_AMOUNT, IMPACT_SHAKE_DURATION,
-                       TILE_SIZE, MAP_COLS, MAP_ROWS)
+                       TILE_SIZE)
+import constants
 from entity_base import _process_combat_hit
 from utils import dist
 
@@ -131,8 +132,8 @@ class Arrow:
             self.ground_timer = GROUND_ARROW_LIFETIME
 
         # Off map check
-        if (self.x < 0 or self.x > MAP_COLS * TILE_SIZE
-                or self.y < 0 or self.y > MAP_ROWS * TILE_SIZE):
+        if (self.x < 0 or self.x > constants.MAP_COLS * TILE_SIZE
+                or self.y < 0 or self.y > constants.MAP_ROWS * TILE_SIZE):
             self.impact_angle = _arc_tangent_angle(
                 self.start_x, self.start_y,
                 self.target_x, self.target_y,
@@ -228,8 +229,8 @@ class Cannonball:
             return
 
         # Off map
-        if (self.x < 0 or self.x > MAP_COLS * TILE_SIZE
-                or self.y < 0 or self.y > MAP_ROWS * TILE_SIZE):
+        if (self.x < 0 or self.x > constants.MAP_COLS * TILE_SIZE
+                or self.y < 0 or self.y > constants.MAP_ROWS * TILE_SIZE):
             self._on_impact(game)
 
     def _on_impact(self, game):

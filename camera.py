@@ -1,5 +1,6 @@
 import pygame, random
-from constants import (MAP_COLS, MAP_ROWS, TILE_SIZE, SCREEN_WIDTH,
+import constants
+from constants import (TILE_SIZE, SCREEN_WIDTH,
                        SCREEN_HEIGHT, BOTTOM_PANEL_H, GAME_AREA_Y, GAME_AREA_H,
                        CAMERA_SPEED, EDGE_SCROLL_MARGIN, ZOOM_MIN, ZOOM_MAX,
                        MINIMAP_X, MINIMAP_Y, MINIMAP_SIZE)
@@ -9,8 +10,8 @@ from utils import clamp
 class Camera:
     def __init__(self):
         self.zoom = 1.0
-        cx = (MAP_COLS // 2) * TILE_SIZE - SCREEN_WIDTH // 2
-        cy = (MAP_ROWS // 2) * TILE_SIZE - GAME_AREA_H // 2
+        cx = (constants.MAP_COLS // 2) * TILE_SIZE - SCREEN_WIDTH // 2
+        cy = (constants.MAP_ROWS // 2) * TILE_SIZE - GAME_AREA_H // 2
         self.x = float(cx)
         self.y = float(cy)
         # Screen shake state
@@ -62,8 +63,8 @@ class Camera:
     def _clamp(self):
         view_w = SCREEN_WIDTH / self.zoom
         view_h = GAME_AREA_H / self.zoom
-        max_x = MAP_COLS * TILE_SIZE - view_w
-        max_y = MAP_ROWS * TILE_SIZE - view_h
+        max_x = constants.MAP_COLS * TILE_SIZE - view_w
+        max_y = constants.MAP_ROWS * TILE_SIZE - view_h
         self.x = clamp(self.x, 0, max(0, max_x))
         self.y = clamp(self.y, 0, max(0, max_y))
 
