@@ -25,6 +25,28 @@ def _process_combat_hit(attacker, target, game, source_label):
     is_building = type(target).__name__ == "Building"
     is_unit = type(target).__name__ == "Unit"
 
+    # v10_zeta.1: telemetry — record damage dealt/taken
+    hub = getattr(game, 'telemetry', None)
+    if hub is not None:
+        actual_dmg = getattr(target, '_last_damage_taken', 0)
+        if actual_dmg > 0:
+            a_eid = attacker.eid if attacker else 0
+            a_type = getattr(attacker, 'unit_type', source_label) if attacker else source_label
+            a_stance = getattr(attacker, 'stance', "")
+            # Check if attacker is in a formation (has a squad)
+            in_fmt = False
+            if attacker and hasattr(game, 'player_squad_mgr') and attacker.owner == "player":
+                in_fmt = game.player_squad_mgr.get_squad(attacker) is not None
+            hub.record_damage_dealt(game.game_time, a_eid, actual_dmg,
+                                    in_formation=in_fmt, attacker_type=a_type,
+                                    attacker_stance=str(a_stance))
+            t_type = getattr(target, 'unit_type', '') or getattr(target, 'building_type', '')
+            hub.record_damage_taken(game.game_time, target.eid, actual_dmg,
+                                    target_type=t_type)
+            if is_building and target.alive and not getattr(target, 'ruined', False):
+                if target.hp < target.max_hp * 0.7:
+                    hub.record_building_damaged()
+
     # building ruin/destroy logging
     if is_building and (target.ruined or not target.alive):
         evt = "BUILDING_RUINED" if target.alive else "BUILDING_DESTROYED"
@@ -58,6 +80,12 @@ def _process_combat_hit(attacker, target, game, source_label):
                             bounty, f"{source_label} {owner}")
             game.add_message(f"Enemy {display_name(target.unit_type)} slain (+{bounty}g)",
                              MSG_COL_ATTACK)
+            # v10_zeta.1: telemetry kill + death
+            if hub is not None:
+                killer_t = attacker.unit_type if attacker else source_label
+                hub.record_kill(killer_t, target.unit_type, target.owner,
+                                killer_stance=str(getattr(attacker, 'stance', '')))
+                hub.record_unit_death(game.game_time, target.eid)
     # player unit lost (enemy kills player unit)
     if not target.alive and target.owner == "player" and is_unit:
         killer = attacker.unit_type if attacker else source_label
@@ -68,6 +96,11 @@ def _process_combat_hit(attacker, target, game, source_label):
                         target.xp, source_label)
         game.add_message(f"{display_name(target.unit_type)} lost to {display_name(killer)}",
                          MSG_COL_ATTACK)
+        # v10_zeta.1: telemetry kill + death
+        if hub is not None:
+            hub.record_kill(killer, target.unit_type, target.owner,
+                            killer_stance=str(getattr(attacker, 'stance', '') if attacker else ''))
+            hub.record_unit_death(game.game_time, target.eid)
     # building destroyed message
     if is_building and not target.alive:
         game.add_message(f"{display_name(target.building_type)} destroyed!",
@@ -117,6 +150,8 @@ class Entity:
             if diff < math.pi / 2:  # within ±90° of front
                 dmg = int(dmg * (1.0 - armor))
         self.hp -= dmg
+        # v10_zeta.1: store actual damage for telemetry pickup
+        self._last_damage_taken = dmg
         if attacker is not None:
             self.last_attacker = attacker
         if self.hp <= 0:

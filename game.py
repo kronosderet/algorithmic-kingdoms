@@ -70,13 +70,16 @@ from enemy_ai import EnemyAI
 from gui import GUI
 from event_logger import EventLogger
 from advisor import Advisor
+from telemetry import TelemetryHub
 
 
 class Game:
     def __init__(self, screen, difficulty="medium"):
-        # close previous logger on restart (R key re-calls __init__)
+        # close previous logger/telemetry on restart (R key re-calls __init__)
         if hasattr(self, 'logger') and self.logger:
             self.logger.close(self)
+        if hasattr(self, 'telemetry') and self.telemetry:
+            self.telemetry.close(getattr(self, 'game_time', 0.0))
 
         self.screen = screen
         self.clock = pygame.time.Clock()
@@ -108,6 +111,11 @@ class Game:
         self.enemy_ai = EnemyAI(difficulty)
         self.game_time = 0.0
         self.logger = EventLogger(difficulty)
+
+        # v10_zeta.1: telemetry hub — central metrics for CSV, advisor, UX
+        self.telemetry = TelemetryHub(difficulty)
+        self.resources._telemetry = self.telemetry
+        self.resources._game_time_fn = lambda: self.game_time
 
         self.player_units = []
         self.player_buildings = []
@@ -233,6 +241,7 @@ class Game:
             wy = th.y + WORKER_SPAWN_OFFSET
             w = Unit(wx, wy, "worker", "player")
             self.player_units.append(w)
+            self.telemetry.record_unit_spawn(0.0, w.eid, "worker", "player")
 
     def add_notification(self, text, duration=3.0, color=(255, 255, 100)):
         """Add a floating notification message + persistent log entry."""
@@ -270,6 +279,7 @@ class Game:
             self.gui.update_tooltip(dt)
             self.render()
         self.logger.close(self)
+        self.telemetry.close(self.game_time)
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -289,6 +299,11 @@ class Game:
             if event.type == pygame.KEYDOWN and event.key in (pygame.K_p, pygame.K_PAUSE) and not self._advisor_visible:
                 self.paused = not self.paused
                 self.pause_menu_selection = 0
+                # v10_zeta.1: telemetry — pause tracking
+                if self.paused:
+                    self.telemetry.record_pause_start(self.game_time)
+                else:
+                    self.telemetry.record_pause_end(self.game_time)
                 continue
 
             # v10_epsilon: advisor overlay intercepts H to close
@@ -296,6 +311,7 @@ class Game:
                 if event.key == pygame.K_h or event.key == pygame.K_ESCAPE:
                     self._advisor_visible = False
                     self.paused = False
+                    self.telemetry.record_advisor_close(self.game_time)
                 continue  # swallow all input while advisor is shown
 
             # v10_8d: pause menu navigation
@@ -346,6 +362,8 @@ class Game:
                     self._handle_left_up(event.pos)
 
     def _handle_key(self, key):
+        # v10_zeta.1: telemetry — hotkey usage
+        self.telemetry.record_hotkey_at(self.game_time)
         # F10: surrender — end the suffering
         if key == pygame.K_F10:
             self.game_over = True
@@ -551,6 +569,7 @@ class Game:
                 self._advisor_suggestions = self._advisor.analyze(self)
                 self._advisor_visible = True
                 self.paused = True
+                self.telemetry.record_advisor_open(self.game_time)
 
         # Global command hotkeys (WASD reserved for camera — never bind here)
         if key == pygame.K_z:
@@ -599,6 +618,7 @@ class Game:
 
     def _handle_left_down(self, pos):
         sx, sy = pos
+        self.telemetry.record_click_at(self.game_time)
 
         # check minimap click
         if self._minimap_click(sx, sy):
@@ -787,6 +807,7 @@ class Game:
 
     def _handle_right_click(self, pos, queued=False):
         sx, sy = pos
+        self.telemetry.record_click_at(self.game_time)
         if sy < GAME_AREA_Y or sy >= GAME_AREA_Y + GAME_AREA_H:
             return
 
@@ -1402,13 +1423,24 @@ class Game:
         mx, my = pygame.mouse.get_pos()
         keys = pygame.key.get_pressed()
         # v10_beta: WASD always pans camera (no suppression)
+        old_cx, old_cy = self.camera.x, self.camera.y
         self.camera.update(keys, dt, mx, my)
+        cam_dist = ((self.camera.x - old_cx) ** 2 + (self.camera.y - old_cy) ** 2) ** 0.5
+        if cam_dist > 0.1:
+            self.telemetry.record_camera_move(cam_dist)
 
         self.enemy_ai.update(dt, self)
 
         # v10_4: rebuild spatial grids once per frame (O(n))
         self.player_grid.rebuild(self.player_units)
         self.enemy_grid.rebuild(self.enemy_units)
+
+        # v10_zeta.1: telemetry — record selection types (once per frame, cheap)
+        if self.selected:
+            for e in self.selected:
+                etype = getattr(e, 'unit_type', None) or getattr(e, 'building_type', '')
+                if etype:
+                    self.telemetry.record_selection(etype)
 
         # track peak army size for game-over stats
         mil_count = sum(1 for u in self.player_units if u.unit_type in ("soldier", "archer"))
@@ -1496,6 +1528,9 @@ class Game:
         # v10_zeta: resource ecology — tick regrowth timers
         if self.game_map.tick_regrowth(dt):
             self._map_dirty = True
+
+        # v10_zeta.1: telemetry tick (economy rates, highwater, worker alloc)
+        self.telemetry.tick(dt, self)
 
         # v10_1: record combat heat for dead units (minimap overlay)
         for u in self.enemy_units:

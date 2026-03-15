@@ -176,6 +176,11 @@ class EnemyAI:
             self._enter_state(STATE_ACTIVE)
             self.narrative_text = NARRATIVE_ACTIVE
             self.incident_start_time = game.game_time
+            # v10_zeta.1: telemetry — start incident scorecard
+            hub = getattr(game, 'telemetry', None)
+            if hub is not None:
+                hub.start_incident(game.game_time, self.incident_number,
+                                   flavour=self.current_flavour or "")
 
     # ------------------------------------------------------------------
     # ACTIVE — combat, wait for all enemies dead/fled
@@ -512,6 +517,11 @@ class EnemyAI:
         msg, color = outcome_msgs[outcome]
         game.add_notification(msg, 3.0, color)
 
+        # v10_zeta.1: telemetry — end incident scorecard
+        hub = getattr(game, 'telemetry', None)
+        if hub is not None:
+            hub.end_incident(game.game_time, outcome, game)
+
         # Callback to game for wave-clear logic (unlocks, etc.)
         if hasattr(game, '_on_attack_resolved'):
             game._on_attack_resolved(self.incident_number, outcome)
@@ -637,6 +647,10 @@ class EnemyAI:
             else:
                 enemy.state = "attacking"
         game.enemy_units.append(enemy)
+        # v10_zeta.1: telemetry — record enemy spawn
+        hub = getattr(game, 'telemetry', None)
+        if hub is not None:
+            hub.record_unit_spawn(game.game_time, enemy.eid, utype, "enemy")
         return enemy
 
     # ------------------------------------------------------------------

@@ -114,6 +114,21 @@ class EventLogger:
         else:
             outcome = "defeat"
 
+        # v10_zeta.1: include telemetry summary if available
+        telem_str = ""
+        hub = getattr(game, 'telemetry', None)
+        if hub is not None:
+            ts = hub.get_game_over_stats(game.game_time, game.resources)
+            telem_str = (
+                f" dmg_dealt:{int(ts.get('total_damage_dealt', 0))}"
+                f" dmg_taken:{int(ts.get('total_damage_taken', 0))}"
+                f" fmt_dmg_pct:{ts.get('formation_damage_pct', 0):.0f}"
+                f" hotkey_pct:{ts.get('hotkey_pct', 0):.0f}"
+                f" advisor_opens:{ts.get('advisor_opens', 0)}"
+                f" pause_count:{ts.get('pause_count', 0)}"
+                f" bottleneck:{ts.get('first_bottleneck', 'none')}"
+            )
+
         summary_note = (
             f"kills:{self._counts['kills']} "
             f"losses:{self._counts['player_units_lost']} "
@@ -129,6 +144,7 @@ class EventLogger:
             f"worker_rank_ups:{self._counts['worker_rank_ups']} "
             f"tower_upgrades:{self._counts['tower_upgrades']} "
             f"resources:{res_str}"
+            f"{telem_str}"
         )
 
         self.log(

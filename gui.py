@@ -1659,7 +1659,7 @@ class GUI:
         logger = game.logger
 
         # Koch-bordered stats card with radial gradient
-        card_x, card_y, card_w, card_h = cx - 200, 100, 400, 500
+        card_x, card_y, card_w, card_h = cx - 200, 80, 400, 580
         if "game_over" not in _panel_bg_cache:
             _panel_bg_cache["game_over"] = radial_gradient(card_w, card_h, (35, 30, 45), (15, 12, 20))
         screen.blit(_panel_bg_cache["game_over"], (card_x, card_y))
@@ -1732,6 +1732,38 @@ class GUI:
             y += 22
             ftext(screen, f"Grade: {grade}", cx, y, self.font_lg, g_col, center=True)
             y += 30
+
+        # v10_zeta.1: Telemetry insights section
+        hub = getattr(game, 'telemetry', None)
+        if hub is not None:
+            ts = hub.get_game_over_stats(game.game_time, game.resources)
+            # Economy flow
+            y += 4
+            total_dealt = ts.get("total_damage_dealt", 0)
+            total_taken = ts.get("total_damage_taken", 0)
+            ftext(screen, f"Damage dealt: {int(total_dealt)}", cx - 120, y, self.font_xs, stat_col)
+            ftext(screen, f"Damage taken: {int(total_taken)}", cx + 40, y, self.font_xs, val_col)
+            y += 16
+            # Formation effectiveness
+            fmt_pct = ts.get("formation_damage_pct", 0)
+            ftext(screen, f"Formation damage: {fmt_pct:.0f}%", cx - 120, y, self.font_xs, stat_col)
+            avg_life = ts.get("avg_unit_lifetime", 0)
+            if avg_life > 0:
+                ftext(screen, f"Avg unit life: {avg_life:.0f}s", cx + 40, y, self.font_xs, val_col)
+            y += 16
+            # UX insights
+            hk_pct = ts.get("hotkey_pct", 0)
+            ftext(screen, f"Hotkey usage: {hk_pct:.0f}%", cx - 120, y, self.font_xs, stat_col)
+            adv_opens = ts.get("advisor_opens", 0)
+            ftext(screen, f"Advisor consulted: {adv_opens}x", cx + 40, y, self.font_xs, val_col)
+            y += 16
+            # Bottleneck
+            bottleneck = ts.get("first_bottleneck")
+            if bottleneck:
+                from constants import display_name
+                ftext(screen, f"First bottleneck: {display_name(bottleneck)}",
+                      cx - 120, y, self.font_xs, (200, 160, 80))
+                y += 16
 
         # Divider
         pygame.draw.line(screen, (80, 80, 100), (cx - 130, y), (cx + 130, y), 1)

@@ -993,6 +993,15 @@ REGROWTH_TIME = {
 REGROWTH_CAPACITY_FRACTION = 0.6      # regrown tiles have 60% of original capacity
 REGROWTH_PREVIEW_FRACTION = 0.2       # show preview sprite at last 20% of timer
 
+# ---------------------------------------------------------------------------
+# v10_zeta.1: Telemetry — measuring points for CSV stats, advisor, and UX
+# ---------------------------------------------------------------------------
+TELEMETRY_WINDOW = 30.0               # sliding window seconds for rate calc
+TELEMETRY_TICK_INTERVAL = 1.0         # hub recalc interval (not every frame)
+BOTTLENECK_THRESHOLD = 5              # resource amount considered "near zero"
+ADVISOR_ACTION_WINDOW = 30.0          # seconds to wait for player to act on suggestion
+RESOURCE_KEYS = ("gold", "wood", "iron", "steel", "stone", "tonic")
+
 # Resonance visual colors (RGB)
 RESONANCE_COLORS = {
     0: (220, 80, 40),     # Rose: red-orange

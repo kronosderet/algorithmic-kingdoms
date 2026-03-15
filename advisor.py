@@ -423,6 +423,119 @@ def _s_incident_approaching(game) -> Suggestion:
         "defense", priority=72)
 
 
+# -- v10_zeta.1: Trend-aware rules (use telemetry rates) -------------------
+
+def _has_telemetry(game) -> bool:
+    return hasattr(game, 'telemetry') and game.telemetry is not None
+
+
+def _r_gold_dropping(game) -> bool:
+    if not _has_telemetry(game):
+        return False
+    t = game.game_time
+    nf = game.telemetry.net_flow(t, "gold")
+    return nf < -3.0 and game.resources.gold < 100 and t > 60
+
+def _s_gold_dropping(game) -> Suggestion:
+    t = game.game_time
+    nf = game.telemetry.net_flow(t, "gold")
+    ttz = game.telemetry.time_to_zero(t, "gold", game.resources.gold)
+    if ttz is not None and ttz < 30:
+        msg = f"Flux dropping at {nf:.1f}/s — will run out in {ttz:.0f}s! Boost income or cut spending."
+    else:
+        msg = f"Flux income is negative ({nf:.1f}/s). Assign more Gatherers to Flux deposits."
+    return Suggestion(msg, "economy", priority=78)
+
+
+def _r_resource_bottleneck(game) -> bool:
+    if not _has_telemetry(game):
+        return False
+    return game.telemetry.bottleneck_resource(game.game_time, game.resources) is not None and game.game_time > 90
+
+def _s_resource_bottleneck(game) -> Suggestion:
+    from constants import display_name
+    rtype = game.telemetry.bottleneck_resource(game.game_time, game.resources) or "gold"
+    return Suggestion(
+        f"{display_name(rtype)} is your bottleneck — prioritize gathering it.",
+        "economy", priority=62)
+
+
+def _r_income_stalled(game) -> bool:
+    if not _has_telemetry(game):
+        return False
+    if game.game_time < 45:
+        return False
+    t = game.game_time
+    # Check if all key resource income rates are near zero
+    for rtype in ("gold", "wood"):
+        if game.telemetry.income_rate(t, rtype) > 0.3:
+            return False
+    return True
+
+def _s_income_stalled(game) -> Suggestion:
+    return Suggestion(
+        "No resource income detected! Send Gatherers to harvest Flux or Fiber tiles immediately.",
+        "economy", priority=88)
+
+
+def _r_overspending(game) -> bool:
+    if not _has_telemetry(game):
+        return False
+    if game.game_time < 60:
+        return False
+    t = game.game_time
+    for rtype in ("gold", "wood", "iron", "stone"):
+        inc = game.telemetry.income_rate(t, rtype)
+        spend = game.telemetry.spend_rate(t, rtype)
+        if inc > 0.5 and spend > inc * 2.0:
+            return True
+    return False
+
+def _s_overspending(game) -> Suggestion:
+    from constants import display_name
+    t = game.game_time
+    worst = ""
+    worst_ratio = 0.0
+    for rtype in ("gold", "wood", "iron", "stone"):
+        inc = game.telemetry.income_rate(t, rtype)
+        spend = game.telemetry.spend_rate(t, rtype)
+        if inc > 0 and spend / inc > worst_ratio:
+            worst_ratio = spend / inc
+            worst = rtype
+    return Suggestion(
+        f"Spending {display_name(worst)} faster than earning it ({worst_ratio:.1f}x). Slow down or boost production.",
+        "economy", priority=58)
+
+
+def _r_strong_formation(game) -> bool:
+    """Notify player when formation effectiveness is high — positive reinforcement."""
+    if not _has_telemetry(game):
+        return False
+    pct = game.telemetry.formation_damage_pct()
+    return pct > 50 and game.game_time > 180
+
+def _s_strong_formation(game) -> Suggestion:
+    pct = game.telemetry.formation_damage_pct()
+    return Suggestion(
+        f"Formations account for {pct:.0f}% of your damage — keep your squads together!",
+        "formation", priority=30)
+
+
+def _r_short_unit_lifetime(game) -> bool:
+    """Units dying very quickly — suggest repositioning."""
+    if not _has_telemetry(game):
+        return False
+    avg = game.telemetry.avg_unit_lifetime("player")
+    # Only trigger if we have enough data and lifetime is short
+    return avg > 0 and avg < 20 and len(game.telemetry._lifetimes) >= 5 and game.game_time > 120
+
+def _s_short_unit_lifetime(game) -> Suggestion:
+    avg = game.telemetry.avg_unit_lifetime("player")
+    return Suggestion(
+        f"Your units survive only {avg:.0f}s on average — try defensive stance or positioning near towers.",
+        "defense", priority=56)
+
+
 # ---------------------------------------------------------------------------
 # Rule registry
 # ---------------------------------------------------------------------------
@@ -458,23 +571,44 @@ ADVISOR_RULES: list[tuple] = [
     # v10_zeta: strategic
     (_r_no_expansion,           _s_no_expansion,           "economy"),
     (_r_incident_approaching,   _s_incident_approaching,   "defense"),
+    # v10_zeta.1: trend-aware (telemetry-based)
+    (_r_gold_dropping,          _s_gold_dropping,          "economy"),
+    (_r_resource_bottleneck,    _s_resource_bottleneck,    "economy"),
+    (_r_income_stalled,         _s_income_stalled,         "economy"),
+    (_r_overspending,           _s_overspending,           "economy"),
+    (_r_strong_formation,       _s_strong_formation,       "formation"),
+    (_r_short_unit_lifetime,    _s_short_unit_lifetime,    "defense"),
 ]
 
 
 class Advisor:
-    """Don't Panic — rule-based live diagnostic engine."""
+    """Don't Panic — rule-based live diagnostic engine.
+    v10_zeta.1: now trend-aware with telemetry integration and rule effectiveness tracking."""
 
     MAX_SUGGESTIONS = 3
 
     def analyze(self, game) -> list[Suggestion]:
         """Run all rules against current game state, return top suggestions."""
         fired: list[Suggestion] = []
+        fired_names: list[str] = []
+        hub = getattr(game, 'telemetry', None)
+
         for condition, factory, _cat in ADVISOR_RULES:
             try:
                 if condition(game):
-                    fired.append(factory(game))
+                    suggestion = factory(game)
+                    fired.append(suggestion)
+                    rule_name = condition.__name__
+                    fired_names.append(rule_name)
+                    # v10_zeta.1: record rule fire for effectiveness tracking
+                    if hub is not None:
+                        hub.record_rule_fired(rule_name, game.game_time)
             except Exception:
                 pass  # advisor should never crash the game
+
+        # v10_zeta.1: check rule effectiveness (did player act on previous suggestions?)
+        if hub is not None:
+            hub.check_rule_effectiveness(game.game_time, fired_names, game)
 
         # sort by priority descending, take top N
         fired.sort(key=lambda s: s.priority, reverse=True)

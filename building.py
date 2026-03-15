@@ -222,6 +222,10 @@ class Building(Entity):
                 UnitClass = _get_unit_class()
                 unit = UnitClass(sx, sy, utype, self.owner)
                 game.player_units.append(unit)
+                # v10_zeta.1: telemetry — record unit spawn
+                hub = getattr(game, 'telemetry', None)
+                if hub is not None:
+                    hub.record_unit_spawn(game.game_time, unit.eid, utype, self.owner)
                 # v10_1: rally point — auto-move to rally
                 if self.rally_point:
                     unit.command_move(self.rally_point[0], self.rally_point[1], game)
