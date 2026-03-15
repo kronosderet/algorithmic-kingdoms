@@ -2,7 +2,7 @@
 
 ## Overview
 Zero-asset Pygame RTS with algorithmic art (polar roses, L-systems, golden spirals, Mandelbrot menus).
-Current version: v10_epsilon3. Working on v10 Economy Overhaul.
+Current version: v10_epsilon3. Working on v10_epsilon Formation Math + Fractal GUI.
 
 ## Tech Stack
 - Python 3.13, Pygame 2.6.1, NumPy

@@ -20,8 +20,8 @@ from constants import (UNIT_DEFS, BUILDING_DEFS, BUILDING_COLORS,
                        FORGE_STONE_COST, FORGE_IRON_COST,
                        FORGE_STEEL_YIELD, FORGE_TIME,
                        SMELTER_REFINERY_BONUS, FORGE_WORKER_SPEED_BONUS,
-                       SENTINEL_CRY_COOLDOWN, SENTINEL_CRY_RADIUS,
-                       SENTINEL_CRY_BUFF_DURATION, SENTINEL_CRY_PULSE_DURATION,
+                       HARMONIC_PULSE_COOLDOWN, HARMONIC_PULSE_RADIUS,
+                       HARMONIC_PULSE_BUFF_DURATION, HARMONIC_PULSE_PULSE_DURATION,
                        MSG_COL_ECONOMY, display_name)
 from entity_base import Entity
 from fractal_ui import fractal_bar_simple
@@ -108,7 +108,7 @@ class Building(Entity):
         self.stationed_workers = []
         # v10.2: smelter boost flag (refinery only)
         self.smelter_boosted = False
-        # v10_7: Sentinel's Cry — tower dead zone mechanic
+        # v10_7: Harmonic Pulse — tower dead zone mechanic
         self.cry_timer = 0.0
         self.cry_pulse_timer = 0.0
 
@@ -283,7 +283,7 @@ class Building(Entity):
                     cd_mult = TOWER_UPGRADE_FIRE_MULT if self.tower_upgrading else 1.0
                     self.tower_timer = TOWER_CANNON_CD * cd_mult
 
-        # v10_7: Sentinel's Cry — tower detects enemies in dead zone, buffs nearby allies
+        # v10_7: Harmonic Pulse — tower detects enemies in dead zone, buffs nearby allies
         if self.building_type == "tower" and self.built and not self.ruined:
             self.cry_pulse_timer = max(0, self.cry_pulse_timer - dt)
             self.cry_timer = max(0, self.cry_timer - dt)  # cooldown ticks always
@@ -292,15 +292,15 @@ class Building(Entity):
                 dead_zone_enemies = [e for e in game.enemy_units
                                      if e.alive and dist(self.x, self.y, e.x, e.y) < TOWER_MIN_RANGE]
                 if dead_zone_enemies:
-                    self.cry_timer = SENTINEL_CRY_COOLDOWN
-                    self.cry_pulse_timer = SENTINEL_CRY_PULSE_DURATION
+                    self.cry_timer = HARMONIC_PULSE_COOLDOWN
+                    self.cry_pulse_timer = HARMONIC_PULSE_PULSE_DURATION
                     # buff nearby friendly units
                     for u in game.player_units:
-                        if u.alive and dist(self.x, self.y, u.x, u.y) <= SENTINEL_CRY_RADIUS:
-                            u.sentinel_cry_buff = SENTINEL_CRY_BUFF_DURATION
+                        if u.alive and dist(self.x, self.y, u.x, u.y) <= HARMONIC_PULSE_RADIUS:
+                            u.sentinel_cry_buff = HARMONIC_PULSE_BUFF_DURATION
                     # highlight dead zone enemies
                     for e in dead_zone_enemies:
-                        e.sentinel_highlighted = SENTINEL_CRY_BUFF_DURATION
+                        e.sentinel_highlighted = HARMONIC_PULSE_BUFF_DURATION
 
         # v10_2: garrison attack — garrisoned workers hurl stones at enemies
         if self.building_type == "town_hall" and self.garrison:
@@ -683,10 +683,10 @@ class Building(Entity):
             self._draw_refinery_shape(surf, cx, cy, px_size, build_pct, is_ruin)
         elif self.building_type == "tower":
             self._draw_tower_shape(surf, cx, cy, px_size, build_pct, is_ruin, self.tower_level)
-            # v10_7: Sentinel's Cry pulse ring VFX
+            # v10_7: Harmonic Pulse pulse ring VFX
             if self.cry_pulse_timer > 0 and not is_ruin:
-                pulse_progress = 1.0 - self.cry_pulse_timer / SENTINEL_CRY_PULSE_DURATION
-                pulse_r = int((SENTINEL_CRY_RADIUS * z) * pulse_progress)
+                pulse_progress = 1.0 - self.cry_pulse_timer / HARMONIC_PULSE_PULSE_DURATION
+                pulse_r = int((HARMONIC_PULSE_RADIUS * z) * pulse_progress)
                 pulse_alpha = int(180 * (1.0 - pulse_progress))
                 if pulse_r > 0 and pulse_alpha > 0:
                     cry_surf = pygame.Surface((pulse_r * 2, pulse_r * 2), pygame.SRCALPHA)

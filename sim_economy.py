@@ -7,7 +7,7 @@ v10_7 updates:
   - 7 enemy types — The Dark 7 (soldier, archer, siege, elite, shieldbearer, healer, raider)
   - Adaptive difficulty engine (pressure tracking, escalation/de-escalation)
   - Straggler metamorphosis modeling
-  - Sentinel's Cry tower buff modeling
+  - Harmonic Pulse tower buff modeling
   - Log analysis integration (parse CSV logs, compare sim vs actual)
 
 All constants imported from constants.py -- no local duplicates.
@@ -25,7 +25,7 @@ from constants import (
     TOWER_EXPLOSIVE_DIRECT, TOWER_EXPLOSIVE_DAMAGE, TOWER_EXPLOSIVE_RADIUS,
     TOWER_UPGRADE_COST, TOWER_UPGRADE_TIME,
     DIFFICULTY_PROFILES,
-    SENTINEL_CRY_SPEED_BONUS, SENTINEL_CRY_COOLDOWN,
+    HARMONIC_PULSE_SPEED_BONUS, HARMONIC_PULSE_COOLDOWN,
     METAMORPH_HP_MULT, METAMORPH_ATK_MULT,
     STRAGGLER_ROOT_WAVES, STRAGGLER_METAMORPH_WAVES,
 )

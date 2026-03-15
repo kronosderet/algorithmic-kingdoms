@@ -1,7 +1,7 @@
 # GDD Roadmap — Resonance
 
 > Living document. Tracks the path from simple RTS to mathematical odyssey.
-> Current implemented version: **v10_epsilon1** (see `GDD_Current_v10.md` for full spec)
+> Current implemented version: **v10_epsilon3** (see `GDD_Current_v10.md` for full spec)
 > Last updated: 2026-03-15
 >
 > *"This game should be combat math. The paradox of it being nonexistent anywhere*
@@ -238,7 +238,7 @@ Sentinels define the skeleton. Other buildings fill the interior:
 | **Harmonic Mill** (Refinery) | Resource processing | Paired Harmonic Mills across a symmetry axis refine 30% faster |
 | **Resonance Forge** | Unit training | Mirrored Resonance Forges train in rhythmic alternation — one finishes as the other starts |
 | **Sentinel** | Defense + Geometry | Sentinels ARE the lattice anchors — their resonance fields merge along symmetry axes for amplified area defense |
-| **Sawmill/Flux Mine/etc.** | Production | Symmetric production buildings pulse together — visible rhythm |
+| **Fiber Spire/Flux Spire/etc.** | Production | Symmetric production buildings pulse together — visible rhythm |
 | **Tree of Life** | Center | The natural center of any symmetry — the origin point all axes pass through |
 
 **Key rule:** A building placed on one side of a symmetry axis gains a bonus when its mirror position is also filled. The bonus scales with the symmetry order — D6 mirror bonuses are stronger than D2. The player is rewarded for *completing the pattern*, never forced.
@@ -753,7 +753,7 @@ At Layer 6+, the advisor transitions from teacher to companion. It no longer tel
 | v10 Phase 1 | Economy Foundation | **SHIPPED** | Stone, worker skill XP, Sentinel (resonance defense), traits, garrison, global commands, perf |
 | v10_5 | Module Split | **SHIPPED** | Architecture split (5 modules), parabolic projectiles with lead aiming |
 | v10_6 | Difficulty Rebalance | **SHIPPED** | Fractal formations (4), stances (4), 5 new enemy types, adaptive difficulty |
-| v10_7 | Edge Case Polish | **SHIPPED** | Harmonic Pulse (evolved Sentinel's Cry), sapper detonation, straggler metamorphosis |
+| v10_7 | Edge Case Polish | **SHIPPED** | Harmonic Pulse (evolved from Sentinel's Cry), sapper detonation, straggler metamorphosis |
 | v10_delta | Physics & Energy | **SHIPPED** | Physics movement, energy/stamina, spring formations, player-driven squads |
 | v10_epsilon | Formation Math | **NEXT** | Correct fractal geometry, rotation combat, formation discovery, Don't Panic advisor (basic) |
 | v10_zeta | Economy Depth | PLANNED | Helper buildings, production buildings, drop-offs, Forge, Sap resource, Sentinel Lattice (D1-D4) |
@@ -783,7 +783,7 @@ entities.py → entity_base.py + unit.py + building.py + building_shapes.py + pr
 4 fractal formations (Polar Rose, Golden Spiral, Sierpinski, Koch). 4 stances (Aggressive, Defensive, Guard, Hunt). 5 specialist enemy types — The Dark 7: Blight Reaper, Hollow Warden, Fade Ranger, Ironbark, Thornknight, Bloodtithe, Hexweaver (7 total, 1:1 mirror of player Heptarchy tones). Adaptive difficulty engine with pressure tracking.
 
 ### v10_7 — Edge Case Polish
-Harmonic Pulse cooldown tuning (evolved from Sentinel's Cry), resonance field range balancing, sapper sympathetic detonation, straggler metamorphosis (rooting → Entrenched Titan).
+Harmonic Pulse cooldown tuning, resonance field range balancing, sapper sympathetic detonation, straggler metamorphosis (rooting → Entrenched Titan).
 
 </details>
 
@@ -922,11 +922,11 @@ Foreman-rank Gatherers unlock 1×1 helper buildings near resource clusters. Gath
 
 | Gatherer Skill | Helper Building | Function |
 |---|---|---|
-| Flux Miner Foreman | Flux Hut | Local Flux drop-off |
-| Fiberjack Foreman | Fiber Camp | Local Fiber drop-off |
-| Crystal Mason Foreman | Quarry Hut | Local Crystal drop-off |
-| Ore Miner Foreman | Ore Depot | Local Ore drop-off |
-| Builder Foreman | Scaffold | +25% build/repair speed aura |
+| Flux Miner Foreman | Flux Node | Local Flux drop-off |
+| Fiberjack Foreman | Grove Tap | Local Fiber drop-off |
+| Crystal Mason Foreman | Crystal Node | Local Crystal drop-off |
+| Ore Miner Foreman | Ore Node | Local Ore drop-off |
+| Builder Foreman | Lattice | +25% build/repair speed aura |
 | Smelter Foreman | — | Upgrades Harmonic Mill: +30% refine speed |
 
 ### ζ.2 Production Buildings
@@ -935,11 +935,11 @@ Master-rank Gatherers upgrade helpers into 2×2 production buildings. Passive re
 
 | Helper | Upgrades To | Production |
 |---|---|---|
-| Fiber Camp | Sawmill | Fiber passively + Gatherer boost |
-| Flux Hut | Flux Mine | Flux passively + Gatherer boost |
-| Quarry Hut | Stoneworks | Crystal passively + Gatherer boost |
-| Ore Depot | Ore Works | Ore passively + Gatherer boost |
-| Harmonic Mill | Forge | Crystal + Ore → Alloy (faster path) |
+| Grove Tap | Fiber Spire | Fiber passively + Gatherer boost |
+| Flux Node | Flux Spire | Flux passively + Gatherer boost |
+| Crystal Node | Crystal Spire | Crystal passively + Gatherer boost |
+| Ore Node | Ore Spire | Ore passively + Gatherer boost |
+| Harmonic Mill | Fractal Forge | Crystal + Ore → Alloy (faster path) |
 
 ### ζ.3 Sentinel Lattice Foundation
 
@@ -961,7 +961,7 @@ Trees regrow slowly near other trees. Flux deposits regenerate at geological pac
 
 ### ζ.5 Defend-the-Economy
 
-Losing a Sawmill mid-game is devastating. Creates a second strategic layer: protect your infrastructure, not just your army. Enemy Raiders specifically target production buildings.
+Losing a Fiber Spire mid-game is devastating. Creates a second strategic layer: protect your infrastructure, not just your army. Enemy Raiders specifically target production buildings.
 
 **Estimate:** 3-4 sessions
 
@@ -1726,7 +1726,7 @@ And beneath the Heptarchy, its mirror. The same field, the same seven, the same 
 
 | File | Purpose |
 |---|---|
-| `GDD_Current_v10.md` | Full specification of currently implemented v10_delta systems |
+| `GDD_Current_v10.md` | Full specification of currently implemented v10_epsilon3 systems |
 | `GDD_Roadmap.md` | This file — the mathematical odyssey roadmap |
 | `future ideas-crazy stuff.txt` | Raw brainstorm: the original spark |
 | `archive/GDD_Current_v9.md` | Historical v9.3 spec |

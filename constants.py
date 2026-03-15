@@ -548,12 +548,12 @@ IMPACT_SHAKE_DURATION = 0.12     # seconds
 # v10_7: Tower upgrade fire penalty (50% rate while upgrading)
 TOWER_UPGRADE_FIRE_MULT = 2.0    # cooldown multiplier during upgrade
 
-# v10_7: Sentinel's Cry — tower dead zone mechanic
-SENTINEL_CRY_COOLDOWN = 4.0      # seconds between cries
-SENTINEL_CRY_RADIUS = 120        # px — friendly units within this get attack speed buff
-SENTINEL_CRY_BUFF_DURATION = 3.0 # seconds the buff lasts
-SENTINEL_CRY_SPEED_BONUS = 0.25  # 25% attack speed bonus for buffed units
-SENTINEL_CRY_PULSE_DURATION = 0.6  # visual pulse ring duration
+# v10_7: Harmonic Pulse — tower dead zone mechanic
+HARMONIC_PULSE_COOLDOWN = 4.0      # seconds between pulses
+HARMONIC_PULSE_RADIUS = 120        # px — friendly units within this get attack speed buff
+HARMONIC_PULSE_BUFF_DURATION = 3.0 # seconds the buff lasts
+HARMONIC_PULSE_SPEED_BONUS = 0.25  # 25% attack speed bonus for buffed units
+HARMONIC_PULSE_PULSE_DURATION = 0.6  # visual pulse ring duration
 
 # v10_7: Straggler Metamorphosis — surviving enemies root and transform
 STRAGGLER_ROOT_WAVES = 1         # root after surviving 1 wave beyond their own
@@ -702,7 +702,7 @@ RUIN_REBUILD_FRACTION = 0.40  # fraction of original cost to rebuild from ruins
 # v10: Worker Skill XP System
 # ---------------------------------------------------------------------------
 WORKER_SKILL_NAMES = {
-    "lumberjack": "Lumberjack", "gold_miner": "Flux Miner",
+    "lumberjack": "Fiberjack", "gold_miner": "Flux Miner",
     "iron_miner": "Ore Miner", "stone_mason": "Crystal Mason",
     "builder": "Builder", "smelter": "Smelter",
 }
@@ -1192,7 +1192,7 @@ TOOLTIP_DATA = {
     "bld_refinery": "Harmonic Mill — Ore processor.\nConverts 2 Ore → 1 Alloy.\nUpgrades to Fractal Forge.",
     "bld_tower": "Sentinel — Lattice anchor.\nResonance field damages nearby enemies.\nKoch snowflake aura, passive + pulse.",
     "bld_goldmine_hut": "Flux Node — Drop-off for Flux.\nReduces worker travel time.\nUnlocked by Flux Miner Foreman.",
-    "bld_lumber_camp": "Grove Tap — Drop-off for Fiber.\nReduces worker travel time.\nUnlocked by Lumberjack Foreman.",
+    "bld_lumber_camp": "Grove Tap — Drop-off for Fiber.\nReduces worker travel time.\nUnlocked by Fiberjack Foreman.",
     "bld_quarry_hut": "Crystal Node — Drop-off for Crystal.\nReduces worker travel time.\nUnlocked by Crystal Mason Foreman.",
     "bld_iron_depot": "Ore Node — Drop-off for Ore.\nReduces worker travel time.\nUnlocked by Ore Miner Foreman.",
     "bld_scaffold": "Lattice — Builder's scaffold.\n+25% build/repair speed nearby.\nUnlocked by Builder Foreman.",

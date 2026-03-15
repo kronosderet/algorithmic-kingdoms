@@ -44,7 +44,7 @@ from constants import (UNIT_DEFS, ENEMY_DEFS, UNIT_COLORS, ENEMY_COLORS,
                        STANCE_AGGRESSIVE, STANCE_DEFENSIVE, STANCE_GUARD,
                        STANCE_HUNT, STANCE_GUARD_AGGRO_BONUS,
                        FORMATION_SLOT_ARRIVAL, FORMATION_REGROUP_DELAY,
-                       SENTINEL_CRY_SPEED_BONUS,
+                       HARMONIC_PULSE_SPEED_BONUS,
                        METAMORPH_HP_MULT, METAMORPH_ATK_MULT,
                        METAMORPH_SPEED_MULT,
                        WORKER_FLEE_COOLDOWN,
@@ -182,9 +182,9 @@ class Unit(Entity):
         self.garrison_target = None
         # v10_2: station target (production buildings)
         self.station_target = None
-        # v10_7: Sentinel's Cry buff (attack speed bonus from nearby tower)
+        # v10_7: Harmonic Pulse buff (attack speed bonus from nearby tower)
         self.sentinel_cry_buff = 0.0
-        # v10_7: highlighted by Sentinel's Cry (enemy in dead zone)
+        # v10_7: highlighted by Harmonic Pulse (enemy in dead zone)
         self.sentinel_highlighted = 0.0
         # v10_7: Straggler metamorphosis
         self.spawn_wave = 0       # wave this enemy was spawned in
@@ -637,7 +637,7 @@ class Unit(Entity):
     def update(self, dt, game):
         if not self.alive:
             return
-        # v10_7: Sentinel's Cry buff decay + attack speed bonus
+        # v10_7: Harmonic Pulse buff decay + attack speed bonus
         if self.sentinel_cry_buff > 0:
             self.sentinel_cry_buff = max(0, self.sentinel_cry_buff - dt)
         if self.sentinel_highlighted > 0:
@@ -645,7 +645,7 @@ class Unit(Entity):
         # v10_7: rooted enemies cannot act (waiting to metamorphose)
         if self.rooted:
             return
-        cry_bonus = SENTINEL_CRY_SPEED_BONUS if self.sentinel_cry_buff > 0 else 0.0
+        cry_bonus = HARMONIC_PULSE_SPEED_BONUS if self.sentinel_cry_buff > 0 else 0.0
         self.attack_timer = max(0, self.attack_timer - dt * (1.0 + cry_bonus))
 
         # worker flee check -- before state dispatch
