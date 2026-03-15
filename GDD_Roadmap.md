@@ -701,6 +701,155 @@ The enemy's blood magic works identically — dark sacrifice generates a Dissona
 
 ---
 
+## The Grid Dissolution — From Tiles to Continuous Space
+
+*The grid is training wheels. The math doesn't need them.*
+
+The current world is a tile grid — 32×32 pixel cells indexed as a 2D array. Terrain, resources, pathfinding, building placement, collision: every spatial system reads from `tiles[row][col]`. Units move in continuous pixel space (floating-point x, y with velocity/acceleration), but their feet touch a discrete floor. The grid served its purpose: it made the game buildable. Now it constrains the game's future.
+
+The grid must dissolve gradually — not in a single rewrite, but across versions, each migration replacing one grid dependency with a continuous alternative while the game keeps shipping.
+
+### Why the Grid Must Go
+
+1. **The Living Strata needs continuous terrain.** Geological processes (erosion, tectonic drift, sediment flow) operate on smooth fields, not integer cells. A river that can only flow through 32px steps isn't a river — it's a staircase. The seven-epoch map generator (v11+) needs `f(x, y)` evaluated at any point, not `tiles[r][c]` looked up at integer coordinates
+
+2. **The Physics Substrate needs continuous collision.** The v10_eta momentum transfer and v11 rigid body formations need real collision surfaces — not "is the tile passable?" checks. A Lancer charging into a forest should decelerate against tree density, not stop dead at a tile boundary. Wall-sliding against rectangular cells produces artifacts that break the physics promise
+
+3. **Building placement wants freedom.** The Sentinel Lattice (v10_zeta) defines symmetry axes through the base. Symmetry is continuous — a mirror axis can fall anywhere. Forcing Sentinels onto integer grid positions means the lattice can only express symmetries that align with 32px increments. The math is richer than the grid allows
+
+4. **Fractal terrain needs resolution independence.** The visual thesis ("every pixel is a mathematical object") contradicts a world built from squares. Voronoi terrain cells, river erosion paths, forest density gradients — these should sample continuous functions at render resolution, not paint colored tiles
+
+5. **Godot (v14) uses NavigationServer2D.** The migration endpoint is a navigation mesh, not A* on tiles. Every grid dependency that persists to v14 becomes migration debt
+
+### What the Grid Does Today
+
+| System | Grid Role | Dependency Level |
+|---|---|---|
+| **Terrain storage** | `tiles[row][col]` → terrain type enum | **Critical** — all world data |
+| **Resource deposits** | `resource_remaining[(col, row)]` → amount | **Critical** — economy core |
+| **Pathfinding (A\*)** | Tile nodes, cardinal + diagonal edges | **Critical** — all movement |
+| **Building placement** | Snap to integer (col, row), 1×1 or 2×2 footprints | **Critical** — construction |
+| **Collision (unit↔terrain)** | `is_passable(col, row)` per-frame check | **Heavy** — every moving unit |
+| **Map rendering** | Iterate tile range, render colored rects | **Heavy** — visual layer |
+| **Camera bounds** | `MAP_COLS × TILE_SIZE` defines world edge | **Light** — easy to decouple |
+| **Spatial grid** | Independent hash (cell_size=80px, not tile-aligned) | **None** — already decoupled |
+
+### The Dissolution Pipeline
+
+Each step retires one grid dependency while keeping the game playable. No step requires the previous step to be complete — they can proceed in any order:
+
+#### Step 1: Terrain Field (v10_zeta–v10_eta)
+
+Replace `tiles[row][col]` with a **continuous terrain function** backed by a sampled grid.
+
+```python
+class TerrainField:
+    def __init__(self, cols, rows, tile_size):
+        self._data = numpy.zeros((rows, cols), dtype=uint8)  # existing tile array
+        self._tile_size = tile_size
+
+    def sample(self, x, y) -> TerrainInfo:
+        """Evaluate terrain at any world coordinate."""
+        col = x / self._tile_size
+        row = y / self._tile_size
+        # Bilinear interpolation for continuous fields (density, fertility)
+        # Nearest-neighbor for discrete types (terrain_type)
+        ...
+
+    def get_tile(self, col, row):
+        """Legacy grid API — wraps sample() for backward compat."""
+        return self.sample(col * self._tile_size, row * self._tile_size).terrain_type
+```
+
+**What changes:** All new code calls `terrain.sample(x, y)`. Old code keeps calling `get_tile(col, row)` through the compatibility wrapper. The internal representation can evolve (noise functions, heightmaps, Voronoi cells) without breaking callers.
+
+**What ships:** Existing game plays identically. New code has a continuous API to build on.
+
+#### Step 2: Resource Nodes (v10_zeta)
+
+Replace tile-indexed resources with **world-position resource nodes**.
+
+```python
+class ResourceNode:
+    x: float           # world pixel position (continuous)
+    y: float
+    resource_type: str  # "gold", "wood", "iron", "stone"
+    remaining: float    # depletable
+    radius: float       # gatherable area (replaces tile boundary)
+```
+
+Workers path to the node position and gather within radius, not at adjacent tiles. Resource placement uses the terrain field's continuous API. Display renders resource deposits as shaped areas, not colored tiles.
+
+**Backward compat:** `game_map.harvest(col, row, amount)` internally finds the nearest node and delegates. Old gathering code works until rewritten.
+
+#### Step 3: Navigation Mesh (v10_eta–v11)
+
+Replace A* on tiles with **navigation over a continuous mesh**.
+
+Phase 1 (v10_eta): Generate a nav mesh FROM the tile grid at map creation time. Pathfinding switches from tile A* to mesh A* — same algorithm, better graph. Movement cost comes from the terrain field, not tile lookups. This is a drop-in replacement that improves path quality without changing gameplay.
+
+Phase 2 (v11): The nav mesh is generated directly from the continuous terrain field. Obstacle shapes (buildings, cliffs, rivers) carve polygons out of the mesh. Pathfinding returns world-coordinate waypoints, not tile centers.
+
+Phase 3 (v14, Godot): `NavigationServer2D` replaces the Python nav mesh entirely.
+
+#### Step 4: Building Footprints (v10_eta)
+
+Replace integer tile footprints with **continuous footprint shapes**.
+
+Buildings still snap to grid for UX (players need predictable placement), but the footprint is a polygon, not a tile set. The snap grid becomes a configurable parameter — could be 32px, 16px, or eventually free placement.
+
+The Sentinel Lattice benefits immediately: symmetry axes can recommend placement points that aren't grid-aligned, and the ghost guide overlay shows the continuous symmetry plane.
+
+#### Step 5: Continuous Collision (v11)
+
+Replace `is_passable(col, row)` with **terrain field collision**.
+
+Units check the terrain field at their exact position — density (impassable if above threshold), move cost (continuous friction), and gradient (slope affects speed). Wall-sliding uses the density gradient instead of tile edges.
+
+This is the step where the grid becomes truly invisible to gameplay. The tile array may still exist as the terrain field's backing store, but nothing queries it directly.
+
+#### Step 6: Render Independence (v11–v13)
+
+Replace tile-iteration rendering with **frustum-sampled terrain**.
+
+The map renderer evaluates `terrain.sample(x, y)` at screen pixels (or a coarse sampling grid at low zoom) instead of iterating rows/cols. At high zoom, sub-tile detail appears — grass texture variation, resource node glow, geological micro-features. At low zoom, the grid vanishes into a smooth landscape.
+
+Grid lines become optional (debug toggle). The world looks continuous because it IS continuous.
+
+#### Step 7: The Grid Becomes a Ghost (v14)
+
+In Godot, the tile array is replaced entirely by:
+- `TileMapLayer` for terrain visualization (if grid-look is retained)
+- `NavigationServer2D` for pathfinding
+- `PhysicsServer2D` for collision
+- Continuous noise/field functions for terrain generation
+
+The `game_map.py` tile array, `pathfinding.py` A* algorithm, and `pos_to_tile()`/`tile_center()` utilities are retired. The grid was the game's skeleton. By v14, the skeleton has been replaced by muscle and tendon — continuous physics and continuous space.
+
+### The Principle: No Grid Visible to the Player
+
+The grid retirement is not about technical debt. It's about the visual thesis: *every pixel is a mathematical object*. A tile grid imposes a square lattice on a world whose mathematics are fractal, continuous, and resolution-independent. The Voronoi terrain, the erosion rivers, the Penrose formations, the resonance fields — none of them are square. The grid is the last rectangular artifact in a game that is otherwise entirely curved.
+
+When the grid dissolves, the game becomes what it was always meant to be: a continuous mathematical surface that the player explores, shapes, and harmonizes. The tiles were the training wheels. The math learned to ride without them.
+
+### Scheduled Introduction
+
+| Version | What's Retired | What Replaces It |
+|---|---|---|
+| **v10_zeta** | Direct `tiles[r][c]` access (new code) | `TerrainField.sample(x, y)` with grid backing store. Resource nodes replace tile-indexed deposits |
+| **v10_eta** | A* on tile nodes | Nav mesh generated from tile grid (Phase 1). Building footprints become polygons with snap grid |
+| **v11** | `is_passable()` tile checks | Continuous terrain collision. Nav mesh from terrain field (Phase 2). Render sampling begins |
+| **v13** | Tile-iteration rendering | Frustum-sampled terrain rendering. Grid lines → debug only |
+| **v14** | `game_map.py` tile array | Godot TileMapLayer / NavigationServer2D / PhysicsServer2D. Full continuous world |
+
+### Implementation Note
+
+The dissolution is **backward-compatible at every step**. Each new system wraps the tile grid with a continuous API. Old code continues to call `get_tile()`, `is_passable()`, `pos_to_tile()` through wrappers that delegate to the new systems. Nothing breaks between versions. The grid doesn't crash — it fades.
+
+This mirrors the game's own philosophy: progressive revelation, earned complexity, fractal depth. The grid dissolves the way the tutorial unfolds — one layer at a time, each one invisible to the player.
+
+---
+
 ## Don't Panic — The Live Advisor
 
 *The game already knows what went wrong. It just needs to tell you.*
@@ -1264,9 +1413,9 @@ When the Incident Director decides to send a deceptive cadence (surprise second 
 | v10_7 | Edge Case Polish | **SHIPPED** | Harmonic Pulse (evolved from Sentinel's Cry), sapper detonation, straggler metamorphosis |
 | v10_delta | Physics & Energy | **SHIPPED** | Physics movement, energy/stamina, spring formations, player-driven squads |
 | v10_epsilon | Formation Math | **SHIPPED** | Correct fractal geometry, rotation combat, formation discovery, Don't Panic advisor (basic), UX overhaul |
-| v10_zeta | Economy Depth | **NEXT** | Helper buildings, production buildings, drop-offs, Forge, Tonic resource, Sentinel Lattice (D1-D4), Incident Conductor v2 Tempo Ear, Presence Director foundation (Economy + Atmosphere channels) |
-| v10_eta | The Fourth & Fifth | PLANNED | Bulwark + Lancer, Lissajous formation, triads, 7-rank system, characteristics, Sentinel D6 + tuning, Incident Conductor Harmony Ear (GF(7) counter-composition), Presence Director Threat + Information channels |
-| v11 | Harmonic Awakening | PLANNED | Mender (6th tone), Penrose formation, procedural audio, GF(7) harmony, Resonance resource, The Fundamental (tone 0 emergence), base drone music, geological map gen, Incident Conductor Drama Ear + cadence system, Presence Director full 5-channel + shared mood signal |
+| v10_zeta | Economy Depth | **NEXT** | Helper buildings, production buildings, drop-offs, Forge, Tonic resource, Sentinel Lattice (D1-D4), Incident Conductor v2 Tempo Ear, Presence Director foundation (Economy + Atmosphere channels), TerrainField continuous API + resource nodes (Grid Dissolution Step 1-2) |
+| v10_eta | The Fourth & Fifth | PLANNED | Bulwark + Lancer, Lissajous formation, triads, 7-rank system, characteristics, Sentinel D6 + tuning, Incident Conductor Harmony Ear (GF(7) counter-composition), Presence Director Threat + Information channels, nav mesh from tile grid + polygon footprints (Grid Dissolution Step 3-4) |
+| v11 | Harmonic Awakening | PLANNED | Mender (6th tone), Penrose formation, procedural audio, GF(7) harmony, Resonance resource, The Fundamental (tone 0 emergence), base drone music, geological map gen, Incident Conductor Drama Ear + cadence system, Presence Director full 5-channel + shared mood signal, continuous terrain collision + render sampling (Grid Dissolution Step 5-6) |
 | v12 | Blood & Chaos | PLANNED | Sage (7th tone), Hilbert formation, enemy blood magic, hex system, full Heptarchy, ruins & resonance scars, Full Incident Conductor (3-ear unified), Presence Director persistent player profiles |
 | v13 | Progressive Depth | PLANNED | 7 depth layers, Tree of Life evolution, emergent GUI, Noita-level secrets, full 7-epoch map gen, Lorenz weather |
 | v14 | Godot Migration | PLANNED | Full port to Godot 4, GPU shaders, 1000+ units, visible waveforms, multiplayer ghosts |
@@ -2428,6 +2577,11 @@ These emerge from the math and from system interactions. Not bugs — features w
 | Fractal depth scaling | **Scheduled** (visual fractal iteration depth scales with game progress/layer) | v13 |
 | The Tree Remembers | **Scheduled** (Tree records all GF(7) operations, plays back as music at game end) | v13 |
 | Physics substrate evolution | **Scheduled** (springs → rigid bodies → constraints → field physics) | v10_eta → v14 |
+| Grid Dissolution (TerrainField API) | **Scheduled** (continuous terrain sampling wrapping tile grid, resource nodes) | v10_zeta |
+| Grid Dissolution (nav mesh) | **Scheduled** (A* on nav mesh generated from tiles, polygon building footprints) | v10_eta |
+| Grid Dissolution (continuous collision) | **Scheduled** (terrain density collision, frustum-sampled rendering) | v11 → v13 |
+| Grid Dissolution (full retirement) | **Scheduled** (Godot NavigationServer2D/PhysicsServer2D replaces tile array) | v14 |
+| Tile grid system | **Implemented** (32px tiles, 2D array terrain, A* pathfinding, tile-aligned buildings) | v1 → current |
 | Momentum transfer (mass physics) | **Scheduled** (Lancer charge, Bulwark mass absorption, knockback) | v10_eta |
 | Rigid body formations | **Scheduled** (angular velocity, rotational inertia, formation collision) | v11 |
 | Constraint skeleton (hex damage) | **Scheduled** (joint constraints between formation units, mechanical hex effects) | v12 |
