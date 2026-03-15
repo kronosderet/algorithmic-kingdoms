@@ -966,6 +966,293 @@ At Layer 6+, the advisor transitions from teacher to companion. It no longer tel
 
 ---
 
+## The Incident Director v2 — Dramaturgic Conductor
+
+*The current director reads a script. The next one improvises.*
+
+The v10_epsilon Incident Director is a solid finite state machine: CALM → FOREBODING → IMMINENT → ACTIVE → AFTERMATH, with tension-driven tier selection, a 13-flavour catalogue, counter-pick AI, and straggler metamorphosis. It works. But it reads like a screenwriter following a beat sheet — the dramatic arc is predetermined, the pacing formula is linear, and the counter-pick logic is a lookup table. As the game deepens through the Heptarchy, the director must evolve from a *scheduler* into a *conductor*.
+
+### What Changes
+
+The current director answers "WHEN do enemies arrive and WHAT do they bring." The v2 director answers a harder question: **"What does the player need to feel right now?"**
+
+### The Three Ears
+
+The conductor listens to three simultaneous signals:
+
+#### 1. The Tempo Ear — Pacing by Feel, Not Formula
+
+Current: cooldown between incidents is `base_cooldown × outcome_mult × late_game_mult`. Predictable once you learn the formula.
+
+v2: The conductor tracks **player action density** — actions per second, camera movements, idle periods. A player frantically microing their army during aftermath doesn't need another wave in 20 seconds. A player who's been AFK-gathering for 90 seconds is *bored* — the music needs a new movement.
+
+```
+action_density = weighted_average(
+    commands_per_10s    × 1.0,
+    camera_moves_per_10s × 0.3,
+    selection_changes    × 0.5
+)
+
+IF action_density HIGH after aftermath:
+    extend_cooldown(1.4×)   # let them breathe, they're still processing
+IF action_density LOW during calm:
+    shorten_cooldown(0.7×)  # they're ready, they just don't know it yet
+IF action_density SPIKE during foreboding:
+    # player noticed the warning — good, maintain tension
+    hold_foreboding(min 8s)  # let the dread build
+```
+
+The player never notices the conductor adjusting. They just feel that the game has *perfect pacing* — the waves come when they're ready, the breaks last exactly long enough.
+
+#### 2. The Harmony Ear — Composition by Counter-Narrative
+
+Current: counter-pick checks "does the player have towers? Add siege. Heavy rangers? Add shields." Static table lookup.
+
+v2: The conductor reads the player's **army composition as a chord** — the same GF(7) system used for formations. The enemy composition is chosen to create *musical tension* against the player's chord.
+
+```
+player_chord = composition_to_gf7(player_army)  # e.g., [3, 2, 0, 0, 0, 0, 0] → GF(7) element
+dissonance_target = choose_interval(player_chord, dramatic_phase)
+
+# Opening/Rising: consonant intervals (thirds, fifths)
+#   → enemies that complement the player, teaching by contrast
+# Midgame: suspended intervals (fourths, sixths)
+#   → enemies that create tension but not crisis
+# Climax: tritones and minor seconds
+#   → maximum dissonance, the army that sounds *wrong*
+# Finale: the anti-chord (additive inverse in GF(7))
+#   → the perfect counter-composition, sum → 0 mod 7
+```
+
+The counter-pick becomes *musical*. The player who understands harmony theory can predict what the director will send — and that prediction IS the skill ceiling. The counter-counter-pick is composing an army that resolves against anything.
+
+#### 3. The Drama Ear — Narrative by Emotional Arc
+
+Current: dramatic arc is linear (Opening → Rising → Midgame → Climax → Finale) keyed to incident count.
+
+v2: The dramatic arc adapts to the player's *emotional trajectory*, inferred from game events:
+
+| Signal | Emotional Inference | Director Response |
+|---|---|---|
+| Player lost 3+ units in last incident | Frustration / learning | Next incident is lighter tier, gives recovery space |
+| Player discovered a new formation | Excitement / curiosity | Give them 30s extra calm to experiment |
+| Player has been in same formation for 5+ minutes | Comfort / stagnation | Send composition that punishes that formation |
+| Player just built their first Sentinel | Pride / investment | Send economy raid → will they defend or let it fall? |
+| Player has 500+ unspent resources | Decision paralysis | FOREBODING starts immediately → force the spend-or-lose moment |
+| Player army wiped, rebuilding | Desperation | False calm (15% → 40% chance), allow rebuild before real threat |
+
+The director creates *stories*. Not random waves, not formula-driven schedules, but sequences of incidents that have dramatic shape: setup, escalation, crisis, resolution. Each game becomes a unique narrative told by the conductor.
+
+### The Rehearsal Memory
+
+The director keeps a **session narrative log** — not the event_logger's CSV (which records facts), but a parallel structure recording *dramatic decisions and their outcomes*:
+
+```python
+rehearsal = [
+    {"incident": 3, "intent": "test_new_formation", "result": "player_adapted", "tension_delta": -0.12},
+    {"incident": 4, "intent": "economy_pressure", "result": "building_lost", "tension_delta": +0.18},
+    {"incident": 5, "intent": "recovery_wave", "result": "dominated", "tension_delta": +0.05},
+]
+```
+
+By incident 7, the conductor has learned: *this player adapts to formation counters but neglects economy defense*. The remaining incidents will target that weakness — not to crush the player, but to teach them. The conductor's goal is not victory. It's a standing ovation.
+
+### The Cadence System
+
+Musical compositions end with cadences — harmonic patterns that signal resolution. The v2 director uses cadences to shape each incident's ending:
+
+- **Perfect cadence** (V → I): Climactic victory. The last enemy falls, tension resolves cleanly. Player feels triumphant
+- **Plagal cadence** (IV → I): Gentle resolution. Enemies retreat or scatter. The "amen" cadence — aftermath feels peaceful
+- **Deceptive cadence** (V → vi): The player thinks it's over, but a second wave arrives from an unexpected direction. Tension subverts expectation
+- **Half cadence** (→ V): The incident ends on unresolved tension. Enemies retreat but aren't dead — they'll return stronger. Foreboding begins immediately
+
+The cadence is chosen based on the dramatic phase and the player's emotional state. Early incidents use perfect and plagal cadences (clean, learnable). Climax incidents use deceptive cadences. The finale always begins with a half cadence — the penultimate incident ends with the feeling that something bigger is coming.
+
+### Scheduled Introduction
+
+| Version | What's Added |
+|---|---|
+| **v10_zeta** | Tempo Ear: action density tracking, adaptive cooldowns. Rehearsal memory structure |
+| **v10_eta** | Harmony Ear: GF(7) chord-based counter-composition (requires Heptarchy unit types) |
+| **v11** | Drama Ear: emotional inference, narrative arc adaptation. Cadence system for incident endings |
+| **v12** | Full conductor: all three ears unified, session narrative log, cross-incident storytelling |
+
+### Implementation
+
+| Component | Scope |
+|---|---|
+| `enemy_ai.py` | Refactor `EnemyAI` into `IncidentConductor`. Three-ear pipeline: tempo → harmony → drama. Rehearsal memory. Cadence selection. Backward-compatible with existing FSM states |
+| `constants.py` | `CONDUCTOR_TEMPO_WEIGHTS`, `CONDUCTOR_CADENCE_TYPES`, `CONDUCTOR_EMOTION_SIGNALS` — tunable parameters for all three ears |
+| `event_logger.py` | Add `ACTION_DENSITY` tracking (commands/s, camera/s, selections/s). Expose as running averages for conductor to read |
+| `game.py` | Feed player action events (clicks, hotkeys, camera) to conductor's tempo ear. ~10 lines per action type |
+
+The FSM states don't change. CALM → FOREBODING → IMMINENT → ACTIVE → AFTERMATH remains the skeleton. The three ears determine WHEN to transition (tempo), WHAT to spawn (harmony), and HOW the incident feels (drama). The conductor plays the same instrument — it just plays it *better*.
+
+---
+
+## The Presence Director — Adaptive GUI Conductor
+
+*The best interface is the one you never notice changing.*
+
+Every RTS player has experienced it: early game you need economy info, mid-game you need army data, late-game you need tactical overview. Most RTS games solve this with tabs, hotkeys, and information density that never changes. The player learns to ignore 60% of the screen.
+
+The Presence Director is a second conductor — a sister system to the Incident Director — whose instrument is not the enemy, but the **interface itself**. Its job: at any moment, the GUI shows exactly what the player needs, nothing they don't, and transitions between states so smoothly the player never notices the change.
+
+### The Principle
+
+The GUI is not a static dashboard. It's a **living surface** that breathes with the game state. The Presence Director reads the same signals as the Incident Director (game state, player actions, emotional arc) and translates them into GUI decisions: what to show, what to hide, what to emphasize, what to shrink.
+
+**The key constraint: no GUI element ever appears or disappears abruptly.** Every transition is animated — fade, slide, scale. The player's peripheral vision registers movement but not disruption. The GUI *flows*.
+
+### The Five Channels
+
+The Presence Director controls five independent GUI channels, each with its own priority and animation rules:
+
+#### Channel 1: Economy Surface
+
+**What it controls:** Resource bar detail level, gather rate display, production queue visibility, resource trend arrows.
+
+| Game State | Economy Surface |
+|---|---|
+| Early game (< 3 min) | Full detail: all resources labeled, gather rates visible, "what to build" hints |
+| Economy stable, pre-combat | Condensed: resource numbers only, production queues minimized |
+| During combat | Minimal: resource totals as small badges, no rates, no hints |
+| Post-combat / aftermath | Expanded: resource delta shown (+120 Flux from bounty), tip if floating resources |
+| Economy crisis (< 50 of key resource) | Alert: deficient resource pulses, production queue shows "can't afford" |
+
+The transition is never binary. "Full detail" → "Condensed" happens over 2 seconds: labels fade, spacing tightens, secondary info slides under the primary bar. The player's eye is never pulled to a sudden change.
+
+#### Channel 2: Threat Surface
+
+**What it controls:** Minimap alerts, tension bar prominence, enemy counter, attack direction indicators, incident alert banner.
+
+| Game State | Threat Surface |
+|---|---|
+| Calm (no tension) | Dormant: tension bar thin and gray, minimap neutral, no indicators |
+| Foreboding (tension rising) | Awakening: tension bar grows, color shifts warm, minimap border subtly pulses |
+| Imminent (enemies spawning) | Alert: full-width banner, attack arrows activate, minimap edges flash |
+| Active combat | Tactical: enemy count visible, minimap shows combat heat, threat arrows pulse |
+| Aftermath | Fading: all threat indicators wind down over 5s, tension bar shrinks |
+
+#### Channel 3: Command Surface
+
+**What it controls:** Bottom panel content, button visibility, selection panel, unit/building info.
+
+The command surface adapts to **selection context** (already partially implemented — worker buttons vs. building buttons vs. military buttons). The Presence Director extends this with:
+
+- **Nothing selected during calm:** Show economy summary + idle unit counter + build suggestions
+- **Nothing selected during combat:** Show army overview (unit counts, HP total, formation status)
+- **Single unit selected:** Current behavior (stats, portrait, abilities)
+- **Multi-select during combat:** Compressed unit cards (4px smaller), more room for command buttons
+- **Building selected during calm:** Full upgrade/training panel
+- **Building selected during combat:** Compressed — just the train buttons, no stats
+
+#### Channel 4: Information Surface
+
+**What it controls:** Tooltips, advisor hints, tutorial text, message log prominence, help system.
+
+| Player Behavior | Information Surface |
+|---|---|
+| Hovering over unknown element | Tooltip appears (existing system). After 3rd hover on same element: tooltip delayed further (they know it) |
+| Player hasn't taken action for 15s | Contextual hint fades in at bottom: "Right-click to move units" / "Press H for help" |
+| Player just discovered a formation | Discovery banner (existing), PLUS mini-tutorial hint about F-key 10s later |
+| Player pressing many hotkeys quickly | All hints suppressed. This is an experienced player — don't patronize |
+| Player opened advisor (H) recently | Suppress duplicate advisor tips from hint system for 60s |
+| Player lost same building type twice | Targeted hint: "Try placing Sentinels near your [building]" (escalating specificity) |
+
+The information surface implements **familiarity decay**: the more the player interacts with an element, the less the GUI explains it. First time selecting a Warden: full stat card with labels. Tenth time: compact card, numbers only. The interface grows up with the player.
+
+#### Channel 5: Atmosphere Surface
+
+**What it controls:** Panel background gradients, border glow colors, font brightness, Koch border depth, ambient particle density.
+
+This is the subtle channel — the one the player *feels* but can't articulate:
+
+| Emotional Context | Atmosphere Surface |
+|---|---|
+| Peaceful economy | Warm amber gradients, Koch depth-1 borders, soft glow, low particles |
+| Tension rising | Cool blue-gray gradients, borders sharpen to depth-2, fonts brighten |
+| Active combat | Dark panels (more contrast for game area), borders flash on damage events, fonts high-contrast |
+| Victory aftermath | Gold-tinged gradients, borders relax to depth-1, celebratory particle burst |
+| Defeat imminent | Red-tinged panels, Koch borders deepen to depth-3 (visual complexity = danger), fonts desaturate |
+
+The atmosphere surface is the Presence Director's most powerful tool because it operates below conscious awareness. The player doesn't think "the panels got darker" — they *feel* the intensity shift.
+
+### The Priority Stack
+
+When channels conflict (e.g., economy crisis wants to expand resource bar, but combat wants to minimize it), the Presence Director resolves via priority:
+
+```
+1. Threat Surface       (combat = highest priority, always wins)
+2. Command Surface      (player's active selection must be responsive)
+3. Economy Surface      (resources matter, but yield to combat)
+4. Information Surface  (hints yield to everything)
+5. Atmosphere Surface   (ambient, never blocks functional elements)
+```
+
+Within a channel, the most recent state change wins. If combat starts while economy crisis is active, the economy alert compresses to a tiny flashing icon rather than a full bar expansion.
+
+### The Memory — Player Profile
+
+The Presence Director maintains a per-session **player profile** that influences GUI behavior:
+
+```python
+profile = {
+    "hotkey_fluency": 0.0–1.0,    # how often player uses hotkeys vs clicking buttons
+    "camera_activity": 0.0–1.0,    # how often player moves camera (map awareness)
+    "selection_speed": 0.0–1.0,    # average time between selections (micro skill)
+    "advisor_usage": 0.0–1.0,      # how often they press H (confusion level)
+    "tooltip_dependency": 0.0–1.0,  # how often they hover for tooltips
+    "economy_attention": 0.0–1.0,   # how often they check resources / build
+    "combat_micro": 0.0–1.0,       # how actively they micro during fights
+}
+```
+
+A player with `hotkey_fluency: 0.9` and `tooltip_dependency: 0.1` gets: smaller buttons (they don't click them), no button labels after first 5 minutes, suppressed tooltips, compact unit cards, more screen space for the game area.
+
+A player with `hotkey_fluency: 0.1` and `advisor_usage: 0.8` gets: larger buttons, persistent labels, expanded tooltips, proactive hints, advisor suggestions surfaced without pressing H.
+
+**The interface literally reshapes itself around the player's skill level.** Not through a settings menu. Through observation.
+
+### Relationship to the Incident Director
+
+The Presence Director and Incident Director are siblings — they share the same sensory inputs (game state, player actions, emotional inference) but control different instruments. The Incident Director controls the *challenge*. The Presence Director controls the *lens through which the challenge is perceived*.
+
+They communicate through a shared **game mood** signal:
+
+```python
+mood = {
+    "tension": 0.0–1.0,          # from Incident Director
+    "action_density": 0.0–1.0,    # from Tempo Ear (shared)
+    "emotional_state": str,        # from Drama Ear (shared)
+    "player_profile": dict,        # from Presence Director (shared back)
+}
+```
+
+When the Incident Director decides to send a deceptive cadence (surprise second wave), it signals the Presence Director: "prepare for threat escalation in 3s." The Presence Director pre-darkens the atmosphere surface and keeps the threat indicators partially active — so when the second wave hits, the GUI is *already ready*. The player's subconscious registered the atmospheric shift before the enemies appeared. They were warned without being warned.
+
+### Scheduled Introduction
+
+| Version | What's Added |
+|---|---|
+| **v10_zeta** | Foundation: Channel 1 (Economy Surface) + Channel 5 (Atmosphere Surface). Player profile tracking begins. Smooth transitions for resource bar |
+| **v10_eta** | Channel 2 (Threat Surface) adaptive minimap and tension bar. Channel 4 (Information Surface) familiarity decay for tooltips |
+| **v11** | Channel 3 (Command Surface) context-adaptive bottom panel. Full 5-channel integration. Shared mood signal with Incident Conductor |
+| **v12+** | Player profile persists across sessions. Profile-driven interface reshaping. Community GUI presets |
+
+### Implementation
+
+| Component | Scope |
+|---|---|
+| `presence.py` | New file. `PresenceDirector` class. Five channel state machines. Player profile tracker. Priority stack resolver. Transition animator (fade/slide/scale). Shared mood signal |
+| `gui.py` | Refactor drawing methods to accept channel overrides: `alpha`, `scale`, `offset`, `detail_level`. Each panel checks `presence.get_channel_state()` before rendering |
+| `game.py` | Feed player actions to Presence Director (same feed as Incident Conductor). Instantiate `PresenceDirector` alongside `EnemyAI`. Pass shared mood object |
+| `constants.py` | `PRESENCE_CHANNEL_*` — transition durations, priority weights, profile decay rates, atmosphere color palettes per mood |
+
+**Estimated scope:** `presence.py` ~300-400 lines (state machines are small, transitions are the bulk). `gui.py` modifications ~100 lines (adding channel-awareness to existing draw methods). The architecture is already half-built — the progressive resource reveal and context-sensitive bottom panel are Channel 1 and Channel 3 prototypes.
+
+---
+
 ## Version Pipeline
 
 | Version | Codename | Status | Theme |
@@ -977,10 +1264,10 @@ At Layer 6+, the advisor transitions from teacher to companion. It no longer tel
 | v10_7 | Edge Case Polish | **SHIPPED** | Harmonic Pulse (evolved from Sentinel's Cry), sapper detonation, straggler metamorphosis |
 | v10_delta | Physics & Energy | **SHIPPED** | Physics movement, energy/stamina, spring formations, player-driven squads |
 | v10_epsilon | Formation Math | **SHIPPED** | Correct fractal geometry, rotation combat, formation discovery, Don't Panic advisor (basic), UX overhaul |
-| v10_zeta | Economy Depth | **NEXT** | Helper buildings, production buildings, drop-offs, Forge, Tonic resource, Sentinel Lattice (D1-D4) |
-| v10_eta | The Fourth & Fifth | PLANNED | Bulwark + Lancer, Lissajous formation, triads, 7-rank system, characteristics, Sentinel D6 + tuning |
-| v11 | Harmonic Awakening | PLANNED | Mender (6th tone), Penrose formation, procedural audio, GF(7) harmony, Resonance resource, The Fundamental (tone 0 emergence), base drone music, geological map gen |
-| v12 | Blood & Chaos | PLANNED | Sage (7th tone), Hilbert formation, enemy blood magic, hex system, full Heptarchy, ruins & resonance scars |
+| v10_zeta | Economy Depth | **NEXT** | Helper buildings, production buildings, drop-offs, Forge, Tonic resource, Sentinel Lattice (D1-D4), Incident Conductor v2 Tempo Ear, Presence Director foundation (Economy + Atmosphere channels) |
+| v10_eta | The Fourth & Fifth | PLANNED | Bulwark + Lancer, Lissajous formation, triads, 7-rank system, characteristics, Sentinel D6 + tuning, Incident Conductor Harmony Ear (GF(7) counter-composition), Presence Director Threat + Information channels |
+| v11 | Harmonic Awakening | PLANNED | Mender (6th tone), Penrose formation, procedural audio, GF(7) harmony, Resonance resource, The Fundamental (tone 0 emergence), base drone music, geological map gen, Incident Conductor Drama Ear + cadence system, Presence Director full 5-channel + shared mood signal |
+| v12 | Blood & Chaos | PLANNED | Sage (7th tone), Hilbert formation, enemy blood magic, hex system, full Heptarchy, ruins & resonance scars, Full Incident Conductor (3-ear unified), Presence Director persistent player profiles |
 | v13 | Progressive Depth | PLANNED | 7 depth layers, Tree of Life evolution, emergent GUI, Noita-level secrets, full 7-epoch map gen, Lorenz weather |
 | v14 | Godot Migration | PLANNED | Full port to Godot 4, GPU shaders, 1000+ units, visible waveforms, multiplayer ghosts |
 
@@ -2106,6 +2393,15 @@ These emerge from the math and from system interactions. Not bugs — features w
 | Multiplayer ghosts | **Scheduled** (server-side ghost collection/injection, cross-game palimpsest) | v14 |
 | Don't Panic advisor (foundation) | **Implemented** (H hotkey, 14 rules, Layer 0-1 scope, calm blue overlay) | v10_epsilon |
 | Don't Panic advisor (full) | **Scheduled** (depth-layer gating, wiki links, object highlighting, 60+ rules) | v10_zeta → v11 |
+| Incident Director v1 (FSM) | **Implemented** (5-state FSM, tension, 13 flavours, counter-pick, straggler metamorphosis) | v10_6 |
+| Incident Conductor v2 (Tempo Ear) | **Scheduled** (action density tracking, adaptive cooldowns, rehearsal memory) | v10_zeta |
+| Incident Conductor v2 (Harmony Ear) | **Scheduled** (GF(7) chord-based counter-composition, musical intervals) | v10_eta |
+| Incident Conductor v2 (Drama Ear) | **Scheduled** (emotional inference, narrative arc adaptation, cadence system) | v11 |
+| Incident Conductor v2 (full) | **Scheduled** (3-ear unified conductor, cross-incident storytelling) | v12 |
+| Presence Director (foundation) | **Scheduled** (Economy + Atmosphere channels, player profile tracking, smooth transitions) | v10_zeta |
+| Presence Director (threat + info) | **Scheduled** (Threat Surface adaptive minimap, Information Surface familiarity decay) | v10_eta |
+| Presence Director (full) | **Scheduled** (5-channel integration, Command Surface, shared mood with Conductor) | v11 |
+| Presence Director (persistent) | **Scheduled** (cross-session player profiles, profile-driven interface reshaping) | v12+ |
 | Energy bar visual | **Implemented** (thin yellow/orange bar below HP, fractal_bar_simple) | v10_epsilon |
 | Velocity trails | **Implemented** (faint directional line behind moving units) | v10_epsilon |
 | Free unit counter | **Implemented** ("Free: 3S 2A" in squad bar) | v10_epsilon |
