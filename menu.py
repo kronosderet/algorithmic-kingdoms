@@ -207,11 +207,11 @@ class MainMenu:
     # Title at h/phi³ — first golden subdivision
     _TITLE_Y = int(SCREEN_HEIGHT / (_PHI ** 3))          # ≈170
     _SUB_Y = _TITLE_Y + int(68 / _PHI)                   # ≈212
-    # Difficulty buttons at h/phi² — second golden subdivision
+    # Difficulty buttons at h/φ² — second golden subdivision
     _BTN_Y = int(SCREEN_HEIGHT / (_PHI ** 2))             # ≈275
-    _BTN_W = 180
-    _BTN_H = 105
-    _BTN_GAP = 10
+    _BTN_W = int(SCREEN_WIDTH / (_PHI ** 4))              # ≈186, φ⁴ subdivision of width
+    _BTN_H = int(_BTN_W / _PHI)                           # ≈114, golden ratio w:h
+    _BTN_GAP = int(_BTN_W / (_PHI ** 4))                  # ≈27, φ⁴ subdivision of button
     _EXIT_PAD = 30  # corner padding for quit button
 
     def _get_easy_btn_rect(self):
