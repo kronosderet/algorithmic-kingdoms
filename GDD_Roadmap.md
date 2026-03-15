@@ -1,7 +1,7 @@
 # GDD Roadmap — Resonance
 
 > Living document. Tracks the path from simple RTS to mathematical odyssey.
-> Current implemented version: **v10_epsilon3** (see `GDD_Current_v10.md` for full spec)
+> Current implemented version: **v10_epsilon4** (see `GDD_Current_v10.md` for full spec)
 > Last updated: 2026-03-15
 >
 > *"This game should be combat math. The paradox of it being nonexistent anywhere*
@@ -15,6 +15,48 @@
 Resonance is a game that teaches math the way math deserves to be taught — not with pencil and paper, but with armies that sing trigonometric harmonies, formations that warp spacetime through golden ratios, and enemies that cast hexes powered by divergent series. Every system in the game IS a mathematical object wearing a gameplay costume. The player learns to wield mathematics as a force multiplier without ever seeing an equation.
 
 The game opens as a simple gather-and-survive RTS. But like a fractal, every layer reveals three more beneath it. Survive long enough, experiment boldly enough, and the game unfolds into something that has no bottom.
+
+### The Playable Isomorphism
+
+Strip away the buildings, the units, the economy, the combat. What remains is a proof — experienced through play, not read on a page — that seven domains of mathematics are the same thing:
+
+| Tone | Domain | Projection | The Player... | Dark Mirror |
+|---|---|---|---|---|
+| **1 (Do)** | **Algebra** | GF(7) — modular arithmetic, field operations | **Composes** armies using tone arithmetic | Chaos (divergent series) |
+| **2 (Re)** | **Geometry** | Fractals — self-similar iterations at every scale | **Watches** formations emerge from composition | Strange attractors (divergent fractals) |
+| **3 (Mi)** | **Music** | Harmony — consonance, intervals, resolution | **Hears** whether the army is in tune | Cacophony (anti-harmony) |
+| **4 (Fa)** | **Color** | Spectrum — complementary, triadic, analogous | **Sees** whether the army looks right together | Anti-color (destructive interference) |
+| **5 (Sol)** | **Physics** | Mechanics — springs, rigid bodies, field forces | **Feels** units pulled into mathematical positions | Entropy (dissipation, heat death) |
+| **6 (La)** | **Chemistry** | Bonding — orbital filling, molecular formation, transmutation | **Combines** elements into compounds greater than their parts | Decay (decomposition, corrosion) |
+| **7 (Ti)** | **Biology** | Life — growth, evolution, self-replication, adaptation | **Grows** a living system from a single seed | Death (the Bitter Root, the end of growth) |
+
+**Tone 0 — Mathematics itself:** The meta-domain. Not a face of the isomorphism but the proof that the isomorphism exists. The ghost note that emerges when all seven domains sing in tune. Its dark mirror is **Incompleteness** — Gödel's theorem, the 7th characteristic that never reveals. The system contains a truth about itself it cannot prove.
+
+Seven domains. Seven tones. Seven senses of mathematical understanding. The isomorphism is complete — and it's prime. Every pair of domains produces a unique cross-product of insight. No two combinations collapse into the same thing. The GF(7) of knowledge has no zero divisors.
+
+The player interacts with all seven simultaneously — composing (algebra), watching (geometry), hearing (music), seeing (color), feeling (physics), combining (chemistry), growing (biology). They don't learn "math." They learn that math is one thing with seven faces, and they are the isomorphism between them.
+
+### The 3→7 Arc
+
+The entire game progression is a journey from **3 to 7**. Start with 3 unit types — discover 4 more. Start with 3 formations — discover 4 more. Start with 3 resources that matter — unlock 4 more. Every system begins as a triangle and ends as a heptagon. Three is the minimum structure (the simplest rigid polygon); seven is the complete field. The arc from 3 to 7 IS the fractal unfolding — simple rules producing complex depth.
+
+### The Numbers After Seven
+
+Nine constants form the game's mathematical DNA. Together they are a hierarchy — read top to bottom, the universe narrows from infinity to zero; read bottom to top, a single point generates everything:
+
+| Constant | Role in Design |
+|---|---|
+| **∞** | The limit — what fractals approach but never reach. Hilbert = formation 7 = "Limit" |
+| **7** | The field — the alphabet of composition. Prime, complete, irreducible |
+| **φ (1.618...)** | The irrational — beauty that never repeats. Vogel spirals, Penrose tiling, evasion curves. The antagonist to 7's rational order |
+| **6 (= 7−1)** | The group — the engine inside the frame. |GF(7)*| = 6. Six generators cycle; the seventh rests |
+| **3** | The structure — minimum viable shape. Sierpinski, Koch 1/3, triangle = scaffold for 7 |
+| **2** | The mirror — duality, opposition. Player/Dark 7, Harmony/Dissonance, map sizes = 2^(7±1) |
+| **1** | The generator — Tree of Life, multiplicative identity, fundamental frequency |
+| **0** | The identity — three zeros (Sage, Fundamental, Bitter Root). The void that holds meaning |
+| **log** | The perception — how human minds map infinity to feeling. Sierpinski depth = log₃(n). The game scales the way the brain scales |
+
+That hierarchy is the Tree of Life. That's the game. That's the math.
 
 ---
 
@@ -40,9 +82,108 @@ Each unit type is a musical tone. Compositions within formations map to musical 
 | **6** | La (A) | **Mender** | Support/sustain | Warm, minor quality, holds things together | v11 |
 | **7** | Ti (B) | **Sage** | Bridge/amplifier | Not a voice in the chord — the silence between fields. Adds 0 to harmony sum but opens the door to the Shadow Heptarchy | v12 |
 
+**Tone 0 — The Fundamental:**
+
+Tone 0 is not a unit type. It cannot be trained. It *emerges* when a formation achieves perfect harmonic resolution (tone sum ≡ 0 mod 7) and sustains it. In music, a **combination tone** (Tartini's "ghost note") appears when two frequencies are perfectly in tune — a phantom frequency neither instrument plays, but the listener hears. The Fundamental is this ghost note made manifest.
+
+| Tone | Note | Entity | Role | Musical Character | Introduced |
+|---|---|---|---|---|---|
+| **0** | — | **The Fundamental** | Emergent formation state | The ghost note — not played, but heard when everything resolves | v11 |
+
+Three distinct zeros exist in the Heptarchy:
+
+| Zero | Side | Nature | Arrives By |
+|---|---|---|---|
+| **Sage** (7 ≡ 0) | Player | Deliberate silence — the bridge between fields | Training (v12) |
+| **The Fundamental** | Player | Emergent resonance — the ghost note of perfect harmony | Sustained perfect resolution (v11) |
+| **Bitter Root** | Enemy | Corrupted silence — a dissonant note that refused to end | Neglect (straggler metamorphosis, v10_7) |
+
+The Sage *chooses* to be zero. The Fundamental *earns* zero through perfection. The Bitter Root *decays* into zero through neglect. Same mathematics, three paths to the additive identity.
+
 **The Gatherer as root note:** A formation with a Gatherer sounds like a chord resolving to its tonic. Pure military formations always have a slight rootlessness — like a chord missing its fundamental. A Gatherer-commander formation is an economy formation that gathers faster and buffs nearby production. But a Gatherer at the center of a Rose is also a vulnerability — protect the root note or the chord collapses.
 
 **GF(7) harmony calculation:** A formation's composition sums mod 7. A total of 0 (mod 7) = perfect resolution (back to root). 5 (mod 7) = dominant, strong but wants one more voice. The player learns modular arithmetic by listening — when the chord resolves, they feel it. When it's unresolved, they feel that tension and naturally seek to fill the gap.
+
+### The Seven Colors (Visible Spectrum)
+
+*Light and sound are the same wave equation at different frequencies. Color harmony IS musical harmony — the fifth face of the isomorphism.*
+
+Each tone maps to a color of the visible spectrum. This is not arbitrary — the rainbow IS a heptachord. Newton himself divided the spectrum into seven colors to mirror the musical scale. The game completes the circle: tones that sound good together also *look* good together, because the mathematics governing consonance is identical for both wave types.
+
+| Tone | Note | Unit | Color | Wavelength | Why This Color |
+|---|---|---|---|---|---|
+| **1** | Do | Gatherer | **Violet** (280°) | ~380nm | The root — deepest visible frequency, foundation, grounding. Violet is the bass note of light |
+| **2** | Re | Warden | **Indigo** (260°) | ~420nm | Steady, dark, reliable. The heavy infantry color — weighty, dependable |
+| **3** | Mi | Ranger | **Blue** (240°) | ~470nm | Bright, sharp, cutting. The major third — clear sightlines, long range |
+| **4** | Fa | Bulwark | **Green** (120°) | ~530nm | Supportive, natural, calming. The subdominant — the color of shields and stability |
+| **5** | Sol | Lancer | **Yellow** (60°) | ~580nm | Dominant, urgent, aggressive. The color of speed and decisive action |
+| **6** | La | Mender | **Orange** (30°) | ~620nm | Warm, healing, sustaining. The minor sixth — the color of fire that doesn't burn |
+| **7** | Ti | Sage | **Red** (0°) | ~700nm | The leading tone — highest visible frequency, unstable, powerful, wants to resolve. Red at the edge of perception, as Ti is at the edge of the octave |
+
+**Color harmony = Musical harmony = GF(7) arithmetic:**
+
+| Color Relationship | Musical Equivalent | GF(7) Operation | Visual Effect |
+|---|---|---|---|
+| **Complementary** (opposite on wheel) | Tritone / dominant interval | a + b ≡ 0 (mod 7) — resolution pair | Maximum contrast — the eye resolves. Violet+Yellow (1+5=6), Indigo+Orange (2+6=1), Blue+Red (3+7=3) |
+| **Triadic** (120° apart) | Major/minor triad | Three tones summing to target | Balanced, vibrant — three colors that feel complete |
+| **Analogous** (adjacent) | Small intervals (2nds, 3rds) | Adjacent tone numbers | Subtle, harmonious, low tension — beautiful but wants more voices |
+| **Full rainbow** (all 7) | Full octave | 1+2+3+4+5+6+7 = 28 ≡ 0 | Complete spectrum = perfect resolution. The formation IS white light |
+
+The visual learner composes by color the way the auditory learner composes by ear. A formation of Violet+Green+Yellow (1+4+5 = 10 ≡ 3) *looks* unresolved — it's a triadic scheme missing its complement. Add a Bulwark's Green shifts it. The player who has an eye for color is doing GF(7) arithmetic with their aesthetic sense.
+
+**The Dark 7 — Anti-Colors:**
+
+Enemy units use the **same hues** but corrupted — desaturated, darkened, shifted toward their complement:
+
+| Player Color | Dark 7 Mirror | Visual Treatment |
+|---|---|---|
+| Violet (Gatherer) | Dull grey-violet (Blight Reaper) | Desaturated, ashen — the root note drained of life |
+| Indigo (Warden) | Pale washed-out blue (Hollow Warden) | Hollow — the color is there but the depth is gone |
+| Blue (Ranger) | Faded blue-grey (Fade Ranger) | Ghostly — the sharpness blurred into mist |
+| Green (Bulwark) | Dark olive-black (Ironbark) | Petrified — green gone to stone |
+| Yellow (Lancer) | Sickly yellow-brown (Thornknight) | Corrupted urgency — speed turned to aggression |
+| Orange (Mender) | Dark red-brown (Bloodtithe) | Warmth curdled into blood — healing inverted to sacrifice |
+| Red (Sage) | Deep black-red (Hexweaver) | The leading tone consumed by darkness — red at the edge of visibility |
+
+The player reads friend from foe by **saturation**, not just hue. Player units are vivid, saturated, alive. Enemy mirrors are the same wavelength but dimmed — like a note played through a broken speaker. The physics is the same; the energy is wrong. Destructive interference in the visual domain.
+
+**Color Mixing as Composition Preview:** When selecting units for a new formation, the GUI shows the **mixed color** of the selected tones — additive color mixing following the same rules as tone summation. A perfect-resolution composition (sum ≡ 0) produces white or near-white. An unresolved composition produces a muddy, unsatisfying blend. The player sees the answer before the formation forms.
+
+### The Seven Domains (Octave of Knowledge)
+
+*The game IS GF(7) — not just in its mechanics, but in its pedagogy. Seven domains of mathematics, each a face of the same isomorphism, each teaching the player through a different sense.*
+
+The Heptarchy doesn't just govern the game's internal systems. It governs the game's relationship to mathematics itself. Each domain maps to a tone, a sense, a way of understanding — and each has its dark mirror in the Shadow Heptarchy:
+
+| Tone | Domain | Studies | Game System | The Player... | Dark Mirror |
+|---|---|---|---|---|---|
+| **1 (Do)** | **Algebra** | Symbol, operation, identity | GF(7) tone arithmetic, harmony sums, mod-7 composition | Composes | Chaos (divergent series, no closure) |
+| **2 (Re)** | **Geometry** | Shape, scale, self-similarity | Fractal formations, Koch/Sierpinski/Hilbert, building L-systems | Watches | Strange attractors (fractals that diverge) |
+| **3 (Mi)** | **Music** | Time, frequency, consonance | Procedural audio, formation singing, Fourier spectra | Hears | Cacophony (anti-harmony, dissonance) |
+| **4 (Fa)** | **Color** | Light, spectrum, complementarity | Rainbow unit palette, anti-color enemies, color mixing preview | Sees | Anti-color (destructive interference) |
+| **5 (Sol)** | **Physics** | Force, mass, equilibrium | Springs → rigid bodies → constraints → field physics | Feels | Entropy (dissipation, heat death) |
+| **6 (La)** | **Chemistry** | Bond, transformation, emergence | Orbital Resonance, periodic table of formations, molecular bonding, resource transmutation (Forge) | Combines | Decay (decomposition, corrosion) |
+| **7 (Ti)** | **Biology** | Growth, evolution, adaptation | Tree of Life (L-system growth), ecological succession, trait inheritance, ghost evolution, Living Strata | Grows | Death (Bitter Root, end of growth) |
+
+**Tone 0 — Mathematics itself:** The meta-domain. The domain that studies the other seven and proves they are the same. Not a face of the isomorphism but the proof that it exists — the ghost note that emerges when all seven domains sing in tune. Its dark mirror is **Incompleteness** (Gödel) — the system contains a truth about itself it cannot prove. The 7th characteristic. The question at the end of the Roadmap.
+
+**Why seven domains work:**
+
+Every pair of domains produces a unique insight — a cross-product that neither domain contains alone:
+
+| Cross-Product | Domains | Insight |
+|---|---|---|
+| Algebra × Geometry | 1 × 2 | Fractal recursion IS iterated function application |
+| Music × Color | 3 × 4 | Sound harmony and light harmony obey the same wave interference rules |
+| Physics × Chemistry | 5 × 6 | Forces between formations follow molecular bonding (constructive/destructive orbital overlap) |
+| Algebra × Biology | 1 × 7 | GF(7) cellular automata on terrain IS artificial life |
+| Geometry × Chemistry | 2 × 6 | Electron orbital filling IS fractal slot classification |
+| Music × Physics | 3 × 5 | Fourier Formations: spatial geometry → FFT → audible spectrum |
+| Color × Biology | 4 × 7 | The rainbow spectrum IS the visible octave of electromagnetic evolution |
+
+21 unique pairs (7 choose 2 = 21). Each pair is a lesson the player learns without being taught. The GF(7) of knowledge has no zero divisors — every combination produces something meaningful.
+
+**The 3→7 domain arc:** The player starts with three domains they can perceive: Algebra (composition), Geometry (visuals), Physics (movement). As the game deepens through layers, four more domains activate: Music (v11 audio), Color (v10_eta palette), Chemistry (v11 orbital resonance), Biology (v13 Living Strata + Tree evolution). The domain progression mirrors the unit progression — three at the start, seven by the end.
 
 ### The Seven Resources (Octave of Matter)
 
@@ -51,16 +192,16 @@ Each unit type is a musical tone. Compositions within formations map to musical 
 | **1** | **Fiber** | Organized carbon chains — life's scaffolding | Trees, plants | Wood | Green |
 | **2** | **Crystal** | Ordered mineral lattice — rigid structure | Stone deposits | Stone | Pale blue |
 | **3** | **Ore** | Dense metallic bonds — strength, conductivity | Iron veins | Iron | Silver |
-| **4** | **Sap** | Tree of Life essence — concentrated vitality | Tree of Life (slow, precious) | *New* | Amber |
+| **4** | **Tonic** | Tree of Life essence — the root note of matter | Tree of Life (slow, precious) | *New* | Amber |
 | **5** | **Flux** | Purified energy potential — the transformer | Gold seams (rare) | Gold | Gold |
 | **6** | **Alloy** | Ore + Crystal fused under Flux — composite | Forge (crafted) | Steel | Blue-steel |
 | **7** | **Resonance** | Crystallized harmony — mathematical substance | Formation singing (!) | *New* | Violet |
 
 **Resonance** is not mined. It is *produced by your army existing in harmony*. Formations passively generate Resonance proportional to their harmony quality. The better your compositions, the more you produce. This is the resource that bridges economy and combat into a single unified system. Rank-7 units amplify Resonance generation.
 
-**Sap** flows from the Tree of Life itself — slowly, preciously. It's the resource of growth and healing. The Tree produces more Sap as it evolves through depth layers, creating a feedback loop: deepen the game → more Sap → more healing/growth → survive longer → deepen further.
+**Tonic** flows from the Tree of Life itself — slowly, preciously. In music, the tonic is the root note, the home key everything resolves to. In biology, a tonic is a restorative essence. The Tree's Tonic is both: the resource of growth and healing, and the fundamental frequency from which all harmony derives. The Tree produces more Tonic as it evolves through depth layers, creating a feedback loop: deepen the game → more Tonic → more healing/growth → survive longer → deepen further.
 
-Resource rename is cosmetic — happens whenever it feels right. The meaningful additions are Sap (v10_zeta) and Resonance (v11).
+Resource rename is cosmetic — happens whenever it feels right. The meaningful additions are Tonic (v10_zeta) and Resonance (v11).
 
 ### The Seven Octaves (Rank System)
 
@@ -455,6 +596,21 @@ In multiplayer-connected mode, map generation gains an **Epoch 0** that runs bef
 
 **The philosophical payoff:** The map the player explores was shaped by plate tectonics, carved by water, grown by forests, built upon by ancient procedural civilizations, scarred by ancient battles, and haunted by the echoes of real human players who came before. Every tile is a layer cake of mathematical processes and human decisions. The player isn't starting fresh — they're inheriting a world with *history*. And when they're done, their own game becomes a ghost in someone else's world.
 
+**Biology across the full system:** The seventh domain — Biology — isn't confined to the Tree. It permeates:
+
+| System | Biological Process |
+|---|---|
+| **Tree of Life** | L-system growth — branching, rooting, adaptation to environment |
+| **Ecological succession** | Logistic growth, carrying capacity, fire/disease as periodic reset |
+| **Trait inheritance** (backlog) | Veteran traits spread to nearby recruits — genetic drift in unit culture |
+| **Formation DNA** (backlog) | Formations can be "bred" — sexual reproduction of mathematical structures |
+| **Ghost evolution** (v14) | Successful strategies propagate across playthroughs, failed ones decay — natural selection across games |
+| **Straggler metamorphosis** | Environmental pressure transforms units — mutation under stress → Bitter Root |
+| **Resource ecology** | Trees regrow, deposits regenerate — the map IS an ecosystem |
+| **The Tree Remembers** | Every GF(7) operation recorded — the Tree's score IS its DNA, the playback IS its phenotype |
+
+Biology's dark mirror is **Death** — the Bitter Root. Where the Tree grows from a seed toward complexity, the Bitter Root grows from neglect toward corruption. Both are biological processes. Both follow the mathematics of growth. One grows toward light. The other grows toward rot. Same equation, different sign.
+
 The map is a fossil record. The player is the latest stratum. And someday, they'll be the ruin someone else discovers.
 
 ### Heptarchy Integration
@@ -477,6 +633,71 @@ The map is a fossil record. The player is the latest stratum. And someday, they'
 | **v12** | Epoch 5-6: procedural ancient civilizations, ruins, resonance scars, dissonance wounds. Archaeological discovery system |
 | **v13** | Full 7-epoch generation. Ruins as gameplay objects (excavation, Resonance Obelisks). Depth-layer-gated map readability. Seasonal cycles + Lorenz weather |
 | **v14** | Multiplayer ghost layer. Server-side ghost collection/injection. Ghost decay. Cross-game palimpsest. GPU-accelerated terrain rendering |
+
+---
+
+## The Physics Substrate — From Springs to Reality
+
+*Spring physics is the scaffolding. Rigid bodies are the building. The magic needs real walls to bounce off.*
+
+The current spring-damper system (v10_delta) proves the concept: units move with physical intent, formations cohere through forces, energy drains with action. But springs are a simplification — they model *attraction* beautifully but cannot model *collision*, *rotation*, *constraint*, or *momentum transfer*. These are the verbs that magic effects need to act upon.
+
+The physics substrate evolves across versions, each layer giving the "reality distortion" effects (v11+) a deeper, more convincing mechanical surface to warp:
+
+### Physics Evolution Pipeline
+
+| Version | Physics Layer | What It Adds | What It Enables |
+|---|---|---|---|
+| **v10_delta** (done) | **Point-mass springs** | Velocity, acceleration, kinematic braking, spring-damped formation slots, energy/stamina pools | Formations that breathe, units that feel weight, exhaustion as gameplay |
+| **v10_epsilon** (done) | **Formation combat forces** | Rose sweep (rotational), Sierpinski pulse (radial), Koch contract (inward), Spiral tighten/loosen | Formations as physical machines — geometry does damage |
+| **v10_eta** | **Momentum transfer** | Lancer charge damage scales with velocity at impact. Bulwark mass absorbs momentum (immovable object). Knockback proportional to mass ratio | Real collision consequences — heavy units stop light ones. Charge physics. Mass matters |
+| **v11** | **Rigid body foundations** | Units gain angular velocity and rotational inertia. Formations rotate as rigid groups (not just springs). Collision detection between formation bounding shapes | Formations physically collide — a Rose and Koch overlapping creates real mechanical interference. Fermata (time dilation) warps angular velocity, not just translation |
+| **v12** | **Constraint systems** | Joint constraints between units in formation (distance, angle, alignment). Formation geometry becomes a rigid skeleton with spring-damped joints | Hex effects physically distort the skeleton — Shatter breaks Bulwark constraints, Discord loosens Warden joints. Formations can be *mechanically damaged*, not just stat-debuffed |
+| **v13** | **Field physics** | Resonance fields as physical fields (gradient, divergence, curl). Harmony creates potential wells. Dissonance creates repulsive ridges. Units roll downhill in the resonance landscape | Reality distortion IS field manipulation — Modulation (space warp) literally bends the potential landscape. Enemies curve away because the gradient pushes them. The Fundamental deepens the potential well, pulling everything toward resolution |
+| **v14 (Godot)** | **GPU-accelerated physics** | Full rigid body + constraint solver on GPU. 1000+ units with real physics. Particle-level destruction. Soft-body deformation for high-rank formations | The mathematics escapes its performance cage. Every effect that was simulated in Pygame becomes real in Godot |
+
+### The Principle: Magic Acts on Physics, Not on Stats
+
+In most games, a "slow spell" reduces a speed variable. In Resonance, Fermata (time dilation) **increases the viscosity of the local physics substrate** — units move through thicker spacetime. Their springs respond slower. Their momentum carries further (because damping is reduced in dilated time). They *slide* through the effect, not *walk slowly*.
+
+This means:
+- **Modulation** (space warp) bends the coordinate system — pathfinding curves because *space itself curves*. Not a pathfinding debuff — a genuine coordinate transformation applied to the physics frame
+- **Dissonance** (HP oscillation) applies a damped harmonic oscillator to the unit's HP — the HP *physically resonates* at the formation's frequency, amplitude decaying exponentially. Not damage ticks — wave mechanics
+- **Stochastic Resonance** injects the formation's fractal pattern as noise into enemy decision functions — the formation's geometry becomes a physical noise source that corrupts targeting
+
+Every magic effect is a physics operation wearing a game costume. The player sees "my formation slowed the enemies." The physicist sees "the damping coefficient in the local reference frame increased by a factor proportional to the resonance field strength." Both are correct. Both are real.
+
+### Why This Matters
+
+The magic system described in the original vision (note #1 in `future ideas-crazy stuff.txt`) requires a real substrate:
+
+> *"No fireballs, more like canceling out time space and matter"*
+
+You can't cancel spacetime if spacetime is just a speed variable. You need a physics substrate deep enough that "canceling spacetime" is a meaningful operation — one with consequences that emerge naturally rather than being scripted. The progression from springs to rigid bodies to constraint systems to field physics builds exactly this substrate, one layer per version, so that by v13 the "singing magic" has real walls to resonate through.
+
+The enemy's blood magic works identically — dark sacrifice generates a Dissonance field that acts on the same physics. The combat between harmony and chaos is a combat between two field configurations acting on the same physical substrate. Same physics, different generators. Same math, different signs.
+
+### Heptarchy Integration
+
+| Heptarchy Layer | Physics Connection |
+|---|---|
+| **7 Tones** | Each unit type has a distinct physics profile (mass, inertia, damping). The Bulwark is *physically* heavy. The Lancer is *physically* fast. The Sage *physically* drifts |
+| **7 Formations** | Each formation imposes different constraints (Rose = rotational, Koch = perimeter, Sierpinski = hierarchical). Formation geometry IS the constraint graph |
+| **7 Harmonic Tiers** | Each tier deepens the physics: Tier 1 = spring only, Tier 3 = rigid group, Tier 5 = field generation, Tier 7 = full reality distortion |
+| **7 Characteristics** | Elasticity (κ) = spring recovery. Density (ρ) = mass. Precision (σ) = constraint stiffness. Entropy (S) = noise injection. Each characteristic IS a physics parameter |
+| **The Fundamental** | The deepest potential well in the resonance field. When The Fundamental emerges, the physics landscape acquires a basin of attraction at the formation's center — everything nearby rolls toward resolution |
+
+### Scheduled Introduction
+
+| Version | What's Added |
+|---|---|
+| **v10_delta** | Point-mass springs, energy/stamina (done) |
+| **v10_epsilon** | Formation combat forces (done) |
+| **v10_eta** | Momentum transfer, mass-based collision consequences |
+| **v11** | Rigid body rotation, formation collision, field physics foundation |
+| **v12** | Constraint skeletons, mechanical hex damage |
+| **v13** | Full resonance field physics, gradient-based movement |
+| **v14** | GPU rigid body solver, 1000+ unit physics, soft-body formations |
 
 ---
 
@@ -755,10 +976,10 @@ At Layer 6+, the advisor transitions from teacher to companion. It no longer tel
 | v10_6 | Difficulty Rebalance | **SHIPPED** | Fractal formations (4), stances (4), 5 new enemy types, adaptive difficulty |
 | v10_7 | Edge Case Polish | **SHIPPED** | Harmonic Pulse (evolved from Sentinel's Cry), sapper detonation, straggler metamorphosis |
 | v10_delta | Physics & Energy | **SHIPPED** | Physics movement, energy/stamina, spring formations, player-driven squads |
-| v10_epsilon | Formation Math | **NEXT** | Correct fractal geometry, rotation combat, formation discovery, Don't Panic advisor (basic) |
-| v10_zeta | Economy Depth | PLANNED | Helper buildings, production buildings, drop-offs, Forge, Sap resource, Sentinel Lattice (D1-D4) |
+| v10_epsilon | Formation Math | **SHIPPED** | Correct fractal geometry, rotation combat, formation discovery, Don't Panic advisor (basic), UX overhaul |
+| v10_zeta | Economy Depth | **NEXT** | Helper buildings, production buildings, drop-offs, Forge, Tonic resource, Sentinel Lattice (D1-D4) |
 | v10_eta | The Fourth & Fifth | PLANNED | Bulwark + Lancer, Lissajous formation, triads, 7-rank system, characteristics, Sentinel D6 + tuning |
-| v11 | Harmonic Awakening | PLANNED | Mender (6th tone), Penrose formation, procedural audio, GF(7) harmony, Resonance resource, base drone music, geological map gen |
+| v11 | Harmonic Awakening | PLANNED | Mender (6th tone), Penrose formation, procedural audio, GF(7) harmony, Resonance resource, The Fundamental (tone 0 emergence), base drone music, geological map gen |
 | v12 | Blood & Chaos | PLANNED | Sage (7th tone), Hilbert formation, enemy blood magic, hex system, full Heptarchy, ruins & resonance scars |
 | v13 | Progressive Depth | PLANNED | 7 depth layers, Tree of Life evolution, emergent GUI, Noita-level secrets, full 7-epoch map gen, Lorenz weather |
 | v14 | Godot Migration | PLANNED | Full port to Godot 4, GPU shaders, 1000+ units, visible waveforms, multiplayer ghosts |
@@ -783,7 +1004,7 @@ entities.py → entity_base.py + unit.py + building.py + building_shapes.py + pr
 4 fractal formations (Polar Rose, Golden Spiral, Sierpinski, Koch). 4 stances (Aggressive, Defensive, Guard, Hunt). 5 specialist enemy types — The Dark 7: Blight Reaper, Hollow Warden, Fade Ranger, Ironbark, Thornknight, Bloodtithe, Hexweaver (7 total, 1:1 mirror of player Heptarchy tones). Adaptive difficulty engine with pressure tracking.
 
 ### v10_7 — Edge Case Polish
-Harmonic Pulse cooldown tuning, resonance field range balancing, sapper sympathetic detonation, straggler metamorphosis (rooting → Entrenched Titan).
+Harmonic Pulse cooldown tuning, resonance field range balancing, sapper sympathetic detonation, straggler metamorphosis (rooting → Bitter Root).
 
 </details>
 
@@ -810,7 +1031,7 @@ The foundation rebuild. Replaced teleport-style movement with real physics, hard
 
 ---
 
-## v10_epsilon — Formation Math (NEXT)
+## v10_epsilon — Formation Math (SHIPPED)
 
 *The formations stop being decoration and become weapons.*
 
@@ -923,7 +1144,7 @@ Foreman-rank Gatherers unlock 1×1 helper buildings near resource clusters. Gath
 | Gatherer Skill | Helper Building | Function |
 |---|---|---|
 | Flux Miner Foreman | Flux Node | Local Flux drop-off |
-| Fiberjack Foreman | Grove Tap | Local Fiber drop-off |
+| Fiberjack Foreman | Fiber Node | Local Fiber drop-off |
 | Crystal Mason Foreman | Crystal Node | Local Crystal drop-off |
 | Ore Miner Foreman | Ore Node | Local Ore drop-off |
 | Builder Foreman | Lattice | +25% build/repair speed aura |
@@ -935,7 +1156,7 @@ Master-rank Gatherers upgrade helpers into 2×2 production buildings. Passive re
 
 | Helper | Upgrades To | Production |
 |---|---|---|
-| Grove Tap | Fiber Spire | Fiber passively + Gatherer boost |
+| Fiber Node | Fiber Spire | Fiber passively + Gatherer boost |
 | Flux Node | Flux Spire | Flux passively + Gatherer boost |
 | Crystal Node | Crystal Spire | Crystal passively + Gatherer boost |
 | Ore Node | Ore Spire | Ore passively + Gatherer boost |
@@ -999,12 +1220,19 @@ This version adds Bulwark and Lancer (tones 4 and 5), expands ranks from 5 to 7,
 
 ### η.3 Seven-Rank Expansion
 
-Ranks 1-5 remain as currently implemented. Two new ranks added:
+Ranks 1-5 remain as currently implemented. Two new ranks added, and the XP curve shifts to **base-7 exponential** — each rank requires 7× the previous:
 
-| Rank | XP Threshold | New Unlock |
-|---|---|---|
-| 6 — Master | ~2.5× Rank 5 | 5th characteristic revealed + **Presence aura** (passive stat buff to nearby allies) |
-| 7 — Transcendent | ~4× Rank 5 | 6th characteristic revealed + **Resonance generation** (passively produces the Resonance resource) |
+| Rank | Name | XP Threshold (7^n) | New Unlock |
+|---|---|---|---|
+| 1 | Recruit | 0 | — |
+| 2 | Tested | 7 | 1st characteristic revealed |
+| 3 | Proven | 49 | 2nd characteristic revealed |
+| 4 | Hardened | 343 | 3rd characteristic + trait eligible |
+| 5 | Decorated | 2,401 | 4th characteristic + commander eligible |
+| 6 | Master | 16,807 | 5th characteristic + **Presence aura** (passive stat buff to nearby allies) |
+| 7 | Transcendent | 117,649 | 6th characteristic + **Resonance generation** (passively produces the Resonance resource) |
+
+The numbers look absurd, but logarithmic perception means each rank *feels* equally far away — the jump from 5→6 feels as long as from 2→3. The XP thresholds ARE powers of 7, reinforcing the Heptarchy at the deepest progression layer. The player who checks the math discovers the pattern; the player who doesn't still feels the even pacing.
 
 Rank 7 is extremely rare in normal play. A Rank-7 unit is a strategic asset — a living tuning fork that generates economy by existing. The tension: use them in combat (where they amplify formations) or protect them in the rear (where they safely generate Resonance). Losing a Rank-7 unit is devastating.
 
@@ -1029,6 +1257,19 @@ With 5 tones available, the harmony system graduates from intervals to chords:
 | Gatherer + 2 military | Rooted triad | Maximum stability | Gatherer grounds the chord — highest possible regen |
 | Lancer + Warden + Ranger | Power triad | Maximum offense | All damage, no sustain — burns bright, burns fast |
 | 3:2:2 any types | Resolution (≡ 0 mod 7) | Perfect (1.0) | The chord resolves — player feels completion |
+
+### η.5b The 6/7 Tension — Active vs. Transcendent
+
+A formation of **6 units** contains all generators of GF(7)* — every element of the multiplicative group is present. The formation is mathematically *complete* in the active sense: all cycles are running, all interactions fire. Maximum combat energy.
+
+Add the **7th unit** and something shifts. The formation reaches the **Limit**. 7 ≡ 0 (mod 7) — the formation sum gains an additive identity. The chord *resolves*. It becomes complete but also... still. Like a held breath after the final note.
+
+| Squad Size | Mathematical State | Gameplay Character |
+|---|---|---|
+| **6 units** | All generators present, |GF(7)*| = 6 | Maximum combat energy — aggressive, volatile, every interaction at full power |
+| **7 units** | Additive identity enters, formation "completes" | Maximum harmonic power — the formation wants to rest. Resonance generation peaks, but combat energy diminishes. The chord has resolved; there's nothing left to *drive toward* |
+
+This makes squad composition a genuine strategic dilemma: 6 = the burning edge, 7 = the transcendent whole. An army of sixes fights. An army of sevens *sings*. The player who mixes both controls the rhythm — aggression and resolution, tension and release, the engine and the frame.
 
 ### η.6 Sentinel D6 & Tuning
 
@@ -1087,6 +1328,49 @@ Resonance (resource #7) comes online. It is not gathered — it is *sung into ex
 
 The economy now has two loops: **material** (Fiber/Crystal/Ore/Flux/Alloy — gathered by Gatherers) and **harmonic** (Resonance — generated by formations). The player must balance both. An army that only fights generates no Resonance. An army that only sings has no materials to build.
 
+### 11.2b The Fundamental — Tone 0 Emergence
+
+When a formation achieves **perfect resolution** (tone sum ≡ 0 mod 7) and sustains it for a threshold duration, **The Fundamental** emerges — the phantom tone that appears when all voices align.
+
+| Aspect | Detail |
+|---|---|
+| **Trigger** | Formation tone sum ≡ 0 (mod 7) sustained for N seconds (tunable, ~10s) |
+| **Effect** | Formation gains a phantom +1 stat aura (ATK, DEF, speed), Resonance generation spikes ×3, visual inner glow (the ghost note made visible), and the formation's procedural audio gains a deep sub-bass fundamental tone |
+| **Fragility** | Lose any unit and the sum shifts — the Fundamental vanishes instantly. This is a state of grace, not a permanent upgrade |
+| **Primary Resonance source** | The bulk of Resonance generation comes from Fundamental-state formations. Basic harmony produces some; perfection produces an order of magnitude more |
+| **The mirror** | The Bitter Root (enemy tone 0) is the anti-Fundamental. Where the Fundamental emerges from sustained harmony, the Bitter Root emerges from sustained dissonance. Same zero, opposite path. Same mechanic, opposite polarity |
+
+**Design intent:** The Fundamental is the carrot that teaches GF(7) arithmetic. The player learns: "certain compositions make my formation glow and produce tons of Resonance." They experiment. They discover that tone sum ≡ 0 is the key. They're doing modular arithmetic. They just think they're making their army sing.
+
+**The Resonance Cascade:** When The Fundamental manifests, its presence shifts the ambient harmony field around it. A nearby formation previously at tone sum 3 now perceives an ambient +4 from the Fundamental's field — 3 + 4 = 7 ≡ 0. That formation also resolves. Its Fundamental emerges. The cascade continues.
+
+A player who carefully positions multiple formations can trigger a **Resonance Cascade** — every formation resolving in sequence, each one's Fundamental triggering the next:
+
+| Phase | What Happens |
+|---|---|
+| **Trigger** | Formation A achieves perfect resolution. The Fundamental emerges. |
+| **Propagation** | Formation B (within cascade radius) receives the Fundamental's ambient field contribution. If B's tone sum + contribution ≡ 0 (mod 7), B also resolves. |
+| **Chain** | Each newly resolved formation propagates to its neighbors. The cascade is depth-first — it follows proximity, not formation order. |
+| **Peak** | For a few seconds, every resolved formation sings simultaneously. The audio builds from a single ghost note to a full harmonic series. Fractal depth on all formations spikes — more Koch iterations, deeper Sierpinski recursion. Spring physics lock into crystalline equilibrium. |
+| **Decay** | Resonance generation spikes massively during the cascade. Then the ambient fields fade. Formations keep their individual Fundamental state if they still satisfy tone sum ≡ 0 on their own. If not, they drop out of resolution as the ambient support disappears. |
+
+The cascade is the game's peak moment — all four faces of the isomorphism (algebra, geometry, music, physics) visible simultaneously for a handful of seconds. Then it fades. Because that's what resonance does. And the player spends the rest of the campaign trying to make it happen again.
+
+**Strategic cost:** Cascading requires formations positioned close together — vulnerable to AoE. The player trades spatial safety for harmonic transcendence. The enemy's Cacophony hex (v12) specifically targets cascade chains.
+
+**Composition examples (7 tones available in v11):**
+
+- Gatherer(1) + Warden(2) + Bulwark(4) = 7 ≡ 0 ✓
+- Ranger(3) + Bulwark(4) + Mender(6) + Sage(7) = 20 ≡ 6 ✗
+- Warden(2) + Ranger(3) + Lancer(5) + Mender(6) + Sage(7) = 23 ≡ 2 ✗
+- Warden(2) + Lancer(5) + Mender(6) + Sage(7) = 20 ≡ 6 ✗
+- Gatherer(1) + Ranger(3) + Lancer(5) + Mender(6) + Sage(7) = 22 ≡ 1 ✗
+- Gatherer(1) + Warden(2) + Ranger(3) + Sage(7) = 13 ≡ 6 ✗
+- Gatherer(1) + Mender(6) + Sage(7) = 14 ≡ 0 ✓
+- All seven tones: 1+2+3+4+5+6+7 = 28 ≡ 0 ✓ (The Full Octave — always resolves)
+
+The player discovers: small efficient trios can resolve as perfectly as the Full Octave. Each perfect composition is a chord the player has *found* in the algebra.
+
 ### 11.3 Procedural Audio Foundation
 
 No asset audio files. All sound is generated mathematically:
@@ -1127,6 +1411,24 @@ Each formation generates a continuous tone based on its mathematical properties.
 | **Hilbert** | Dense continuous spectrum — all frequencies simultaneously, white noise becoming music | Curve depth, coverage area |
 
 The player HEARS the math. A resolved chord (≡ 0 mod 7) sounds consonant — like arriving home. An unresolved chord sounds tense, searching. 100% harmony is a pure tone. 50% harmony has beating/interference. The player's ear teaches them GF(7) arithmetic.
+
+### 11.5b Fourier Formations — Shape IS Sound
+
+The formation singing system has a deeper layer: every formation shape has a **Fourier transform**. The spatial arrangement of units IS a signal. Its Fourier decomposition IS frequencies. The formation doesn't play an arbitrary chord assigned by the designer — it plays **its own spatial spectrum**.
+
+| Formation | Fourier Character | Audio Signature |
+|---|---|---|
+| **Rose** | Dominant frequency = petal count (k), harmonics at 2k, 3k... | Clean, periodic hum. More petals = higher pitch. Unmistakable |
+| **Spiral** | Spectrum spreads like 1/f noise (pink noise) | Continuous, warm, wide-band. The golden ratio in its DNA ensures it never repeats — the sound breathes |
+| **Sierpinski** | Discrete spectrum at powers of 3 (fractal recursion) | Staccato, layered. Each recursion depth adds a new overtone at 3× the previous. Self-similar in sound as in shape |
+| **Koch** | Spectrum at powers of 4 (4 segments per iteration) | Shimmering, dense. The infinite perimeter generates infinite harmonics — in practice capped by iteration depth, but the sound is rich |
+| **Lissajous** | Two dominant frequencies at the Lissajous ratio (a:b) | Phase-shifting beats. Two tones that interfere — the ratio determines the timbre. 1:1 = unison, 2:3 = perfect fifth |
+| **Penrose** | Quasicrystal spectrum — peaks at φ-related intervals, never periodic | Almost-repetition. The golden ratio makes the sound *almost* resolve but never quite. Haunting |
+| **Hilbert** | Dense, approaching white noise as depth → ∞ | All frequencies simultaneously — space-filling in sound as in geometry. At low depth: structured noise. At high depth: everything at once |
+
+Convert formation geometry to audio via inverse FFT: the unit positions define a 2D signal, the FFT extracts the frequency spectrum, the spectrum drives oscillators. The math generates the music generates the math. Move a unit and the sound changes instantly — the player sculpts sound by sculpting geometry.
+
+This is the deepest layer of the Playable Isomorphism: geometry → algebra (FFT) → music → physics (sound waves). All four faces in a single operation.
 
 **Octave layering:** Mixed-rank formations produce richer sound. A Rank-7 + Rank-1 pairing creates octave doubling — the most fundamental harmonic reinforcement, felt as depth and warmth. Same-rank formations sound thin by comparison.
 
@@ -1203,11 +1505,31 @@ The player who reads the terrain finds resources faster. Flux follows fault line
 
 **Resonance weathering** also begins: tiles near high-harmony formations slowly shift toward resonance-positive terrain. Harmony heals the land. Dissonance scars it.
 
-**Estimate:** 7-9 sessions (largest version — audio + GF(7) + Mender + geological gen is substantial)
+### 11.10b GF(7) Cellular Automata — The Living Field
+
+Beneath the geological epochs, a deeper mathematical layer: each tile carries a **GF(7) value** (0-6) computed by cellular automaton rules during world generation and updated in real-time during play.
+
+**World generation:** During Epoch 4 (Crystal), tile values are seeded by geological pressure. The CA runs for N iterations using: `tile(t+1) = (Σ neighbors) mod 7`. The resulting value field determines crystal growth patterns — tiles where the CA converges to 0 become Crystal deposits (the additive identity crystallizes). Tiles oscillating between values become Flux seams (energy that never settles).
+
+**Real-time evolution:** During gameplay, the CA continues at reduced speed. Formations affect nearby tile values — a Gatherer (tone 1) passing through adds 1 to the tile sum. A formation in perfect resolution (sum ≡ 0 mod 7) leaves the terrain unchanged (additive identity!). The math is consistent at every scale:
+
+| Game Element | Effect on Tile CA |
+|---|---|
+| Unit passing through | Tile value += unit's tone (mod 7) |
+| Formation (resolved, sum ≡ 0) | No effect — the identity passes through silently |
+| Formation (unresolved) | Tile value += formation's residue (mod 7) |
+| Bitter Root / Dark 7 | Tile value += enemy tone using generator 5 (mod 7) |
+| Resource depletion | Tile value resets to 0 (silence) |
+
+Over time, the map becomes a **living record of mathematical activity** — player-controlled territory trends toward certain GF(7) values, enemy territory toward others. The terrain IS the algebra, computed in real-time, visible as subtle color shifts at Layer 3+.
+
+**Estimate:** 7-9 sessions (largest version — audio + GF(7) + Mender + geological gen + CA is substantial)
 
 ### 11.11 Orbital Resonance — The Periodic Table of Formations
 
 *"The whole periodic table is just formations of electrons filling orbitals by a precise algorithm."*
+
+**This is the sixth domain — Chemistry — made playable.** The formation system doesn't just borrow chemistry's vocabulary. It IS chemistry: units are electrons, slots are orbitals, formations are atoms, bonded formation pairs are molecules. The player who masters Orbital Resonance has learned chemistry by commanding an army.
 
 The harmony system's deepest layer. Instead of hand-authoring resonance effects per unit composition, effects **emerge algorithmically** from how units fill formation slots — exactly like electron orbital filling determines an element's chemical properties.
 
@@ -1296,6 +1618,10 @@ Two Rose squads with complementary configs form a stronger bond than two identic
 
 The periodic table writes itself. Different unit compositions in the same formation create different elements. Different formation pairs create different molecules. The player discovers chemistry by playing an RTS.
 
+**Resource transmutation as Chemistry:** The Forge (Ore + Crystal → Alloy) isn't a crafting recipe — it's a chemical reaction. The Harmonic Mill is a still. The production chain IS a synthesis pathway. Chemistry governs not just formations but the entire economy: raw materials are elements, refined materials are compounds, the Forge is a reactor. The player who understands bonding understands both their army AND their economy.
+
+**Chemistry × Dark Mirror = Decay:** The enemy's blood magic is anti-chemistry — decomposition, corrosion, entropy. Where the player's chemistry builds compounds (units into formations, ores into alloys, formations into molecules), the enemy's dark chemistry breaks them apart. Hexes corrode molecular bonds between formations. Sacrifice dissolves units into raw energy. The Bloodtithe is literally anti-chemistry — it takes life and reduces it to its base components.
+
 ---
 
 ## v12 — Blood & Chaos
@@ -1333,6 +1659,39 @@ If the player uses harmony (constructive interference, convergent series, golden
 **Harmonic Capture:** Late-game enemy meta-structures (large ritual circles of 7+ casters) can attempt to **capture** a player formation's resonance field. If a player formation stays within the capture zone for too long, its harmony inverts — the formation begins generating **Dissonance**, feeding the enemy's hex economy. The captured formation still belongs to the player, still follows orders — but its song has been corrupted. It *sounds wrong*. The player must dissolve and rebuild the formation to cleanse it, or — if they're bold — push deeper into the ritual circle and overload it. A captured formation forcibly pushed to Tier 6 harmony *inside* the capture zone creates a feedback loop that shatters the ritual structure.
 
 **The inverse is also true.** Player formations at Tier 5+ harmony with a Sage present can attempt to **subsume** enemy ritual circles they encounter. A Sage-bearing formation that achieves harmonic dominance over an enemy structure — resonance field stronger than the enemy's Dissonance field — can *tune* the enemy energy, converting Dissonance into player Resonance. Captured energy is volatile, unstable, but potent. Resonance generated this way has a 1.5× multiplier but decays over time. The mathematics of theft. (At Layer 7, when enemy elites begin forming their own shadow fractals, subsumption becomes a full capture-economy loop — see v13.)
+
+### 12.2b GF(7²) — The Second Octave
+
+Harmonic capture opens a mathematical door the player didn't know existed: **field extension**.
+
+The player's Heptarchy operates on GF(7) — 7 elements, generator 3. The enemy's Shadow Heptarchy uses the same field but generator 5. When the player captures an enemy unit (via Sage subsumption), that unit retains its generator-5 perspective. It still thinks in shadow arithmetic.
+
+Mixing generator-3 (player) and generator-5 (enemy) units in one formation creates compositions that no longer live in GF(7). They live in **GF(7²) = GF(49)** — the quadratic field extension. Like going from real numbers to complex numbers:
+
+| Field | Elements | Generator | Compositions | Musical Analogy |
+|---|---|---|---|---|
+| GF(7) — Player | 7 | 3 | 7 possible tone sums | First octave — heptachord |
+| GF(7) — Enemy | 7 | 5 | 7 possible tone sums | Same octave, different tuning |
+| GF(7²) — Mixed | 49 | (3, 5) as 2D pair | 49 possible composition states | **Second octave** — the harmony space explodes |
+
+**In practice:** A mixed formation's harmony is computed as a pair (player_sum mod 7, enemy_sum mod 7). Resolution requires BOTH components to reach 0 — a "biharmonic zero" that is exponentially harder to achieve but exponentially more powerful. The player who masters composition in GF(7²) commands effects that GF(7) cannot produce.
+
+**The depth is infinite:** GF(7³) = GF(343) exists too. And GF(7⁴). Each field extension is another octave — another dimension of harmony. The game doesn't implement them all, but the mathematical door is visibly open. The player sees GF(7²) and realizes: this goes deeper. It always goes deeper. The depth IS the fractal.
+
+### 12.2c The Dissonance Constant — φ Corruption
+
+When enemy formations corrupt a player formation (harmonic capture), the corruption doesn't spread linearly. It follows **φ-spirals** — golden ratio paths through the formation's geometry.
+
+Player harmony is mod-7: rational, finite, periodic. Enemy dissonance corrupts via φ: irrational, infinite, aperiodic. The player literally fights irrationality with prime arithmetic.
+
+| Corruption Mechanic | Mathematical Basis |
+|---|---|
+| Corruption spreads along φ-spiral paths from the capture point | Vogel sunflower distribution — same math as the Spiral formation |
+| Corrupted units shift tone by φ-quantized amounts (approximated to nearest integer in GF(7)) | The irrational invading the rational — never exact, always slightly off |
+| Corruption can't fully resolve — it oscillates around values, never landing | φ resists rational approximation — the corruption *almost* stabilizes but never does |
+| Cleansing requires achieving resolution (sum ≡ 0) which snaps the corruption to the nearest integer | Prime arithmetic resolves the irrational — mod 7 forces everything to land. This IS the game's thesis: structure tames chaos |
+
+The visual: corrupted formation slots drift in φ-spiral patterns instead of holding their fractal positions. The sound: the formation's chord acquires irrational beating — two frequencies that almost align but never do (the acoustic signature of φ). The feeling: something is *wrong*, and the wrongness doesn't settle.
 
 ### 12.3 Symmetry-Breaking Warfare
 
@@ -1422,7 +1781,24 @@ The game and GUI unfold organically. No tutorial dumps. Seven layers, each unloc
 
 The bottom panel literally grows. At Layer 0 it's minimal — resources and a build button. By Layer 5 there are harmony meters, resonance interference visualizations, formation tuning controls. But the player never feels overwhelmed because each layer arrived when they were ready.
 
+### 13.1b Fractal Depth Scaling — The Game Approaches Its Own Limit
+
+As the player deepens through layers, the game's **fractal visuals deepen with them** — not as a reward, but as a mirror. The game is approaching its own limit:
+
+| Layer | Visual Depth | What Changes |
+|---|---|---|
+| 0-2 | Minimal fractals | Koch borders at depth 1. Simple building shapes. Clean, readable |
+| 3-4 | Moderate fractals | Koch borders at depth 2. Sierpinski buildings gain recursion. Font serifs branch once. The game starts to shimmer |
+| 5-6 | Deep fractals | Koch borders at depth 3, breathing. Buildings fully fractal. Font serifs branch twice. Resonance waveforms visible. The screen is alive with self-similarity |
+| 7 | The Limit | Maximum fractal iteration on everything. Koch borders breathe deeply. Buildings are recursive cathedrals. The font itself is a fractal tree. The game has become its own Mandelbrot boundary — infinitely detailed at every scale |
+
+The player sees infinity coming. The visuals get denser, richer, more self-similar. And then: the game ends. Because that's what limits ARE. The Hilbert curve fills all space in the limit — but the limit is unreachable. The player can approach fractal perfection but never arrive. The gap between "almost" and "there" is infinite.
+
+**Implementation:** Fractal iteration depths (Koch border depth, Sierpinski building recursion, font serif branching, formation visual detail) are parameterized by a global `depth_layer` value. The same rendering code produces different visual complexity based on game state. No new art. No new code paths. Just a single parameter that deepens everything simultaneously.
+
 ### 13.2 The Tree of Life
+
+**This is the seventh domain — Biology — made visible.** The Tree is not a metaphor for life. It IS life — an L-system (invented by Lindenmayer to model biological growth) that branches, roots, responds to its environment, and evolves through the campaign. The player who nurtures their Tree has learned the mathematics of biological growth by building a civilization.
 
 The starting building isn't just a Town Hall — it's the Tree of Life. At Layer 0 it looks like a building. As the game deepens:
 
@@ -1435,6 +1811,29 @@ The starting building isn't just a Town Hall — it's the Tree of Life. At Layer
 | 5 | Root network connects to production buildings — visible supply lines |
 | 6 | The tree IS the map. Its fractal branching was the terrain generation seed all along |
 | 7 | *The roots go deeper than the map. They reach another Tree.* |
+
+### 13.2b The Tree Remembers — Mathematical Fingerprint
+
+The Tree of Life is tone 1 — the generator, the multiplicative identity. It records every GF(7) operation the player performs throughout the campaign:
+
+- Every formation created (tone composition)
+- Every harmony achieved (resolution quality)
+- Every Resonance generated (amount and source)
+- Every Fundamental manifested (duration and cascade depth)
+- Every dissonance suffered (corruption events)
+
+This accumulates into a **score** — a sequence of mod-7 operations that IS the player's mathematical fingerprint. No two campaigns produce the same score.
+
+**At game end:** The Tree plays back the score as music. Fast, compressed, abstracted into a 30-second piece. The harmony quality of the piece reflects how the player played — a player who mastered GF(7) arithmetic hears a beautiful, resolving composition. A player who brute-forced through chaos hears something raw and dissonant but energetic. Both are valid. Both are *their* music.
+
+```
+"Your Tree remembers 2,847 harmonies and 412 dissonances.
+ It sings what you taught it."
+```
+
+Every player's piece is unique, sharable, comparable. The piece IS proof that this player traversed this specific path through GF(7). A speedrunner's piece sounds different from a builder's. A cascade-chaser's piece has moments of overwhelming density. A cautious player's piece is sparse and precise.
+
+The Tree doesn't judge. It remembers. And it sings.
 
 ### 13.3 Layer 7 — The Mirror Field
 
@@ -1634,6 +2033,9 @@ Ideas not yet scheduled. Seeds for future fractals.
 - **Harmonic Puzzle Mode:** Given specific units, achieve target resonance configuration
 
 ### The Deep End
+- **The Prime Spiral — Alternate Fields:** The design framework works for ANY prime p. Unlockable game modes: **GF(5) Pentatonic** (5 tones, 5 units, simpler/more consonant — not "easy mode" but a different field with different music), **GF(11) Undecimal** (11 tones, harsh dissonances, massive combinatorics — "impossible mode"), **GF(2) Binary** (2 tones, pure duality, minimalist). Each mode changes the music (pentatonic vs heptachord vs undecimal), the geometry (5-fold vs 7-fold vs 11-fold symmetry), and the combat (fewer/more options). The player experiences how prime numbers *feel* different
+- **Multiplayer as Counterpoint:** Two players' formations interact as musical counterpoint. When formations overlap spatially, the combined chord is computed — two players can accidentally create The Fundamental together (combined sum ≡ 0 mod 7). Cooperative play = musical composition across two minds. Competitive play = trying to dissonance the opponent's army by choosing tones that create irresolvable intervals with theirs
+- **Proof Mode:** Hidden endgame reward for reaching the Hilbert formation — the game reveals the mathematics behind every system. Not a tutorial but a REWARD. The player who reaches the Limit has earned the right to see the isomorphism laid bare. Like Noita's hidden physical constants, but for pure mathematics. Achievement: "You have been doing abstract algebra for 47 hours."
 - **Morale Field:** Invisible territory from resonance — creates organic frontlines
 - **Unit Memory:** Units remember kills, preferred targets. Personalities emerge from experience
 - **Trait Inheritance:** Veteran traits spread to nearby recruits — unit culture lineage
@@ -1688,9 +2090,10 @@ These emerge from the math and from system interactions. Not bugs — features w
 | 7-rank system | **Scheduled** (expands current 5-rank to 7-octave) | v10_eta |
 | Characteristic system | **Scheduled** (7 traits per unit, base-7 values) | v10_eta |
 | Resonance resource | **Scheduled** (generated by formation harmony) | v11 |
+| The Fundamental (tone 0) | **Scheduled** (emergent ghost note from perfect resolution, ×3 Resonance, mirrors Bitter Root) | v11 |
 | GF(7) harmony math | **Scheduled** (modular arithmetic composition system) | v11 |
 | Resource rename (Fiber/Crystal/Ore/Flux/Alloy) | **Scheduled** (cosmetic, whenever ready) | v10_zeta+ |
-| Sap resource | **Scheduled** (Tree of Life essence) | v10_zeta |
+| Tonic resource | **Scheduled** (Tree of Life essence — the root note of matter) | v10_zeta |
 | Sentinel Lattice (D1-D4) | **Scheduled** (standing-stone symmetry anchors, mirror bonuses, ghost guides) | v10_zeta |
 | Sentinel D6 + tuning | **Scheduled** (hexagonal symmetry, tone-tuned axes, Formation × Base resonance) | v10_eta |
 | Base drone audio | **Scheduled** (symmetry-dependent procedural music, jazz asymmetry) | v11 |
@@ -1701,7 +2104,17 @@ These emerge from the math and from system interactions. Not bugs — features w
 | Full 7-epoch Living Strata | **Scheduled** (complete temporal map generation, excavation, depth-layer readability) | v13 |
 | Lorenz weather system | **Scheduled** (deterministic chaos storm paths, seasonal cycles) | v13 |
 | Multiplayer ghosts | **Scheduled** (server-side ghost collection/injection, cross-game palimpsest) | v14 |
-| Don't Panic advisor | **Scheduled** (rule-based live diagnostic from event log, depth-layer gated) | v10_epsilon → v11 |
+| Don't Panic advisor (foundation) | **Implemented** (H hotkey, 14 rules, Layer 0-1 scope, calm blue overlay) | v10_epsilon |
+| Don't Panic advisor (full) | **Scheduled** (depth-layer gating, wiki links, object highlighting, 60+ rules) | v10_zeta → v11 |
+| Energy bar visual | **Implemented** (thin yellow/orange bar below HP, fractal_bar_simple) | v10_epsilon |
+| Velocity trails | **Implemented** (faint directional line behind moving units) | v10_epsilon |
+| Free unit counter | **Implemented** ("Free: 3S 2A" in squad bar) | v10_epsilon |
+| Exhaustion particles | **Implemented** (panting dots above unit at <20% energy) | v10_epsilon |
+| Game-over stats panel | **Implemented** (kills, losses, buildings, grade S/A/B/C, contextual tips) | v10_epsilon |
+| Attack direction arrows | **Implemented** (red chevrons at screen edge toward off-screen enemies) | v10_epsilon |
+| Difficulty descriptions | **Implemented** (expanded menu buttons with resource/incident counts) | v10_epsilon |
+| Formation discovery hints | **Implemented** (contextual text + Form Squad F-key + GUI button) | v10_epsilon |
+| Incident spawn alert | **Implemented** (center-screen IMMINENT banner with direction) | v10_epsilon |
 | Lissajous Knot formation | **Scheduled** (5th formation — phase interference loops) | v10_eta |
 | Penrose Tiling formation | **Scheduled** (6th formation — aperiodic quasicrystal) | v11 |
 | Hilbert Curve formation | **Scheduled** (7th formation — space-filling total coverage) | v12 |
@@ -1709,6 +2122,29 @@ These emerge from the math and from system interactions. Not bugs — features w
 | Shadow Heptarchy (Mirror Field) | **Scheduled** (enemy's complete GF(7) with generator 5, Layer 7 revelation) | v13 |
 | 7th characteristic (∅) activation | **Scheduled** (chaos-affinity value, boundary position, biharmonic resonance) | v13 |
 | Tree Communion | **Scheduled** (two Trees recognize each other — endgame secret) | v13 |
+| Base-7 XP curve (7^n thresholds) | **Scheduled** (logarithmic rank progression reinforcing Heptarchy) | v10_eta |
+| 6/7 formation tension | **Scheduled** (6 units = max combat energy, 7 = transcendent resolution) | v10_eta |
+| Resonance Cascade | **Scheduled** (chain-reaction Fundamental propagation across formations) | v11 |
+| Fourier Formations | **Scheduled** (formation geometry → FFT → audio spectrum. Shape IS sound) | v11 |
+| GF(7) cellular automata | **Scheduled** (tile values evolve by mod-7 CA rules, formations imprint terrain) | v11 |
+| GF(7²) field extension | **Scheduled** (mixed player+enemy compositions in 49-element field) | v12 |
+| φ-dissonance corruption | **Scheduled** (corruption spreads via golden-ratio spirals, irrational vs prime) | v12 |
+| Fractal depth scaling | **Scheduled** (visual fractal iteration depth scales with game progress/layer) | v13 |
+| The Tree Remembers | **Scheduled** (Tree records all GF(7) operations, plays back as music at game end) | v13 |
+| Physics substrate evolution | **Scheduled** (springs → rigid bodies → constraints → field physics) | v10_eta → v14 |
+| Momentum transfer (mass physics) | **Scheduled** (Lancer charge, Bulwark mass absorption, knockback) | v10_eta |
+| Rigid body formations | **Scheduled** (angular velocity, rotational inertia, formation collision) | v11 |
+| Constraint skeleton (hex damage) | **Scheduled** (joint constraints between formation units, mechanical hex effects) | v12 |
+| Resonance field physics | **Scheduled** (gradient/divergence/curl fields, potential wells, field-based movement) | v13 |
+| GPU physics (Godot) | **Scheduled** (full rigid body solver, 1000+ units, soft-body formations) | v14 |
+| Rainbow unit colors (3 of 7) | **Implemented** (Violet/Indigo/Blue for Gatherer/Warden/Ranger, future 4 commented) | v10_6 |
+| Dark 7 anti-colors | **Implemented** (same hue desaturated/darkened for all 7 enemy types) | v10_6 |
+| Rainbow unit colors (full 7) | **Scheduled** (Green/Yellow/Orange/Red for Bulwark/Lancer/Mender/Sage) | v10_eta → v12 |
+| Color harmony composition preview | **Scheduled** (additive color mixing in GUI shows resolution quality by color) | v11 |
+| Color theory as 4th isomorphism domain | **Scheduled** (complementary/triadic/analogous schemes mirror GF(7) arithmetic) | v11 |
+| Chemistry as 6th isomorphism domain | **Scheduled** (Orbital Resonance = electron shell harmony, bonding = formation binding energy) | v11 |
+| Biology as 7th isomorphism domain | **Scheduled** (Tree of Life = phylogenetic record, Living Strata = geological evolution, ghost evolution = speciation) | v13 |
+| Seven Domains (Octave of Knowledge) | **Scheduled** (Algebra→Geometry→Music→Color→Physics→Chemistry→Biology, Mathematics as tone 0) | v11 → v13 |
 
 ---
 

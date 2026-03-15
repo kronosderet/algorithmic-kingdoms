@@ -135,3 +135,26 @@ class Entity:
         ratio = self.hp / self.max_hp
         col = COL_HEALTH if self.owner == "player" else COL_ENEMY_HEALTH
         fractal_bar_simple(surf, bx, by, w, bh, ratio, col)
+
+    def draw_energy_bar(self, surf, cam, width=24):
+        """Draw thin energy bar below the HP bar. Only shown when energy < max."""
+        max_e = getattr(self, 'max_energy', 0)
+        if max_e <= 0:
+            return
+        cur_e = getattr(self, 'energy', max_e)
+        if cur_e >= max_e:
+            return
+        z = cam.zoom
+        w = max(4, int(width * z))
+        sx, sy = cam.world_to_screen(self.x, self.y)
+        bx = sx - w // 2
+        # position just below the HP bar (HP bar is at y - 20*z, height ~4*z)
+        by = sy - int(20 * z) + max(2, int(4 * z)) + 1
+        bh = max(1, int(2 * z))
+        ratio = cur_e / max_e
+        # yellow when OK, orange-red when exhausted
+        if ratio >= 0.2:
+            col = (220, 200, 60)
+        else:
+            col = (220, 100, 30)
+        fractal_bar_simple(surf, bx, by, w, bh, ratio, col)

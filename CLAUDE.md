@@ -2,7 +2,7 @@
 
 ## Overview
 Zero-asset Pygame RTS with algorithmic art (polar roses, L-systems, golden spirals, Mandelbrot menus).
-Current version: v10_epsilon3. Working on v10_epsilon Formation Math + Fractal GUI.
+Current version: v10_epsilon4. Working on v10_zeta Economy Depth.
 
 ## Tech Stack
 - Python 3.13, Pygame 2.6.1, NumPy
@@ -21,7 +21,7 @@ python -c "from game import Game; print('OK')"
 pyright
 
 # Build executable
-python -m PyInstaller v10_epsilon3.spec --noconfirm
+python -m PyInstaller v10_epsilon4.spec --noconfirm
 ```
 
 ## Project Structure
@@ -39,6 +39,7 @@ python -m PyInstaller v10_epsilon3.spec --noconfirm
 - `pathfinding.py` — A* pathfinding
 - `enemy_ai.py` — Wave spawning, enemy targeting, counter-pick AI
 - `squads.py` — Squad formation system (Rose, Spiral, Sierpinski, Koch)
+- `advisor.py` — Don't Panic live advisor (rule-based diagnostic)
 - `event_logger.py` — Game event logging
 - `resources.py` — Resource manager
 - `game_map.py` — Procedural map generation

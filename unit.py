@@ -128,7 +128,7 @@ class Unit(Entity):
         self.energy_attack_cost = ep.get("attack_cost", 6.0)
         self.energy_gather_cost = ep.get("gather_cost", 0.0)
 
-        # state: idle, moving, gathering, building, attacking, returning
+        # state: idle, moving, gathering, building, attacking, returning, repairing, garrisoned, stationed, fleeing
         self.state = "idle"
         self.target_pos = None
         self.target_entity = None
@@ -703,8 +703,22 @@ class Unit(Entity):
         elif self.state == "repairing":
             self._do_repair(dt, game)
         elif self.state == "garrisoned":
+            # safety: auto-eject if garrison building died or became invalid
+            if not self.garrison_target or not self.garrison_target.alive or self.garrison_target.ruined:
+                if self.garrison_target and self in self.garrison_target.garrison:
+                    self.garrison_target.garrison.remove(self)
+                self.garrison_target = None
+                self.state = "idle"
+                return
             return  # inside building, skip all behavior
         elif self.state == "stationed":
+            # safety: auto-eject if station building died or became invalid
+            if not self.station_target or not self.station_target.alive or self.station_target.ruined:
+                if self.station_target and self in self.station_target.stationed_workers:
+                    self.station_target.stationed_workers.remove(self)
+                self.station_target = None
+                self.state = "idle"
+                return
             return  # inside production building, skip all behavior
         elif self.state == "fleeing":
             if self.owner == "player":
@@ -826,7 +840,7 @@ class Unit(Entity):
         self.path = []
 
     def metamorphose(self):
-        """v10_7: Rooted straggler transforms into an Entrenched Titan."""
+        """v10_7: Rooted straggler transforms into a Bitter Root."""
         self.metamorphosed = True
         self.rooted = False
         self.max_hp = int(self.max_hp * METAMORPH_HP_MULT)
@@ -1267,7 +1281,7 @@ class Unit(Entity):
                     game.enemy_ai.wave_number,
                     "tower", "explosive", "", 0,
                     f"upgraded to Lv.2")
-                game.add_notification("Tower upgraded to Explosive Cannon!", 3.0, (255, 140, 40))
+                game.add_notification("Sentinel upgraded to Amplified Resonance!", 3.0, (255, 140, 40))
                 self.state = "idle"
                 self.build_target = None
             return
@@ -2304,3 +2318,28 @@ class Unit(Entity):
                 pygame.draw.circle(surf, carry_col, (ox, oy), cr)
 
         self.draw_health_bar(surf, cam)
+        self.draw_energy_bar(surf, cam)
+
+        # v10_epsilon: velocity trail — faint line behind fast-moving units
+        if self.current_speed > self.max_speed * 0.4 and r >= 3:
+            trail_len = min(int(self.current_speed * 0.3 * z), int(20 * z))
+            if trail_len >= 2 and (self.vx != 0 or self.vy != 0):
+                spd = max(0.01, self.current_speed)
+                tx = sx - int(self.vx / spd * trail_len)
+                ty = sy - int(self.vy / spd * trail_len)
+                color = UNIT_COLORS.get(self.unit_type) or ENEMY_COLORS.get(self.unit_type, (150, 150, 150))
+                trail_col = (color[0] // 3, color[1] // 3, color[2] // 3)
+                pygame.draw.line(surf, trail_col, (sx, sy), (tx, ty), max(1, int(z)))
+
+        # v10_epsilon: exhaustion particles — panting dots at < 20% energy
+        if self.max_energy > 0 and self.energy < self.max_energy * ENERGY_EXHAUSTED_THRESHOLD and r >= 3:
+            ticks = pygame.time.get_ticks()
+            for i in range(2):
+                phase = ticks * 0.005 + i * 3.14
+                px = sx + int(r * 0.8 * math.cos(phase + self.eid))
+                py_dot = sy - r - max(2, int(4 * z)) - int(3 * z * abs(math.sin(phase * 0.7)))
+                alpha = 120 + int(80 * abs(math.sin(phase)))
+                dot_r = max(1, int(1.5 * z))
+                pant_surf = pygame.Surface((dot_r * 2, dot_r * 2), pygame.SRCALPHA)
+                pygame.draw.circle(pant_surf, (200, 200, 200, alpha), (dot_r, dot_r), dot_r)
+                surf.blit(pant_surf, (px - dot_r, py_dot - dot_r))

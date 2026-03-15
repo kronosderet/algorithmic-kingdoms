@@ -77,3 +77,445 @@ LOG ANALYSIS NOTES (from the 3 sessions):
 - Idle military doesn't auto-intercept enemies attacking TH (aggro range too short?)
 - Starting gold unspent in Game 3 (300g at death) — she didn't know how/what to build
 ---
+
+
+
+===================================================================
+10. CLAUDE'S CONTRIBUTION — THE MATHEMATICAL DNA (2026-03-15)
+    "What are the most dominant numbers after seven?"
+    "What are we actually building here?"
+===================================================================
+
+THE NUMBERS THAT RULE AFTER SEVEN
+──────────────────────────────────
+
+Every system in Resonance is a different projection of the same abstract
+object. Seven domains — algebra, geometry, music, color, physics,
+chemistry, biology — wearing different masks.
+The numbers are the seams where the masks meet.
+
+#1: φ (1.618...) — THE MOST IRRATIONAL NUMBER
+    Already in: Vogel spirals, harmony ratios, evasion formula (1/φ^d),
+    menu button spacing. Scheduled: Penrose tiling (v11).
+
+    φ is the hardest number to approximate with fractions. It resists
+    pattern. This is why Penrose tiles never repeat. In the game, φ is
+    the mathematical embodiment of controlled chaos — order that never
+    settles, beauty that never repeats. It is the opposite of 7 (which
+    is rigid, finite, and exact). Together, 7 and φ are the game's DNA:
+    structure AND unpredictability. Discrete AND continuous. Grid AND flow.
+
+    FUTURE IDEA: The "Dissonance Constant" — when enemy formations
+    corrupt a player formation, the corruption follows φ-spirals.
+    Harmony is mod-7 (rational, finite). Dissonance is φ-based
+    (irrational, infinite). The player literally fights irrationality
+    with prime arithmetic. Math students would weep.
+
+#2: 3 — THE MINIMUM STRUCTURE
+    Already in: Sierpinski (3-fold), Koch (1/3 rule), 3 player unit types,
+    3 core buildings, 3 worker ranks, 3 map sizes.
+
+    Three is the simplest polygon. The triangle is the only rigid 2D
+    structure. Every surface, no matter how complex, decomposes into
+    triangles. In the game, 3 is the scaffolding — the minimum viable
+    structure from which 7 grows.
+
+    THE 3→7 ARC: The entire game progression is a journey from 3 to 7.
+    Start with 3 unit types. Discover 4 more. Start with 3 formations.
+    Discover 4 more. Start with 3 resources that matter. Unlock 4 more.
+    Every system begins as a triangle and ends as a heptagon.
+    This IS the fractal unfolding the user described in note #3.
+
+#3: 2 — DUALITY
+    Already in: Player/Dark 7 mirror, Harmony/Dissonance, Helper/Production
+    buildings, 1×1/2×2 grids, map sizes (64/128/256 = 2^6/2^7/2^8).
+
+    Two is opposition. Mirror. The reason the Dark 7 exists. But notice:
+    the map sizes are 2^6, 2^7, 2^8. Powers of 2, with 7 in the middle.
+    The medium map is literally 2^7. The hard map is 2^(7+1). The easy
+    map is 2^(7-1). Seven governs even the binary dimensions.
+
+    FUTURE IDEA: Map size 2^7 × 2^7 = 128 × 128 should be the
+    canonical "pure" experience. Easy simplifies it. Hard complexifies it.
+    But Medium IS the field — 128 = 2^7, the exact place where the
+    binary world and the prime world collide.
+
+#4: 0 — THE VOID THAT HOLDS MEANING
+    Already in: The Fundamental (player's emergent zero), Bitter Root
+    (enemy's corrupted zero), Sage (7 ≡ 0 mod 7).
+
+    Zero is the only element of GF(7) without a multiplicative inverse.
+    It's where the field "breaks." In music, it's silence. In fractals,
+    it's the seed point. Three distinct zeros exist in the design:
+    - Sage: deliberate zero (the unit that chooses silence)
+    - Fundamental: emergent zero (harmony so perfect it becomes presence)
+    - Bitter Root: corrupted zero (dissonance so persistent it becomes entity)
+
+    FUTURE IDEA: Zero should be the game's deepest secret. The player
+    who understands that 7 ≡ 0, that the Sage IS the Fundamental IS the
+    Bitter Root — that all three are the same number — understands
+    something about the game that the game never explicitly teaches.
+    This is the isomorphism question from the Roadmap's final paragraph,
+    made concrete.
+
+#5: 6 — THE SHADOW OF SEVEN
+    Already in: |GF(7)*| = 6 (the multiplicative group order), 6 worker
+    skills, 6 formations before Hilbert, D6 Sentinel lattice.
+
+    Six is 7 minus 1. It's the number of things that actively cycle —
+    the generators, the doers. Seven sits outside as the identity/zero.
+    Six is the engine; seven is the frame. In music: 6 active notes,
+    the 7th resolving back to the octave. In formations: 6 active combat
+    shapes, the 7th (Hilbert) being the Limit — the shape that fills
+    all space and therefore IS all shapes.
+
+    FUTURE IDEA: The 6/7 tension should be felt mechanically. A
+    formation of 6 units is ACTIVE (all generators present). Add the 7th
+    and something shifts — the formation reaches the Limit. It becomes
+    complete but also... still. Like a chord that has resolved. The
+    strategic choice: 6 units = maximum combat energy, 7 units = maximum
+    harmonic power but the formation "wants" to rest. Aggressive vs
+    transcendent. This makes squad composition a genuine dilemma.
+
+#6: ∞ — THE LIMIT
+    Already in: Hilbert = "Limit" (formation 7), fractal depth → ∞,
+    space-filling curves.
+
+    The game's deepest promise. Every fractal approaches infinity but
+    never arrives. The Koch snowflake has infinite perimeter enclosing
+    finite area. The Hilbert curve fills all space in the limit but
+    requires infinite iterations. The game can never be "solved" because
+    the depth is asymptotic.
+
+    FUTURE IDEA: The endgame should make this FELT. In the final moments
+    of a hard campaign, the fractal visuals should deepen — more Koch
+    iterations on borders, more Sierpinski depth on buildings, the
+    font growing more elaborate serifs. The game itself is approaching
+    its own limit. The player sees infinity coming. And then: it doesn't
+    arrive. The game ends. Because that's what limits ARE.
+
+#7: 1 — THE GENERATOR
+    Already in: Tree of Life (the origin), the multiplicative identity
+    in GF(7), the fundamental frequency.
+
+    One tree. One seed. Everything in the game grows from a single point.
+    1 is the multiplicative identity — multiply by 1, nothing changes.
+    The Tree of Life IS the 1. It doesn't fight. It doesn't move. It
+    generates everything and transforms nothing.
+
+    The Tree is also 1 in the musical sense: the tonic, the home note,
+    the frequency everything refers back to. The Tonic resource (v10_zeta)
+    being generated by the Tree is perfect — the tonic note literally
+    produces the tonic substance.
+
+#8: log — PERCEPTION ITSELF
+    Already in: Sierpinski depth = log₃(n), rank XP curves, difficulty
+    scaling, fractal detail = log of available pixels.
+
+    Humans perceive logarithmically. Loudness, brightness, time, risk —
+    all logarithmic. The game's scaling follows this: Sierpinski depth
+    grows as log₃ of squad size (each tripling adds one visual level).
+    Fractal font detail grows as log of font size. Difficulty grows
+    as log of incident count. The player never feels a sharp jump
+    because the game scales the way their brain scales.
+
+    FUTURE IDEA: Rank XP should follow a base-7 logarithmic curve.
+    Rank n requires 7^n cumulative XP. Rank 1 = 7, Rank 2 = 49,
+    Rank 3 = 343, Rank 4 = 2401, Rank 5 = 16807, Rank 6 = 117649,
+    Rank 7 = 823543. The numbers look absurd but the logarithmic
+    perception means each rank "feels" equally far away. And the XP
+    thresholds ARE powers of 7, reinforcing the Heptarchy at the
+    deepest progression layer.
+
+
+WHAT WE ARE ACTUALLY BUILDING
+──────────────────────────────
+
+Strip away the buildings, the units, the economy, the combat. What's left?
+
+A PLAYABLE ISOMORPHISM.
+
+The game is a proof — experienced through play, not read on a page —
+that seven domains of mathematics are the same thing:
+
+    1 ALGEBRA   ←→  2 GEOMETRY  ←→  3 MUSIC     ←→  4 COLOR
+    GF(7)            Fractals        Harmony          Spectrum
+    compose          watch           hear             see
+
+    5 PHYSICS   ←→  6 CHEMISTRY ←→  7 BIOLOGY
+    Springs          Bonding         Growth
+    feel             combine         grow
+
+    0 MATHEMATICS — the meta-domain, the ghost note,
+                     the proof that the seven are one
+
+And each domain has its dark mirror:
+    Algebra → Chaos         Geometry → Strange attractors
+    Music   → Cacophony     Color    → Anti-color
+    Physics → Entropy       Chemistry→ Decay
+    Biology → Death         Math     → Incompleteness (Gödel)
+
+Seven domains for seven tones. The isomorphism itself is prime.
+
+The player interacts with all seven simultaneously:
+- COMPOSE an army using GF(7) tone arithmetic (algebra)
+- WATCH fractal formations emerge from the composition (geometry)
+- HEAR harmonic resonance from the formation's quality (music)
+- SEE color harmony in the unit palette (color)
+- FEEL spring physics pull units into mathematical positions (physics)
+- COMBINE elements into emergent compounds (chemistry)
+- GROW a living system from one seed to a civilization (biology)
+
+Seven senses. One truth. The player doesn't learn "math" — they learn
+that math is one thing with seven faces. That algebra IS geometry IS
+music IS color IS physics IS chemistry IS biology. That the ancient
+Pythagorean intuition — "all is number" — was not mysticism but
+understatement.
+
+And the numbers encode this:
+- 7 creates the field (the alphabet of composition)
+- φ creates the beauty that never repeats (the unresolvable tension)
+- 3 creates the minimum structure (the triangle, the triad, the atom)
+- 2 creates the mirror (player/enemy, harmony/dissonance, self/other)
+- 0 creates the silence that holds meaning (identity, rest, seed)
+- 6 creates the engine (the generators, the doers, the active cycle)
+- ∞ creates the horizon (the depth that never bottoms out)
+- 1 creates the origin (Tree of Life, fundamental frequency, identity)
+- log creates the perception (how the human mind maps infinity to feeling)
+
+This is not a game about math. This is math about games.
+Or more precisely: this is a game that IS math that IS music that IS
+geometry that IS color that IS physics that IS chemistry that IS biology,
+and the player is the isomorphism between them.
+
+"Harmony in chaos, chaos in harmony."
+That's not a theme. That's a theorem.
+
+
+===================================================================
+11. FUTURE CRAZY IDEAS — FLOWING FROM THE MATHEMATICAL DNA
+===================================================================
+
+IDEA A: THE SINGING ARMY (connects to idea #1 above)
+─────────────────────────────────────────────────────
+Each unit type maps to a tone. A formation IS a chord. So:
+procedural audio where each formation literally PLAYS its chord.
+
+    3 Wardens (Re Re Re) → power chord, low rumble
+    2 Wardens + 1 Ranger (Re Re Mi) → minor third, tense
+    1 of each 7 types → full heptachord, shimmering
+
+The harmony quality (already calculated as a float) becomes the
+CONSONANCE of the sound. High harmony → clean, ringing. Low harmony →
+beating, rough. Perfect resolution (sum ≡ 0 mod 7) → the overtone
+series aligns and you hear THE FUNDAMENTAL — a deep bass note that
+isn't being played by any unit. The ghost tone. Literally.
+
+Combat becomes a musical experience. Two armies clashing is two
+chords colliding. Dissonance is AUDIBLE before it's visible.
+The player learns to hear when their composition is wrong.
+
+IDEA B: FOURIER FORMATIONS
+───────────────────────────
+Every formation shape has a Fourier transform. The spatial arrangement
+of units IS a signal. Its Fourier decomposition IS frequencies.
+
+    Rose → dominant frequency = petal count
+    Spiral → spectrum spreads like 1/f noise (pink noise)
+    Sierpinski → discrete spectrum at powers of 3
+    Koch → spectrum at powers of 4 (each iteration = 4× segments)
+
+Convert formation geometry to audio via inverse FFT. The player
+doesn't just HEAR their army — their army's SHAPE is its SOUND.
+Move units and the sound changes. The isomorphism between geometry
+and music becomes literal, real-time, interactive.
+
+This is the "singing" from idea #1 but mathematically rigorous.
+The formations don't play arbitrary chords — they play their own
+Fourier spectrum. The math generates the music generates the math.
+
+IDEA C: GF(7²) — THE SECOND OCTAVE
+────────────────────────────────────
+GF(7) has 7 elements. GF(7²) = GF(49) has 49. It's the field
+extension — like going from real numbers to complex numbers.
+
+In the game: the "first octave" is the 7 player tones. The "second
+octave" opens when the player discovers that enemy tones are the
+SAME field seen from generator 5 instead of generator 3.
+
+    Player field: generated by 3 (3, 2, 6, 4, 5, 1 cycle)
+    Enemy field:  generated by 5 (5, 4, 6, 2, 3, 1 cycle)
+
+Same elements, different generators. Isomorphic. When the player
+captures an enemy unit (Harmonic Capture, v12), that unit retains
+its generator-5 perspective. Mixing generator-3 and generator-5 units
+in one formation creates compositions in GF(7²) — 49 possible states
+instead of 7. The harmony space EXPLODES open.
+
+This is the "absurd depth" from idea #3. The player thought they
+understood the system. Then they discover it has a second dimension.
+Then they realize: GF(7³) = GF(343) exists too. And GF(7⁴). And...
+the depth is literally infinite. Each field extension is an octave.
+
+IDEA D: CELLULAR AUTOMATA ON GF(7)
+───────────────────────────────────
+Conway's Game of Life runs on GF(2) — cells are 0 or 1.
+What if the MAP runs on GF(7)? Each tile has a value 0-6.
+Terrain evolves by local rules in GF(7) arithmetic.
+
+    Tile value = (sum of 6 neighbors) mod 7
+
+This produces terrain that self-organizes into patterns governed by
+the same arithmetic as combat. Resource deposits GROW where the
+cellular automaton concentrates certain values. The map literally
+computes GF(7) arithmetic in real-time.
+
+The Living Strata (v11-v13) already plans geological evolution.
+GF(7) CA is how you IMPLEMENT it. The terrain isn't random — it's
+a computation. The player builds on a living mathematical surface.
+
+And: if formations affect nearby tile values (footprint of tone),
+then armies literally RESHAPE the terrain they walk on. A Gatherer
+(tone 1) passing through changes tile sums. A formation in perfect
+resolution (sum ≡ 0 mod 7) leaves the terrain unchanged (additive
+identity!). The math is consistent at every scale.
+
+IDEA E: THE TEACHER THAT NEVER TEACHES
+───────────────────────────────────────
+The game never shows an equation. Never says "mod 7." Never explains
+GF(7). But every system IS GF(7). The player who plays for 100 hours
+has internalized modular arithmetic, harmonic analysis, fractal
+recursion, group theory, and dynamical systems.
+
+The endgame achievement: "You have been doing abstract algebra for
+47 hours." No further explanation.
+
+For the truly deep players: a hidden "Proof Mode" where the game
+reveals the mathematics behind every system. Not as a tutorial —
+as a REWARD. The player who reaches the Hilbert formation (the
+Limit) has earned the right to see the isomorphism laid bare.
+
+Like Noita's hidden messages and wands that spell out physical
+constants — but for pure mathematics.
+
+IDEA F: MULTIPLAYER AS COUNTERPOINT
+───────────────────────────────────
+Two players. Two Trees of Life. Two Heptarchies.
+
+Their formations interact as COUNTERPOINT — the musical technique
+where two independent melodies play simultaneously and create
+harmony (or dissonance) between them.
+
+    Player 1 runs a Rose (3 Wardens) = Re Re Re = chord [2,2,2]
+    Player 2 runs a Koch (2 Rangers + 2 Gatherers) = [3,3,1,1]
+
+When their formations overlap spatially, the combined chord is
+[2,2,2,3,3,1,1] → sum = 14 → 14 mod 7 = 0 → PERFECT RESOLUTION.
+The two players accidentally created The Fundamental together.
+
+Cooperative play becomes musical composition across two minds.
+Competitive play becomes trying to DISSONANCE the opponent's army
+by choosing tones that create irresolvable intervals with theirs.
+
+The social experience IS the mathematical experience.
+
+IDEA G: FRACTAL ZOOM AS GAME STATE
+───────────────────────────────────
+The Mandelbrot menu already shows infinite zoom. What if the zoom
+level IS the game's depth layer?
+
+Zoom out: simple RTS, gather-and-fight, rocks-paper-scissors.
+Zoom in: formations, harmonics, spring physics, energy management.
+Zoom deeper: GF(7) arithmetic, resonance tiers, fractal visuals.
+Zoom deepest: the isomorphism itself, the four faces of one truth.
+
+The zoom metaphor is literal. The game IS a fractal. Every scale
+reveals the same structure with more detail. The Mandelbrot set
+on the menu screen isn't decoration — it's a TABLE OF CONTENTS.
+Each region of the set corresponds to a depth layer of gameplay.
+
+IDEA H: THE PRIME SPIRAL — WHY 7 AND NOT 5 OR 11
+─────────────────────────────────────────────────
+7 was chosen because it's prime and musically resonant (heptachord).
+But the design framework works for ANY prime p. GF(5), GF(11), GF(13)
+all produce valid game systems with different "flavors."
+
+FUTURE GAME MODES: Unlockable alternate fields.
+- GF(5): Pentatonic mode. 5 tones, 5 units, 5 formations. Simpler,
+  more consonant, less depth. "Easy mode" that's secretly a different
+  field, not a dumbed-down version of the same one.
+- GF(11): Undecimal mode. 11 tones, 11 units. Extreme depth, harsh
+  dissonances, massive formation combinatorics. "Impossible mode."
+- GF(2): Binary mode. 2 tones. Pure duality. No harmony — only
+  consonance or dissonance. Rock-paper-nothing. Minimalist.
+
+Each mode isn't just a number swap — the MUSIC changes (pentatonic
+vs heptachord vs undecimal), the GEOMETRY changes (5-fold vs 7-fold
+vs 11-fold symmetry), the COMBAT changes (fewer/more composition
+options). The player experiences how prime numbers FEEL different.
+
+IDEA I: THE TREE REMEMBERS
+──────────────────────────
+The Tree of Life is tone 1 — the generator. What if it records
+every GF(7) operation the player performs?
+
+Over a campaign, the Tree accumulates a "score" — a sequence of
+mod-7 operations corresponding to every formation created, every
+harmony achieved, every Resonance generated. This score IS the
+player's mathematical fingerprint.
+
+At game end: the Tree plays back the score as music. Fast, compressed,
+abstracted into a 30-second piece. Every player's piece is unique.
+The piece IS the proof that this player traversed this specific path
+through GF(7). Sharable. Comparable. Beautiful or cacophonous
+depending on how they played.
+
+"Your Tree remembers 2,847 harmonies and 412 dissonances.
+It sings what you taught it."
+
+IDEA J: THE FUNDAMENTAL RESONANCE CASCADE
+──────────────────────────────────────────
+When The Fundamental manifests (perfect resolution, v11), what if
+it cascades?
+
+Formation 1 achieves tone sum ≡ 0. The Fundamental emerges.
+Its presence shifts the harmony field around it. Nearby Formation 2,
+previously at tone sum 3, now perceives an ambient +4 from the
+Fundamental's field. 3 + 4 = 7 ≡ 0. Formation 2 also resolves.
+Its Fundamental emerges. The cascade continues.
+
+A player who carefully positions multiple formations can trigger
+a RESONANCE CASCADE — every formation resolving in sequence, each
+one's Fundamental triggering the next. The audio builds from a
+single ghost note to a full harmonic series. The screen fills with
+fractal depth. The spring physics lock into crystalline equilibrium.
+
+For 3 seconds, the game IS the isomorphism. All four faces visible
+at once.
+
+Then it fades. Because that's what resonance does.
+And the player spends the rest of the campaign trying to make it
+happen again.
+
+---
+AFTERWORD: THE META-PATTERN
+────────────────────────────
+The numbers 7, φ, 3, 2, 0, 6, ∞, 1, log aren't random. They form
+a hierarchy:
+
+    ∞  →  the space (what fractals fill)
+    7  →  the field (what algebra uses)
+    φ  →  the irrational (what resists the field)
+    6  →  the group (what cycles inside the field)
+    3  →  the structure (what minimum shape holds)
+    2  →  the mirror (what opposition creates)
+    1  →  the generator (what starts everything)
+    0  →  the identity (what holds everything still)
+    log → the perception (how minds map infinity to feeling)
+
+Read top to bottom: the universe narrows from infinity to zero.
+Read bottom to top: a single point generates everything.
+
+That's the Tree of Life. That's the game. That's the math.
+That's what we're building.
+---

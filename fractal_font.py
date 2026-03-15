@@ -275,6 +275,53 @@ _GLYPHS: dict[str, list[list[tuple[float, float]]]] = {
          (0.2, 0.35), (0.8, 0.65), (0.8, 0.85), (0.6, 1.0),
          (0.4, 1.0), (0.2, 0.85)],
     ],
+    # --- EXTENDED PUNCTUATION ---
+    "\u2014": [  # em dash —
+        [(0.05, 0.5), (0.95, 0.5)],
+    ],
+    "\u2013": [  # en dash –
+        [(0.15, 0.5), (0.85, 0.5)],
+    ],
+    "\u2019": [  # right single quote '
+        [(0.5, 0.0), (0.45, 0.2)],
+    ],
+    "\u2018": [  # left single quote '
+        [(0.45, 0.0), (0.5, 0.2)],
+    ],
+    "\u2022": [  # bullet •
+        [(0.35, 0.4), (0.65, 0.4), (0.65, 0.6), (0.35, 0.6), (0.35, 0.4)],
+    ],
+    "\u2192": [  # right arrow →
+        [(0.1, 0.5), (0.85, 0.5)],
+        [(0.65, 0.3), (0.85, 0.5), (0.65, 0.7)],
+    ],
+    "\u2605": [  # star ★
+        [(0.5, 0.0), (0.38, 0.38), (0.0, 0.38), (0.3, 0.62),
+         (0.2, 1.0), (0.5, 0.75), (0.8, 1.0), (0.7, 0.62),
+         (1.0, 0.38), (0.62, 0.38), (0.5, 0.0)],
+    ],
+    "\u266a": [  # music note ♪
+        [(0.6, 0.0), (0.6, 0.75)],
+        [(0.3, 0.75), (0.6, 0.65), (0.6, 0.85), (0.3, 0.95), (0.3, 0.75)],
+    ],
+    "\u2726": [  # four-pointed star ✦
+        [(0.5, 0.0), (0.4, 0.4), (0.0, 0.5), (0.4, 0.6),
+         (0.5, 1.0), (0.6, 0.6), (1.0, 0.5), (0.6, 0.4), (0.5, 0.0)],
+    ],
+    "|": [
+        [(0.5, 0.0), (0.5, 1.0)],
+    ],
+    "{": [
+        [(0.65, 0.0), (0.45, 0.1), (0.45, 0.4), (0.3, 0.5),
+         (0.45, 0.6), (0.45, 0.9), (0.65, 1.0)],
+    ],
+    "}": [
+        [(0.35, 0.0), (0.55, 0.1), (0.55, 0.4), (0.7, 0.5),
+         (0.55, 0.6), (0.55, 0.9), (0.35, 1.0)],
+    ],
+    "\\": [
+        [(0.15, 0.0), (0.85, 1.0)],
+    ],
     # lowercase — map to uppercase for runic consistency
 }
 
@@ -310,6 +357,24 @@ def _serif_depth(font_size: int) -> int:
     if font_size >= 24:
         return 1
     return 0
+
+
+def _char_advance(font_size: int) -> int:
+    """Character advance width (cell width + inter-char spacing).
+
+    Small sizes get proportionally more spacing for readability.
+    The spacing ratio tapers from ~0.85 at 8px to ~0.65 at 22px+.
+    """
+    cw = max(1, int(font_size * 0.6))
+    if font_size <= 10:
+        spacing = max(2, int(font_size * 0.25))
+    elif font_size <= 16:
+        spacing = max(1, int(font_size * 0.15))
+    elif font_size <= 22:
+        spacing = max(1, int(font_size * 0.08))
+    else:
+        spacing = max(1, int(font_size * 0.05))
+    return cw + spacing
 
 
 # ---------------------------------------------------------------------------
@@ -426,14 +491,14 @@ class FractalFont:
         if not text:
             return pygame.Surface((0, 0), pygame.SRCALPHA)
 
-        # Fallback: long strings or sub-pixel sizes use system font
-        if size < 7 or len(text) > 50:
+        # Fallback: sub-pixel sizes use system font
+        if size < 7:
             sf = self._get_sysfont(size)
             return sf.render(text, True, color)
 
-        cw = max(1, int(size * 0.6))
+        adv = _char_advance(size)
         pad = max(4, size // 6)
-        total_w = cw * len(text) + pad  # slight right padding
+        total_w = adv * len(text) + pad  # slight right padding
         total_h = size + pad * 2
         result = pygame.Surface((total_w, total_h), pygame.SRCALPHA)
 
@@ -441,7 +506,7 @@ class FractalFont:
         for ch in text:
             glyph = self._get_glyph(ch, size, color)
             result.blit(glyph, (x, 0))
-            x += cw
+            x += adv
 
         return result
 
@@ -468,12 +533,12 @@ class FractalFont:
         """Return (width, height) of rendered text without actually blitting."""
         if not text:
             return (0, 0)
-        if font_size < 13 or len(text) > 50:
+        if font_size < 7:
             sf = self._get_sysfont(font_size)
             return sf.size(text)
-        cw = max(1, int(font_size * 0.6))
+        adv = _char_advance(font_size)
         pad = max(4, font_size // 6)
-        return (cw * len(text) + pad, font_size + pad * 2)
+        return (adv * len(text) + pad, font_size + pad * 2)
 
     def clear_cache(self) -> None:
         """Clear all cached glyph surfaces."""

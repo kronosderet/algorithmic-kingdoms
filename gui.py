@@ -28,11 +28,22 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, TOP_BAR_H, BOTTOM_PANEL_H,
                        DISCOVERY_HINTS,
                        TOOLTIP_DATA, TOOLTIP_HOVER_DELAY, TOOLTIP_MAX_WIDTH,
                        TOOLTIP_BG, TOOLTIP_BORDER, TOOLTIP_PADDING,
-                       MSG_LOG_FADE, GAME_AREA_Y, GAME_AREA_H)
-from utils import draw_text, ruin_rebuild_cost
+                       TOOLTIP_CURSOR_DX, TOOLTIP_CURSOR_DY, TOOLTIP_SCREEN_MARGIN,
+                       MSG_LOG_FADE, GAME_AREA_Y, GAME_AREA_H,
+                       RESONANCE_DISSONANCE_COLORS, HARMONY_LABELS,
+                       GAME_OVER_TIPS_DEFEAT, GAME_OVER_TIPS_VICTORY,
+                       MSG_LOG_MINI_FONT_SZ, MSG_LOG_MINI_HEADER_SZ,
+                       MSG_LOG_MINI_LINE_H, MSG_LOG_MINI_SHOW,
+                       MSG_LOG_MINI_PAD, MSG_LOG_MINI_W, MSG_LOG_MINI_MARGIN,
+                       MSG_LOG_MINI_BG)
+import math as _math
+from utils import ruin_rebuild_cost
 from entities import Building, Unit
 from fractal_font import fractal_font
 from fractal_ui import (koch_border, radial_gradient, draw_resource_icon, fractal_bar)
+from squads import (compute_harmony, get_squad_composition,
+                    resonance_polar_rose_bonus, resonance_golden_spiral_miss,
+                    resonance_sierpinski_aoe_factor, resonance_koch_slow)
 
 # Pre-rendered panel backgrounds (created once on first use)
 _panel_bg_cache: dict[str, pygame.Surface] = {}
@@ -157,12 +168,12 @@ class GUI:
         card_h = total_h
 
         # Position: prefer below-right of cursor, clamp to screen
-        tx = mx + 14
-        ty = my + 18
-        if tx + card_w > SCREEN_WIDTH - 4:
-            tx = mx - card_w - 4
-        if ty + card_h > SCREEN_HEIGHT - 4:
-            ty = my - card_h - 4
+        tx = mx + TOOLTIP_CURSOR_DX
+        ty = my + TOOLTIP_CURSOR_DY
+        if tx + card_w > SCREEN_WIDTH - TOOLTIP_SCREEN_MARGIN:
+            tx = mx - card_w - TOOLTIP_SCREEN_MARGIN
+        if ty + card_h > SCREEN_HEIGHT - TOOLTIP_SCREEN_MARGIN:
+            ty = my - card_h - TOOLTIP_SCREEN_MARGIN
 
         # Draw card background
         card_surf = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
@@ -182,17 +193,19 @@ class GUI:
 
     @staticmethod
     def cost_str(gold=0, wood=0, iron=0, steel=0, stone=0):
+        # VDD §9.4: resource-colored fractal font for costs
+        # Use display name abbreviations from NAMING.md
         parts = []
         if gold:
-            parts.append(f"{gold}g")
+            parts.append(f"{gold}Fx")
         if wood:
-            parts.append(f"{wood}w")
+            parts.append(f"{wood}Fb")
         if iron:
-            parts.append(f"{iron}i")
+            parts.append(f"{iron}Or")
         if steel:
-            parts.append(f"{steel}s")
+            parts.append(f"{steel}Al")
         if stone:
-            parts.append(f"{stone}st")
+            parts.append(f"{stone}Cr")
         return " ".join(parts)
 
     @staticmethod
@@ -220,7 +233,6 @@ class GUI:
     # Resource icon shapes (VDD: distinct per resource)
     # ------------------------------------------------------------------
     @staticmethod
-    @staticmethod
     def _draw_res_icon(surf, cx, cy, res_type):
         """Draw a mathematical resource icon (Fibonacci spiral, binary tree, etc.)."""
         color_map = {
@@ -228,12 +240,12 @@ class GUI:
             "steel": COL_STEEL, "stone": COL_STONE,
         }
         color = color_map.get(res_type, COL_TEXT)
-        draw_resource_icon(surf, res_type, cx, cy, 7, color)
+        draw_resource_icon(surf, res_type, cx, cy, 10, color)
 
     # ------------------------------------------------------------------
     # TOP BAR
     # ------------------------------------------------------------------
-    def draw_top_bar(self, surf, resources, enemy_ai, player_units):
+    def draw_top_bar(self, surf, resources, enemy_ai, player_units, unlocks=None):
         # Radial gradient background
         if "top_bar" not in _panel_bg_cache:
             _panel_bg_cache["top_bar"] = radial_gradient(
@@ -242,7 +254,10 @@ class GUI:
         # Koch depth-1 border
         koch_border(surf, (0, 0, SCREEN_WIDTH, TOP_BAR_H), 1, (80, 75, 55))
 
-        # --- Resources (left side) ---
+        # --- Resources (left side) --- VDD §9.5: Fibonacci Counter
+        # Short display labels: Fx=Flux, Fb=Fiber, Or=Ore, Al=Alloy, Cr=Crystal
+        res_labels = {"gold": "Fx", "wood": "Fb", "iron": "Or",
+                      "steel": "Al", "stone": "Cr"}
         res_list = [
             ("gold", resources.gold, COL_GOLD),
             ("wood", resources.wood, COL_WOOD),
@@ -250,22 +265,52 @@ class GUI:
             ("steel", resources.steel, COL_STEEL),
             ("stone", resources.stone, COL_STONE),
         ]
-        x = 12
+        x = 6
         for res_type, amount, color in res_list:
-            self._draw_res_icon(surf, x + 8, 20, res_type)
-            ftext(surf, str(int(amount)), x + 20, 12, self.font, color)
-            self._register_tooltip(pygame.Rect(x, 2, 76, 36), f"res_{res_type}")
-            x += 80
+            # Progressive reveal: hide iron/steel/stone until first collected
+            if res_type in ("iron", "steel", "stone") and amount == 0:
+                if unlocks:
+                    if res_type == "iron" and not unlocks.get("has_iron", False):
+                        continue
+                    elif res_type == "steel" and not unlocks.get("has_iron", False):
+                        continue
+                    elif res_type == "stone" and not unlocks.get("has_stone", False):
+                        continue
+                else:
+                    continue
+            # VDD §9.5: icon + label + amount, properly spaced
+            self._draw_res_icon(surf, x + 6, 20, res_type)
+            lbl = res_labels[res_type]
+            # Dim label above, bright amount below
+            ftext(surf, lbl, x + 18, 5, self.font_xs, tuple(max(0, c - 40) for c in color))
+            ftext(surf, str(int(amount)), x + 18, 18, self.font, color)
+            self._register_tooltip(pygame.Rect(x, 2, 66, 36), f"res_{res_type}")
+            x += 68
 
         # --- Separator ---
-        sep_x = x + 8
+        sep_x = x + 4
         pygame.draw.line(surf, COL_GUI_BORDER, (sep_x, 6), (sep_x, 34))
 
-        # --- Population (compact) ---
-        pop = len(player_units)
-        pop_x = sep_x + 12
-        ftext(surf, f"Pop {pop}", pop_x, 12, self.font, (180, 200, 255))
-        self._register_tooltip(pygame.Rect(pop_x, 4, 60, 30), "pop")
+        # --- Population with composition ---
+        pop_x = sep_x + 8
+        workers = sum(1 for u in player_units if u.unit_type == "worker")
+        military = len(player_units) - workers
+        pop_str = f"Pop {len(player_units)}"
+        ftext(surf, pop_str, pop_x, 6, self.font, (180, 200, 255))
+        # Compact composition: "3G 2W 1R"
+        comp_parts = []
+        if workers:
+            comp_parts.append(f"{workers}G")
+        if military:
+            soldiers = sum(1 for u in player_units if u.unit_type == "soldier")
+            archers = sum(1 for u in player_units if u.unit_type == "archer")
+            if soldiers:
+                comp_parts.append(f"{soldiers}W")
+            if archers:
+                comp_parts.append(f"{archers}R")
+        if comp_parts:
+            ftext(surf, " ".join(comp_parts), pop_x, 22, self.font_xs, (130, 150, 190))
+        self._register_tooltip(pygame.Rect(pop_x, 4, 80, 30), "pop")
 
         # --- v10_9: Tension meter + incident state (right side) ---
         tension_x = SCREEN_WIDTH - 380
@@ -294,9 +339,8 @@ class GUI:
         bar_col = (max(0, min(255, r)), max(0, min(255, g)), max(0, min(255, b)))
         # Phase 5: pulse border red during foreboding
         if enemy_ai.state == "foreboding":
-            import math
             from constants import TENSION_PULSE_SPEED
-            pulse = 0.4 + 0.6 * abs(math.sin(enemy_ai.state_timer * TENSION_PULSE_SPEED))
+            pulse = 0.4 + 0.6 * abs(_math.sin(enemy_ai.state_timer * TENSION_PULSE_SPEED))
             pulse_col = (int(255 * pulse), int(40 * pulse), int(40 * pulse))
             fractal_bar(surf, bar_x, bar_y, bar_w, bar_h, t, bar_col, border=True, border_col=pulse_col)
         else:
@@ -426,6 +470,31 @@ class GUI:
             if x + card_w > SCREEN_WIDTH - 10:
                 break  # overflow protection
 
+        # v10_epsilon: free unit counter — show unassigned military units
+        free_soldiers = 0
+        free_archers = 0
+        free_workers = 0
+        for e in game.player_units:
+            if e.alive:
+                sq = game.player_squad_mgr.get_squad(e)
+                if sq is None:
+                    if e.unit_type == "soldier":
+                        free_soldiers += 1
+                    elif e.unit_type == "archer":
+                        free_archers += 1
+                    elif e.unit_type == "worker":
+                        free_workers += 1
+        parts = []
+        if free_soldiers:
+            parts.append(f"{free_soldiers}S")
+        if free_archers:
+            parts.append(f"{free_archers}A")
+        if free_workers:
+            parts.append(f"{free_workers}W")
+        if parts:
+            free_str = "Free: " + " ".join(parts)
+            ftext(surf, free_str, x + 8, py + 6, self.font_xs, (140, 180, 140))
+
     # ------------------------------------------------------------------
     # ENEMY INSPECTION PANEL (v10_2)
     # ------------------------------------------------------------------
@@ -490,13 +559,12 @@ class GUI:
         elif e.unit_type == "enemy_healer":
             ftext(surf, "Bloodtithe: sacrifices allies for inverted harmonics", 80, ability_y, self.font_xs, (180, 50, 60))
         elif e.unit_type == "enemy_raider":
-            ftext(surf, "Raider: targets workers & economy", 80, ability_y, self.font_xs, (220, 100, 150))
+            ftext(surf, "Blight Reaper: targets Gatherers & economy", 80, ability_y, self.font_xs, (220, 100, 150))
 
         # v10_8: dissonance tag
         dis_fmt = getattr(e, 'dissonant_formation', -1)
         if dis_fmt >= 0:
-            from constants import RESONANCE_DISSONANCE_COLORS
-            fmt_names = {0: "Rose", 1: "Spiral", 2: "Sierpinski", 3: "Koch"}
+            fmt_names = {i: n for i, n in enumerate(FORMATION_NAMES)}
             dis_col = RESONANCE_DISSONANCE_COLORS.get(dis_fmt, (150, 50, 50))
             ftext(surf, f"Dissonant (anti-{fmt_names.get(dis_fmt, '?')})",
                       80, ability_y + 14, self.font_xs, dis_col)
@@ -614,10 +682,11 @@ class GUI:
             if n_workers > 0:
                 ftext(surf, f"Workers: {n_workers}", 80, status_y + 16, self.font_sm, (160, 140, 100))
 
-        # action buttons (moved further right for cleaner spacing)
-        btn_x = 360
+        # action buttons — golden-ratio column position
+        self._draw_panel_divider(surf, py, BOTTOM_PANEL_H - 25)
+        btn_x = self._ACTION_X
         btn_y = py + 8
-        btn_w, btn_h = 140, 48
+        btn_w, btn_h = 155, 44
 
         if b.building_type == "town_hall":
             ud = UNIT_DEFS["worker"]
@@ -698,7 +767,6 @@ class GUI:
     # SINGLE UNIT PANEL (player) — v10_8c rework
     # ------------------------------------------------------------------
     def _draw_unit_panel(self, surf, py, u, game):
-        import math as _m
         color = UNIT_COLORS.get(u.unit_type, (150, 150, 150))
         cx, cy = 40, py + 42
         portrait_r = 24
@@ -713,9 +781,9 @@ class GUI:
             arc_r = portrait_r + 3
             segments = int(24 * hp_ratio)
             for i in range(segments):
-                angle = -_m.pi / 2 + (2 * _m.pi * i / 24)
-                ax = cx + int(arc_r * _m.cos(angle))
-                ay = cy + int(arc_r * _m.sin(angle))
+                angle = -_math.pi / 2 + (2 * _math.pi * i / 24)
+                ax = cx + int(arc_r * _math.cos(angle))
+                ay = cy + int(arc_r * _math.sin(angle))
                 pygame.draw.circle(surf, hp_col, (ax, ay), 2)
 
         # portrait fill
@@ -751,8 +819,8 @@ class GUI:
             rank_col = RANK_COLORS.get(u.rank, COL_TEXT)
             ftext(surf, name, ix, py + 4, self.font, rank_col)
             # rank badge
-            badge_x = ix + self.font.size(name)[0] + 6
-            badge_w = self.font_xs.size(rank_name)[0] + 8
+            badge_x = ix + fractal_font.size(name, self.font.get_height())[0] + 6
+            badge_w = fractal_font.size(rank_name, self.font_xs.get_height())[0] + 8
             pygame.draw.rect(surf, rank_col, (badge_x, py + 5, badge_w, 14))
             koch_border(surf, (badge_x, py + 5, badge_w, 14), 1, rank_col)
             ftext(surf, rank_name, badge_x + 4, py + 5, self.font_xs, (10, 10, 10))
@@ -766,8 +834,8 @@ class GUI:
                 skill_display = WORKER_SKILL_NAMES.get(primary_skill, primary_skill)
                 rank_name = WORKER_RANKS[primary_rank]
                 badge_text = f"{skill_display} {rank_name}"
-                badge_x = ix + self.font.size(name)[0] + 6
-                badge_w = self.font_xs.size(badge_text)[0] + 8
+                badge_x = ix + fractal_font.size(name, self.font.get_height())[0] + 6
+                badge_w = fractal_font.size(badge_text, self.font_xs.get_height())[0] + 8
                 pygame.draw.rect(surf, (*sc, 180), (badge_x, py + 5, badge_w, 14))
                 koch_border(surf, (badge_x, py + 5, badge_w, 14), 1, sc)
                 ftext(surf, badge_text, badge_x + 4, py + 5, self.font_xs, (255, 255, 255))
@@ -784,10 +852,10 @@ class GUI:
                 pygame.draw.circle(surf, tc, (tx + 5, py + 24), 4)
                 trait_label = t.replace("_", " ").title()[:8]
                 ftext(surf, trait_label, tx + 12, py + 19, self.font_xs, tc)
-                tw = self.font_xs.size(trait_label)[0] + 18
+                tw = fractal_font.size(trait_label, self.font_xs.get_height())[0] + 18
                 self._register_tooltip(pygame.Rect(tx, py + 17, tw, 14), f"trait_{t}")
                 tx += tw
-                if tx > 340:
+                if tx > self._DIVIDER_X - 10:
                     break
 
         # Row 3: HP bar (wider, fractal-styled)
@@ -823,7 +891,7 @@ class GUI:
             state_col = (160, 160, 200)
 
         # state tag with Koch border
-        tag_w = self.font_xs.size(state_str)[0] + 8
+        tag_w = fractal_font.size(state_str, self.font_xs.get_height())[0] + 8
         pygame.draw.rect(surf, (*state_col[:3], 60), (ix, py + 47, tag_w, 14))
         koch_border(surf, (ix, py + 47, tag_w, 14), 1, state_col)
         ftext(surf, state_str, ix + 4, py + 48, self.font_xs, state_col)
@@ -834,7 +902,7 @@ class GUI:
             stance_col = STANCE_COLORS.get(u.stance, (180, 220, 255))
             stance_name = STANCE_NAMES[u.stance]
             ftext(surf, stance_name, stat_x, py + 48, self.font_xs, stance_col)
-            stat_x += self.font_xs.size(stance_name)[0] + 8
+            stat_x += fractal_font.size(stance_name, self.font_xs.get_height())[0] + 8
         ftext(surf, f"ATK:{u.attack_power}  SPD:{u.speed}", stat_x, py + 48, self.font_xs, (150, 150, 170))
 
         # Row 5: XP / Carrying / Skills
@@ -862,7 +930,8 @@ class GUI:
             if u.carry_amount > 0:
                 cc = carry_colors.get(u.carry_type, COL_GOLD)
                 pygame.draw.rect(surf, cc, (ix, row5_y, 8, 8), border_radius=2)
-                ftext(surf, f"{u.carry_amount} {u.carry_type}", ix + 12, row5_y - 1, self.font_xs, cc)
+                carry_name = RESOURCE_DISPLAY_NAMES.get(u.carry_type, u.carry_type)
+                ftext(surf, f"{u.carry_amount} {carry_name}", ix + 12, row5_y - 1, self.font_xs, cc)
 
             # skill XP inline badges
             active_skills = [(s, u.skill_xp[s], u.skill_ranks[s])
@@ -874,7 +943,7 @@ class GUI:
                 skill_short = str(WORKER_SKILL_NAMES.get(skill_name, skill_name))[:4]
                 rank_label = WORKER_RANKS[rank][0]
                 badge_text = f"{skill_short}:{rank_label}"
-                bw = self.font_xs.size(badge_text)[0] + 6
+                bw = fractal_font.size(badge_text, self.font_xs.get_height())[0] + 6
                 # mini XP bar behind badge
                 if rank < len(WORKER_RANK_XP) - 1:
                     cur_thresh = WORKER_RANK_XP[rank]
@@ -887,13 +956,13 @@ class GUI:
                 fractal_bar(surf, skill_x, row5_y, bw, 12, ratio, sc[:3], border=False)
                 ftext(surf, badge_text, skill_x + 3, row5_y, self.font_xs, sc)
                 skill_x += bw + 4
-                if skill_x > 340:
+                if skill_x > self._DIVIDER_X - 10:
                     break
 
         # Row 6: Gather hint for idle workers
         if u.unit_type == "worker" and u.state == "idle":
-            ftext(surf, "RClick resource or use gather buttons →", ix, py + 80,
-                      self.font_xs, (100, 100, 130))
+            fractal_font.draw(surf, "Right-click resource or use buttons",
+                              ix, py + 80, 10, (100, 100, 130))
 
         # === ACTION COLUMN (right side) ===
         if u.unit_type == "worker":
@@ -905,68 +974,73 @@ class GUI:
     # WORKER ACTION BUTTONS — v10_8c: build + gather in one panel
     # ------------------------------------------------------------------
     def _draw_worker_action_buttons(self, surf, py, game):
-        """v10_8d: Build buttons + gather — progressively revealed."""
-        btn_x = 400
+        """v10_8d: Build buttons + gather — progressively revealed.
+        Uses golden-ratio column layout: actions start at _ACTION_X."""
+        self._draw_panel_divider(surf, py, BOTTOM_PANEL_H - 25)
+        btn_x = self._ACTION_X
         btn_y_start = py + 2
-        btn_w, btn_h = 105, 28
+        btn_w, btn_h = 155, 28
         bd = BUILDING_DEFS
         unlocks = game.unlocks
 
         # Tree of Life: always visible (core building)
-        self._add_button(surf, btn_x, btn_y_start, btn_w, btn_h, "Tree of Life(1)",
+        self._add_button(surf, btn_x, btn_y_start, btn_w, btn_h, "T.of Life [1]",
                          lambda: game.start_placement("town_hall"),
                          game.resources.can_afford(gold=bd["town_hall"]["gold"], wood=bd["town_hall"]["wood"]),
                          cost_text=self.building_cost_str("town_hall"))
 
-        # War Nexus: visible after first wave or ~60s of play (player needs army)
+        # Resonance Forge: visible after first wave or ~60s of play (player needs army)
         if unlocks["first_wave_cleared"] or game.game_time > 60:
-            self._add_button(surf, btn_x + btn_w + 4, btn_y_start, btn_w, btn_h, "War Nexus(2)",
+            self._add_button(surf, btn_x + btn_w + 4, btn_y_start, btn_w, btn_h, "Res.Forge [2]",
                              lambda: game.start_placement("barracks"),
                              game.resources.can_afford(gold=bd["barracks"]["gold"], wood=bd["barracks"]["wood"]),
                              cost_text=self.building_cost_str("barracks"))
         else:
             # teaser: locked button with hint
             self._draw_locked_button(surf, btn_x + btn_w + 4, btn_y_start, btn_w, btn_h,
-                                     "???", "Survive first wave")
+                                     "???", "First wave")
 
         # Build row 2
         r2y = btn_y_start + btn_h + 2
 
-        # Crucible: visible after iron is discovered
+        # Harmonic Mill: visible after iron is discovered
         if unlocks["has_iron"]:
-            self._add_button(surf, btn_x, r2y, btn_w, btn_h, "Crucible(3)",
+            self._add_button(surf, btn_x, r2y, btn_w, btn_h, "H.Mill [3]",
                              lambda: game.start_placement("refinery"),
                              game.resources.can_afford(gold=bd["refinery"]["gold"], wood=bd["refinery"]["wood"], iron=bd["refinery"]["iron"]),
                              cost_text=self.building_cost_str("refinery"))
         elif game.game_time > 30:
-            self._draw_locked_button(surf, btn_x, r2y, btn_w, btn_h, "???", "Mine Iron")
+            self._draw_locked_button(surf, btn_x, r2y, btn_w, btn_h, "???", "Mine Ore")
 
         # Sentinel: visible after barracks built
         if unlocks["has_barracks"]:
-            self._add_button(surf, btn_x + btn_w + 4, r2y, btn_w, btn_h, "Sentinel(4)",
+            self._add_button(surf, btn_x + btn_w + 4, r2y, btn_w, btn_h, "Sentinel [4]",
                              lambda: game.start_placement("tower"),
                              game.resources.can_afford(gold=bd["tower"]["gold"], iron=bd["tower"].get("iron", 0),
                                                        stone=bd["tower"].get("stone", 0)),
                              cost_text=self.building_cost_str("tower"))
         elif unlocks["has_iron"]:
-            self._draw_locked_button(surf, btn_x + btn_w + 4, r2y, btn_w, btn_h, "???", "Build Barracks")
+            self._draw_locked_button(surf, btn_x + btn_w + 4, r2y, btn_w, btn_h, "???", "Build Forge")
 
-        # Gather row: 4 resource-colored buttons
+        # Gather row: progressively revealed resource buttons
         r3y = r2y + btn_h + 4
         gather_w = 52
         res_defs = [
-            ("wood",  COL_WOOD,   "Fiber"),
-            ("gold",  COL_GOLD,   "Flux"),
-            ("iron",  COL_IRON_C, "Ore"),
-            ("stone", COL_STONE,  "Crystal"),
+            ("wood",  COL_WOOD,   RESOURCE_DISPLAY_NAMES["wood"],  True),
+            ("gold",  COL_GOLD,   RESOURCE_DISPLAY_NAMES["gold"],  True),
+            ("iron",  COL_IRON_C, RESOURCE_DISPLAY_NAMES["iron"],  unlocks.get("has_iron", False)),
+            ("stone", COL_STONE,  RESOURCE_DISPLAY_NAMES["stone"], unlocks.get("has_stone", False)),
         ]
-        for i, (rtype, rcol, rlabel) in enumerate(res_defs):
-            gx = btn_x + i * (gather_w + 3)
+        gi = 0
+        for rtype, rcol, rlabel, visible in res_defs:
+            if not visible:
+                continue
+            gx = btn_x + gi * (gather_w + 3)
             self._add_button(surf, gx, r3y, gather_w, 22, rlabel,
                              lambda rt=rtype: game.command_gather_nearest_selected(rt))
             # colored underline
             pygame.draw.line(surf, rcol, (gx + 2, r3y + 21), (gx + gather_w - 2, r3y + 21), 2)
-        ftext(surf, "Gather:", btn_x - 45, r3y + 4, self.font_xs, (120, 120, 140))
+            gi += 1
 
         # Foreman buildings (if applicable)
         foreman_skills = set()
@@ -1086,8 +1160,6 @@ class GUI:
                            if u.unit_type in ("soldier", "archer")
                            and game.player_squad_mgr.is_free(u)]
             if len(free_combat) >= 2 and game.discovered_formations:
-                from squads import compute_harmony
-                from constants import HARMONY_LABELS, RESONANCE_COLORS, FORMATION_NAMES
                 ftext(surf, f"{s_count}S {a_count}A", 20, chord_y,
                           self.font_xs, (180, 180, 200))
                 chord_y += 14
@@ -1141,16 +1213,10 @@ class GUI:
             if len(game.discovered_formations) < 4 and len(free_combat) >= 3:
                 hint_col = (180, 160, 80)
                 if len(game.discovered_formations) == 0:
-                    ftext(surf, "Move 3+ military units together", 20, chord_y,
-                              self.font_xs, hint_col)
-                    chord_y += 13
-                    ftext(surf, "to discover formations!", 20, chord_y,
+                    ftext(surf, "Press F to form a squad!", 20, chord_y,
                               self.font_xs, hint_col)
                 else:
-                    ftext(surf, "Move units together to discover", 20, chord_y,
-                              self.font_xs, hint_col)
-                    chord_y += 13
-                    ftext(surf, "more formations", 20, chord_y,
+                    ftext(surf, "Press F to form another squad", 20, chord_y,
                               self.font_xs, hint_col)
         else:
             self._form_squad_btn_rect = None
@@ -1179,7 +1245,7 @@ class GUI:
         # Defend/Hunt only after combat exists
         if unlocks["has_barracks"] or unlocks["has_squad"]:
             self._add_button(surf, btn_x + slot * (btn_w + gap), btn_y, btn_w, btn_h,
-                             "Defend Base", lambda: game.global_defend())
+                             "Defend [D]", lambda: game.global_defend())
             slot += 1
             self._add_button(surf, btn_x + slot * (btn_w + gap), btn_y, btn_w, btn_h,
                              "Hunt Enemies", lambda: game.global_attack())
@@ -1189,16 +1255,16 @@ class GUI:
         if unlocks["has_iron"] or game.game_time > 120:
             gc = GARRISON_COST
             can_bell = game.resources.can_afford(wood=gc["wood"], iron=gc["iron"], stone=gc["stone"])
-            cost_str = f"{gc['wood']}W {gc['iron']}I {gc['stone']}S"
+            cost_str = f"{gc['wood']}Fb {gc['iron']}Or {gc['stone']}Cr"
             self._add_button(surf, btn_x + slot * (btn_w + gap), btn_y, btn_w, btn_h,
-                             "Town Bell", lambda: game.global_bell(),
+                             "Bell [B]", lambda: game.global_bell(),
                              enabled=can_bell, cost_text=cost_str)
             slot += 1
 
         # Resume: always after bell is available
         if unlocks["has_iron"] or game.game_time > 120:
             self._add_button(surf, btn_x + slot * (btn_w + gap), btn_y, btn_w, btn_h,
-                             "Resume Work", lambda: game.global_resume())
+                             "Resume [N]", lambda: game.global_resume())
             slot += 1
 
         # v10_8d: contextual help text — changes based on progression
@@ -1206,7 +1272,7 @@ class GUI:
         if game.game_time < 30:
             hint = "Select workers and right-click resources to start gathering"
         elif not unlocks["has_barracks"] and game.game_time < 120:
-            hint = "Build a War Nexus to train soldiers — enemies approach!"
+            hint = "Build a Resonance Forge (2) to train Wardens — enemies approach!"
         elif unlocks["has_squad"]:
             hint = "LClick: select  RClick: command  1-9: squad  Tab: cycle  A+click: atk-move  P: pause"
         else:
@@ -1216,7 +1282,8 @@ class GUI:
     # ------------------------------------------------------------------
     def _draw_command_buttons(self, surf, py, game):
         """v10_8d: Formation picker + stance picker — progressively unlocked."""
-        btn_x = 400
+        self._draw_panel_divider(surf, py, BOTTOM_PANEL_H - 25)
+        btn_x = self._ACTION_X
         btn_y_start = py + 2
         unlocks = game.unlocks
 
@@ -1280,9 +1347,6 @@ class GUI:
 
         # Resonance value + harmony quality labels below formation buttons
         if primary_squad and squads_seen:
-            from squads import (resonance_polar_rose_bonus, resonance_golden_spiral_miss,
-                                resonance_sierpinski_aoe_factor, resonance_koch_slow,
-                                compute_harmony, get_squad_composition)
             n = primary_squad.alive_count
             s_count, a_count = get_squad_composition(primary_squad)
             labels = [
@@ -1384,6 +1448,20 @@ class GUI:
                             m.stance = stance_idx
 
     # ------------------------------------------------------------------
+    # LAYOUT CONSTANTS — golden ratio panel design
+    # ------------------------------------------------------------------
+    # Bottom panel splits into info column (left) and action column (right)
+    # separated by a Koch divider at the φ position.
+    _ACTION_X = 375       # action column starts here (φ split of ~1000px usable)
+    _DIVIDER_X = 368      # Koch vertical divider position
+
+    @staticmethod
+    def _draw_panel_divider(surf, py, panel_h):
+        """Draw a subtle Koch vertical divider between info and action columns."""
+        dx = GUI._DIVIDER_X
+        koch_border(surf, (dx, py + 4, 1, panel_h - 8), 1, (50, 50, 65))
+
+    # ------------------------------------------------------------------
     # BUTTONS
     # ------------------------------------------------------------------
     def _draw_locked_button(self, surf, x, y, w, h, label, hint):
@@ -1391,8 +1469,9 @@ class GUI:
         rect = pygame.Rect(x, y, w, h)
         pygame.draw.rect(surf, (25, 25, 35), rect)
         koch_border(surf, (x, y, w, h), 1, (45, 45, 55))
-        ftext(surf, label, x + w // 2, y + h // 2 - 5, self.font_sm, (55, 55, 70), center=True)
-        ftext(surf, hint, x + w // 2, y + h // 2 + 7, self.font_xs, (70, 60, 50), center=True)
+        # 13px label, 10px hint — always fits within button bounds
+        fractal_font.draw(surf, label, x + w // 2, y + h // 2 - 5, 13, (55, 55, 70), center=True)
+        fractal_font.draw(surf, hint, x + w // 2, y + h // 2 + 6, 10, (70, 60, 50), center=True)
 
     def _add_button(self, surf, x, y, w, h, label, callback, enabled=True, cost_text=None):
         rect = pygame.Rect(x, y, w, h)
@@ -1407,15 +1486,18 @@ class GUI:
         koch_border(surf, (x, y, w, h), 1, border_col)
         text_col = COL_BTN_TEXT if enabled else (80, 80, 90)
 
+        # 13px label, 10px cost — sized to fit standard buttons without overflow
         if cost_text:
-            ftext(surf, label, x + w // 2, y + h // 2 - 7, self.font_sm, text_col, center=True)
+            fractal_font.draw(surf, label, x + w // 2, y + h // 2 - 6, 13, text_col, center=True)
             cost_col = (180, 180, 100) if enabled else (70, 70, 60)
-            ftext(surf, cost_text, x + w // 2, y + h // 2 + 9, self.font_xs, cost_col, center=True)
+            fractal_font.draw(surf, cost_text, x + w // 2, y + h // 2 + 7, 10, cost_col, center=True)
         else:
-            ftext(surf, label, x + w // 2, y + h // 2, self.font_sm, text_col, center=True)
+            fractal_font.draw(surf, label, x + w // 2, y + h // 2, 13, text_col, center=True)
 
         self.buttons.append((rect, label, callback, enabled))
-        tooltip_key = f"btn_{label.split('(')[0].strip()}"
+        # Strip hotkey hints like "(Q)" or "[D]" for tooltip key lookup
+        clean = label.split('(')[0].split('[')[0].strip()
+        tooltip_key = f"btn_{clean}"
         if tooltip_key in TOOLTIP_DATA:
             self._register_tooltip(rect, tooltip_key)
 
@@ -1423,14 +1505,17 @@ class GUI:
     # MESSAGE LOG — mini panel in bottom-right, click to expand
     # ------------------------------------------------------------------
     def _draw_message_log_mini(self, surf, py, game):
-        """Draw 3 most recent messages in the bottom-right of the panel."""
+        """Draw 3 most recent messages in the bottom-right of the panel.
+        Uses 8px fractal font with fixed spacing for compact readability."""
         log = game._message_log
-        line_h = 15
-        n_show = 3
-        pad = 4
-        log_w = 280
+        msg_sz = MSG_LOG_MINI_FONT_SZ
+        header_sz = MSG_LOG_MINI_HEADER_SZ
+        line_h = MSG_LOG_MINI_LINE_H
+        n_show = MSG_LOG_MINI_SHOW
+        pad = MSG_LOG_MINI_PAD
+        log_w = MSG_LOG_MINI_W
         log_h = n_show * line_h + pad * 2 + 14  # +14 for header
-        log_x = SCREEN_WIDTH - log_w - 8
+        log_x = SCREEN_WIDTH - log_w - MSG_LOG_MINI_MARGIN
         log_y = py + 4
 
         # store rect for click detection
@@ -1438,41 +1523,44 @@ class GUI:
 
         # subtle background with Koch border
         bg = pygame.Surface((log_w, log_h), pygame.SRCALPHA)
-        bg.fill((18, 18, 28, 160))
+        bg.fill(MSG_LOG_MINI_BG)
         surf.blit(bg, (log_x, log_y))
-        koch_border(surf, (log_x, log_y, log_w, log_h), 1, (50, 50, 65))
+        koch_border(surf, (log_x, log_y, log_w, log_h), 1, (60, 60, 80))
 
         # header
-        header_col = (100, 100, 130) if not game.show_message_log else (160, 160, 200)
-        ftext(surf, "Messages", log_x + pad, log_y + pad, self.font_xs, header_col)
+        header_col = (120, 120, 160) if not game.show_message_log else (180, 180, 220)
+        fractal_font.draw(surf, "Messages", log_x + pad, log_y + pad, header_sz, header_col)
         if len(log) > n_show:
-            ftext(surf, f"({len(log)})", log_x + 62, log_y + pad,
-                      self.font_xs, (70, 70, 90))
+            fractal_font.draw(surf, f"({len(log)})", log_x + 62, log_y + pad + 1,
+                              msg_sz, (90, 90, 110))
 
-        # recent messages
+        # recent messages — 8px fractal font, brighter base, slower fade
         recent = log[-n_show:] if log else []
         y = log_y + pad + 14
         for text, msg_time, color in recent:
             age = game.game_time - msg_time
-            if age > MSG_LOG_FADE:
-                fade = max(0.3, 1.0 - (age - MSG_LOG_FADE) / MSG_LOG_FADE)
-                faded = tuple(max(0, int(c * fade)) for c in color)
+            # Boost base brightness for readability at small size
+            bright = tuple(min(255, c + 60) for c in color)
+            if age > MSG_LOG_FADE * 1.5:
+                fade = max(0.4, 1.0 - (age - MSG_LOG_FADE * 1.5) / (MSG_LOG_FADE * 2))
+                faded = tuple(max(0, int(c * fade)) for c in bright)
             else:
-                faded = color
-            # truncate text to fit
+                faded = bright
+            # truncate text to fit (using fractal font measurement)
             max_tw = log_w - pad * 2 - 4
-            txt_surf = self.font_xs.render(str(text), True, faded)
-            if txt_surf.get_width() > max_tw:
-                t = str(text)
-                while txt_surf.get_width() > max_tw - 8 and len(t) > 5:
+            t = str(text)
+            tw, _ = fractal_font.size(t, msg_sz)
+            if tw > max_tw:
+                while tw > max_tw - 8 and len(t) > 5:
                     t = t[:-1]
-                txt_surf = self.font_xs.render(t + "..", True, faded)
-            surf.blit(txt_surf, (log_x + pad + 2, y))
+                    tw, _ = fractal_font.size(t + "..", msg_sz)
+                t = t + ".."
+            fractal_font.draw(surf, t, log_x + pad + 2, y, msg_sz, faded)
             y += line_h
 
         if not recent:
-            ftext(surf, "-- No messages --", log_x + pad + 2, y,
-                      self.font_xs, (60, 60, 80))
+            fractal_font.draw(surf, "-- No messages --", log_x + pad + 2, y,
+                              msg_sz, (80, 80, 100))
 
     def draw_message_log_full(self, surf, game):
         """Draw the full message log as a center overlay when expanded."""
@@ -1526,15 +1614,16 @@ class GUI:
             secs = int(msg_time) % 60
             ts = f"{mins:02d}:{secs:02d}"
             ftext(surf, ts, log_x + pad, y, self.font_xs, (70, 70, 90))
-            # message
+            # message (fractal font with truncation)
             max_tw = log_w - 60
-            txt_surf = self.font_xs.render(str(text), True, faded)
-            if txt_surf.get_width() > max_tw:
-                t = str(text)
-                while txt_surf.get_width() > max_tw - 8 and len(t) > 5:
+            t = str(text)
+            tw, _ = fractal_font.size(t, self.font_xs.get_height())
+            if tw > max_tw:
+                while tw > max_tw - 8 and len(t) > 5:
                     t = t[:-1]
-                txt_surf = self.font_xs.render(t + "..", True, faded)
-            surf.blit(txt_surf, (log_x + pad + 44, y))
+                    tw, _ = fractal_font.size(t + "..", self.font_xs.get_height())
+                t = t + ".."
+            ftext(surf, t, log_x + pad + 44, y, self.font_xs, faded)
             y += line_h
 
     def handle_click(self, pos):
@@ -1556,11 +1645,10 @@ class GUI:
     def draw_game_over_panel(self, screen, game):
         """Render a stats-rich game-over overlay instead of the bare label."""
         import random
-        from constants import (GAME_OVER_TIPS_DEFEAT, GAME_OVER_TIPS_VICTORY,
-                               FORMATION_NAMES)
 
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 170))
+        from constants import OVERLAY_ALPHA_DARK
+        overlay.fill((0, 0, 0, OVERLAY_ALPHA_DARK))
         screen.blit(overlay, (0, 0))
 
         cx = SCREEN_WIDTH // 2

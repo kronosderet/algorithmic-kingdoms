@@ -554,7 +554,7 @@ class EnemyAI:
             wave_age = n - spawn_inc
             if wave_age >= STRAGGLER_METAMORPH_WAVES and not e.metamorphosed:
                 e.metamorphose()
-                game.add_notification("A straggler has metamorphosed into an Entrenched Titan!",
+                game.add_notification("A straggler's dissonance has taken root... Bitter Root!",
                                       2.5, (255, 60, 60))
             elif wave_age >= STRAGGLER_ROOT_WAVES and not e.rooted and not e.metamorphosed:
                 e.root()

@@ -209,9 +209,9 @@ class MainMenu:
     _SUB_Y = _TITLE_Y + int(68 / _PHI)                   # ≈212
     # Difficulty buttons at h/φ² — second golden subdivision
     _BTN_Y = int(SCREEN_HEIGHT / (_PHI ** 2))             # ≈275
-    _BTN_W = int(SCREEN_WIDTH / (_PHI ** 4))              # ≈186, φ⁴ subdivision of width
-    _BTN_H = int(_BTN_W / _PHI)                           # ≈114, golden ratio w:h
-    _BTN_GAP = int(_BTN_W / (_PHI ** 4))                  # ≈27, φ⁴ subdivision of button
+    _BTN_W = int(SCREEN_WIDTH / (_PHI ** 3.5))            # ≈170, tighter to avoid overlap
+    _BTN_H = int(_BTN_W / _PHI) + 35                     # ≈140, room for 3 desc lines + tag + key with proper spacing
+    _BTN_GAP = int(_BTN_W / (_PHI ** 3))                  # ≈40, more breathing room
     _EXIT_PAD = 30  # corner padding for quit button
 
     def _get_easy_btn_rect(self):
@@ -230,15 +230,15 @@ class MainMenu:
                            self._BTN_Y, self._BTN_W, self._BTN_H)
 
     def _get_exit_btn_rect(self):
-        # v10_epsilon1: bottom-right corner, golden subdivision below difficulty row
-        # Space below buttons: from (_BTN_Y + _BTN_H) to (SCREEN_HEIGHT - hint bar ~50)
-        # Place exit at 1/φ of that remaining space
+        # v10_epsilon4: subtle exit — smaller, bottom-right
+        _EXIT_W = 100
+        _EXIT_H = 35
         top_of_space = self._BTN_Y + self._BTN_H
         bottom_of_space = SCREEN_HEIGHT - 60  # above hint bar
-        exit_y = int(top_of_space + (bottom_of_space - top_of_space) / (self._PHI ** 2)) - 22
-        return pygame.Rect(SCREEN_WIDTH - self._BTN_W - self._EXIT_PAD,
+        exit_y = int(top_of_space + (bottom_of_space - top_of_space) / (self._PHI ** 2)) - 10
+        return pygame.Rect(SCREEN_WIDTH - _EXIT_W - self._EXIT_PAD,
                            exit_y,
-                           self._BTN_W, 45)
+                           _EXIT_W, _EXIT_H)
 
     def _check_buttons(self, pos):
         if self._get_easy_btn_rect().collidepoint(pos):
@@ -295,21 +295,27 @@ class MainMenu:
         fractal_font.draw(self.screen, name, cx, rect.top + 9,
                           self._sz_btn, color_accent, center=True)
 
-        # description lines
+        # description lines (with text shadow for readability over fractal)
         lines = desc_lines if desc_lines else [desc]
-        line_y = rect.top + 35
+        line_y = rect.top + 38
         for line in lines:
+            fractal_font.draw(self.screen, line, cx + 1, line_y + 1,
+                              self._sz_desc, (10, 10, 15), center=True)
             fractal_font.draw(self.screen, line, cx, line_y,
                               self._sz_desc, (150, 150, 170), center=True)
-            line_y += 18
+            line_y += 20
 
         # recommended tag
         if recommended:
-            fractal_font.draw(self.screen, "Recommended for first game", cx, line_y,
+            fractal_font.draw(self.screen, "Recommended", cx + 1, line_y + 1,
+                              self._sz_desc, (10, 10, 15), center=True)
+            fractal_font.draw(self.screen, "Recommended", cx, line_y,
                               self._sz_desc, (218, 165, 32), center=True)
-            line_y += 18
+            line_y += 20
 
         # key hint
+        fractal_font.draw(self.screen, f"[{key}]", cx + 1, line_y + 1,
+                          self._sz_desc, (10, 10, 15), center=True)
         fractal_font.draw(self.screen, f"[{key}]", cx, line_y,
                           self._sz_desc, (100, 100, 120), center=True)
 
@@ -343,13 +349,14 @@ class MainMenu:
             dot_r = 3 if hovered else 2
             pygame.draw.circle(self.screen, hex_color, (cx + dx, cy + dy), dot_r)
 
-        # text with glow on hover
+        # text with glow on hover (smaller font for exit)
+        sz = self._sz_sub  # 20px — subtler than difficulty buttons
         if hovered:
             fractal_font.draw(self.screen, text, cx + 1, cy + 1,
-                              self._sz_btn, (240, 240, 250), center=True)
+                              sz, (240, 240, 250), center=True)
         txt_col = (220, 220, 230) if hovered else (160, 160, 180)
         fractal_font.draw(self.screen, text, cx, cy,
-                          self._sz_btn, txt_col, center=True)
+                          sz, txt_col, center=True)
 
     def _render(self):
         # fractal background
@@ -423,7 +430,7 @@ class MainMenu:
         fractal_font.draw(self.screen, "Press 1 / 2 / 3 to start  |  ESC to quit",
                           cx, SCREEN_HEIGHT - 50, self._sz_desc, (70, 70, 90), center=True)
 
-        fractal_font.draw(self.screen, "v10_epsilon3",
+        fractal_font.draw(self.screen, "v10_epsilon4",
                           12, SCREEN_HEIGHT - 20, self._sz_ver, (50, 50, 65))
 
         pygame.display.flip()

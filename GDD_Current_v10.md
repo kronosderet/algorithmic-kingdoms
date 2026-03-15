@@ -1,4 +1,4 @@
-# Game Design Document — Resonance v10_epsilon3 (Current)
+# Game Design Document — Resonance v10_epsilon4 (Current)
 
 > Reflects the actual implemented state of all systems.
 > Last updated: 2026-03-15
@@ -34,6 +34,7 @@
 - v10_epsilon: Formation combat — Rose sweep, Sierpinski pulse, Koch contract, Spiral tighten/loosen, type-aware slot classification, Quick-Form (F key)
 - v10_epsilon2: Quick-Form auto-picks best harmony formation, fractal GUI overhaul begins
 - v10_epsilon3: Fractal font, Koch borders, fractal progress bars — complete GUI rebirth
+- v10_epsilon4: UX overhaul (game-over stats, attack arrows, difficulty descriptions, formation hints, incident alerts), energy bar visual, velocity trails, exhaustion particles, free unit counter, Don't Panic advisor (basic)
 
 ---
 
@@ -143,7 +144,7 @@ Modifies incident composition based on player state:
 
 Enemy units that survive across incident boundaries evolve:
 - **After 1 incident:** Unit roots in place (speed=0, stops attacking, grows root tendrils VFX)
-- **After 2 incidents:** Metamorphoses into Entrenched Titan (3× HP, 2× ATK, 60% base speed)
+- **After 2 incidents:** Metamorphoses into **Bitter Root** — a lingering dissonant tone grown into something worse (3× HP, 2× ATK, 60% base speed, pulsing red aura)
 
 ---
 
@@ -221,7 +222,7 @@ Unlocked when a Gatherer reaches Foreman rank in the corresponding skill. Placed
 | Building (code → UI) | Flux | Fiber | Ore | Alloy | Crystal | HP | Build | Unlock |
 |---|---|---|---|---|---|---|---|---|
 | goldmine_hut → **Flux Node** | 40 | 30 | 0 | 0 | 0 | 150 | 12s | Flux Miner Foreman |
-| lumber_camp → **Grove Tap** | 30 | 40 | 0 | 0 | 0 | 150 | 12s | Fiberjack Foreman |
+| lumber_camp → **Fiber Node** | 30 | 40 | 0 | 0 | 0 | 150 | 12s | Fiberjack Foreman |
 | quarry_hut → **Crystal Node** | 40 | 30 | 0 | 0 | 10 | 150 | 12s | Crystal Mason Foreman |
 | iron_depot → **Ore Node** | 40 | 30 | 0 | 0 | 0 | 150 | 12s | Ore Miner Foreman |
 | scaffold → **Lattice** | 50 | 40 | 0 | 0 | 0 | 100 | 10s | Builder Foreman |
@@ -236,7 +237,7 @@ Upgraded from helper buildings when a Gatherer reaches Master rank. Generate res
 
 | Building (code → UI) | Flux | Crystal | HP | Build | Upgrades From | Production |
 |---|---|---|---|---|---|---|
-| sawmill → **Fiber Spire** | 60 | 40 | 300 | 20s | Grove Tap | Fiber: 1.5 base + 5.0/worker per tick |
+| sawmill → **Fiber Spire** | 60 | 40 | 300 | 20s | Fiber Node | Fiber: 1.5 base + 5.0/worker per tick |
 | goldmine → **Flux Spire** | 80 | 40 | 300 | 20s | Flux Node | Flux: 1.0 base + 4.0/worker per tick |
 | stoneworks → **Crystal Spire** | 60 | 30 | 300 | 20s | Crystal Node | Crystal: 1.0 base + 4.0/worker per tick |
 | iron_works → **Ore Spire** | 60 | 40 | 300 | 20s | Ore Node | Ore: 0.8 base + 3.5/worker per tick |
@@ -527,7 +528,7 @@ Squads are **player-created**, not auto-formed. Max size: 12. Leader = highest r
 |---|---|
 | **F1-F4** | Select military units, press formation hotkey. Creates new squad from free units (min 2). Shift+F# force-pulls from existing squads |
 | **F (Quick-Form)** | Auto-picks best-harmony formation for selected free units. Double-tap cycles formations |
-| **Pending Group Discovery** | Move 3+ free military units to same location → arrival triggers composition check → formation auto-discovered if recipe matches |
+| **Pending Group Discovery** | form a squad from free or mixxed units → triggers composition check → formation auto-discovered if recipe matches |
 
 ### 12.3 Formation Discovery
 

@@ -89,7 +89,7 @@ The codebase uses pragmatic internal names. The UI displays Heptarchy-themed nam
 | `iron` | **Ore** | Octahedron wireframe |
 | `steel` | **Alloy** | Reuleaux triangle |
 | `stone` | **Crystal** | Voronoi cell cluster |
-| `sap` | **Sap** | Bifurcating root (same name) |
+| `sap` | **Tonic** | Bifurcating root |
 
 ---
 
@@ -948,7 +948,7 @@ Resource icons:
 | Iron/Ore | Octahedron wireframe | Polyhedron projection |
 | Steel/Alloy | Reuleaux triangle | Constant-width curve |
 | Stone/Crystal | Voronoi cell cluster | 4-5 cells packed |
-| Sap (v10_zeta) | Bifurcating root | Downward L-system, 2 iterations |
+| Tonic (v10_zeta) | Bifurcating root | Downward L-system, 2 iterations |
 | Resonance (v11) | Standing wave | Sine envelope with nodes |
 
 Animations: idle pulse (1.0 + 0.03 × sin(t × 1.5)), income flash to 1.15×, depletion warning wobble.

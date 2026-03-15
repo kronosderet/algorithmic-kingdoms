@@ -693,6 +693,9 @@ class SquadManager:
             if u is not leader:
                 squad.add_member(u)
                 self._unit_to_squad[u.eid] = squad
+        # sync all member stances to squad stance (consistent with reinforce_squad)
+        for u in units:
+            u.stance = squad.stance
         return squad
 
     def dissolve_squad(self, squad):

@@ -16,7 +16,7 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE,
                        TOWER_CANNON_CD, TOWER_EXPLOSIVE_DIRECT,
                        RALLY_POINT_COLOR,
                        GARRISON_COST,
-                       DROPOFF_BUILDING_TYPES, PRODUCTION_RATES,
+                       DROPOFF_BUILDING_TYPES, PRODUCTION_RATES, RESOURCE_DISPLAY_NAMES,
                        UPGRADE_PATH,
                        STANCE_AGGRESSIVE, STANCE_DEFENSIVE, STANCE_GUARD,
                        STANCE_HUNT, STANCE_NAMES, STANCE_COLORS,
@@ -45,6 +45,15 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE,
                        TUTORIAL_HINTS, TUTORIAL_HINT_DURATION, TUTORIAL_HINT_COOLDOWN,
                        INCIDENT_ALERT_COLOR, TENSION_PULSE_SPEED,
                        ATTACK_ARROW_COLOR, ATTACK_ARROW_SIZE,
+                       ATTACK_ARROW_PULSE_SPEED, ATTACK_ARROW_TIP_SCALE,
+                       ATTACK_ARROW_WING_SCALE, ATTACK_ARROW_WING_ANGLE,
+                       INCIDENT_ALERT_BANNER_W, INCIDENT_ALERT_BANNER_H,
+                       INCIDENT_ALERT_BANNER_BG, INCIDENT_ALERT_PULSE_SPEED,
+                       MINIMAP_FLASH_COLOR, MINIMAP_FLASH_INTENSITY,
+                       MINIMAP_FLASH_SPEED, MINIMAP_FLASH_LINE_W,
+                       OVERLAY_ALPHA_DARK, OVERLAY_ALPHA_PAUSE,
+                       PAUSE_PULSE_SPEED, PAUSE_PULSE_MIN, PAUSE_TITLE_COLOR,
+                       NOTIFY_Y_OFFSET,
                        display_name)
 from utils import dist, pos_to_tile, draw_text, ruin_rebuild_cost
 from gui import ftext
@@ -58,6 +67,7 @@ from squads import SquadManager
 from enemy_ai import EnemyAI
 from gui import GUI
 from event_logger import EventLogger
+from advisor import Advisor
 
 
 class Game:
@@ -191,6 +201,11 @@ class Game:
         # v10_alpha: formation discovery — starts empty, discovered through composition
         self.discovered_formations = set()
 
+        # v10_epsilon: Don't Panic advisor
+        self._advisor = Advisor()
+        self._advisor_suggestions: list = []  # current suggestions
+        self._advisor_visible = False  # overlay shown
+
         self._setup_start()
 
     def _setup_start(self):
@@ -263,11 +278,18 @@ class Game:
                     return
                 continue
 
-            # v10_8d: pause toggle
-            if event.type == pygame.KEYDOWN and event.key in (pygame.K_p, pygame.K_PAUSE):
+            # v10_8d: pause toggle (not while advisor is shown)
+            if event.type == pygame.KEYDOWN and event.key in (pygame.K_p, pygame.K_PAUSE) and not self._advisor_visible:
                 self.paused = not self.paused
                 self.pause_menu_selection = 0
                 continue
+
+            # v10_epsilon: advisor overlay intercepts H to close
+            if self._advisor_visible and event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_h or event.key == pygame.K_ESCAPE:
+                    self._advisor_visible = False
+                    self.paused = False
+                continue  # swallow all input while advisor is shown
 
             # v10_8d: pause menu navigation
             if self.paused and event.type == pygame.KEYDOWN:
@@ -512,6 +534,28 @@ class Game:
         # L key: toggle message log panel
         if key == pygame.K_l:
             self.show_message_log = not self.show_message_log
+
+        # H key: Don't Panic advisor
+        if key == pygame.K_h:
+            if self._advisor_visible:
+                self._advisor_visible = False
+                self.paused = False
+            else:
+                self._advisor_suggestions = self._advisor.analyze(self)
+                self._advisor_visible = True
+                self.paused = True
+
+        # Global command hotkeys
+        if key == pygame.K_d:
+            self.global_defend()
+            self.add_notification("Defend Base — all units rallying", 2.0, (50, 200, 80))
+        if key == pygame.K_b and not workers_selected:
+            # B = Town Bell (only when no workers selected, to avoid conflict with build keys)
+            self.global_bell()
+            self.add_notification("Town Bell — Gatherers garrisoning", 2.0, (255, 200, 80))
+        if key == pygame.K_n:
+            self.global_resume()
+            self.add_notification("Resume Work — Gatherers deploying", 2.0, (100, 200, 100))
 
         # build hotkeys (need worker selected)
         if workers_selected:
@@ -822,7 +866,7 @@ class Game:
                     self.resources.spend(steel=cost["steel"])
                     for w in workers:
                         w.command_tower_upgrade(b, self)
-                    self.add_notification("Upgrading tower to Explosive Cannon (15 steel)", 2.0, (255, 140, 40))
+                    self.add_notification("Upgrading Sentinel to Amplified Resonance (15 Alloy)", 2.0, (255, 140, 40))
                     handled = True
             elif (b.built and not b.ruined
                   and (b.building_type in PRODUCTION_RATES or b.building_type == "forge")):
@@ -831,7 +875,7 @@ class Game:
                     for w in workers:
                         w.command_station(b, self)
                     self.add_notification(
-                        f"Workers stationing in {BUILDING_LABELS.get(b.building_type, b.building_type)}",
+                        f"Gatherers stationing in {BUILDING_LABELS.get(b.building_type, b.building_type)}",
                         1.5, (220, 180, 80))
                     handled = True
             # else: fully built and healthy -- fall through to move
@@ -976,39 +1020,49 @@ class Game:
             self.placing_building = building_type
 
     def _quick_form_squad(self):
-        """v10_epsilon2: Quick-Form — auto-create squad with best harmony match."""
+        """v10_epsilon4: Quick-Form — F key discovers + forms squad in one press."""
         combat_sel = [e for e in self.selected
                       if isinstance(e, Unit) and e.unit_type in ("soldier", "archer")]
         free_units = [u for u in combat_sel if self.player_squad_mgr.is_free(u)]
-        if len(free_units) >= FORMATION_MIN_VIABLE and self.discovered_formations:
-            from squads import compute_harmony
-            s_ct = sum(1 for u in free_units if u.unit_type == "soldier")
-            a_ct = sum(1 for u in free_units if u.unit_type == "archer")
-            ranked = sorted(self.discovered_formations,
-                            key=lambda fi: compute_harmony(fi, s_ct, a_ct),
-                            reverse=True)
-            # Double-tap F cycles to next-best formation
-            now = pygame.time.get_ticks()
-            if (hasattr(self, '_last_f_tap_time')
-                    and now - self._last_f_tap_time < DOUBLE_CLICK_THRESHOLD
-                    and hasattr(self, '_last_f_fmt_idx')):
-                try:
-                    cur_pos = ranked.index(self._last_f_fmt_idx)
-                    best_fmt = ranked[(cur_pos + 1) % len(ranked)]
-                except ValueError:
-                    best_fmt = ranked[0]
-            else:
-                best_fmt = ranked[0]
-            self._last_f_tap_time = now
-            self._last_f_fmt_idx = best_fmt
-            sq = self.player_squad_mgr.create_squad(free_units, formation=best_fmt)
-            if sq:
-                self.add_notification(
-                    f"Squad formed: {FORMATION_NAMES[best_fmt]} ({sq.alive_count} units)",
-                    2.0, (100, 255, 100))
-        elif not self.discovered_formations:
-            self.add_notification("Discover a formation first — move 3+ units together!",
+        if len(free_units) < FORMATION_MIN_VIABLE:
+            self.add_notification(
+                f"Select {FORMATION_MIN_VIABLE}+ free military units to form a squad",
+                2.0, (180, 160, 80))
+            return
+
+        # Auto-discover any formations this composition qualifies for
+        self._check_group_discovery(free_units)
+
+        if not self.discovered_formations:
+            self.add_notification("No formation discovered — try a different composition",
                                  2.0, (180, 160, 80))
+            return
+
+        from squads import compute_harmony
+        s_ct = sum(1 for u in free_units if u.unit_type == "soldier")
+        a_ct = sum(1 for u in free_units if u.unit_type == "archer")
+        ranked = sorted(self.discovered_formations,
+                        key=lambda fi: compute_harmony(fi, s_ct, a_ct),
+                        reverse=True)
+        # Double-tap F cycles to next-best formation
+        now = pygame.time.get_ticks()
+        if (hasattr(self, '_last_f_tap_time')
+                and now - self._last_f_tap_time < DOUBLE_CLICK_THRESHOLD
+                and hasattr(self, '_last_f_fmt_idx')):
+            try:
+                cur_pos = ranked.index(self._last_f_fmt_idx)
+                best_fmt = ranked[(cur_pos + 1) % len(ranked)]
+            except ValueError:
+                best_fmt = ranked[0]
+        else:
+            best_fmt = ranked[0]
+        self._last_f_tap_time = now
+        self._last_f_fmt_idx = best_fmt
+        sq = self.player_squad_mgr.create_squad(free_units, formation=best_fmt)
+        if sq:
+            self.add_notification(
+                f"Squad formed: {FORMATION_NAMES[best_fmt]} ({sq.alive_count} units)",
+                2.0, (100, 255, 100))
 
     def _can_place_building(self, btype, col, row):
         d = BUILDING_DEFS[btype]
@@ -1240,9 +1294,9 @@ class Game:
                         best_worker = u
             if best_worker:
                 best_worker.command_tower_upgrade(b, self)
-                self.add_notification("Upgrading tower to Explosive Cannon (15 steel)", 2.0, (255, 140, 40))
+                self.add_notification("Upgrading Sentinel to Amplified Resonance (15 Alloy)", 2.0, (255, 140, 40))
             else:
-                self.resources.steel += cost["steel"]
+                self.resources.add("steel", cost["steel"])
                 self.add_notification("No idle workers available for upgrade!", 2.0, (255, 80, 80))
 
     def _update_resonance(self):
@@ -1320,9 +1374,9 @@ class Game:
             w.command_gather_nearest(self, resource_type)
             if w.state == "moving":
                 count += 1
-        rname = resource_type.title() if resource_type else "resource"
+        rname = RESOURCE_DISPLAY_NAMES.get(resource_type, resource_type.title()) if resource_type else "resource"
         if count:
-            self.add_notification(f"{count} worker(s) → nearest {rname}", 1.5, (200, 180, 80))
+            self.add_notification(f"{count} Gatherer(s) → nearest {rname}", 1.5, (200, 180, 80))
         elif workers:
             self.add_notification(f"No {rname} found", 1.5, (200, 80, 80))
 
@@ -1622,7 +1676,8 @@ class Game:
         self.screen.set_clip(None)
 
         # GUI
-        self.gui.draw_top_bar(self.screen, self.resources, self.enemy_ai, self.player_units)
+        self.gui.draw_top_bar(self.screen, self.resources, self.enemy_ai, self.player_units,
+                              unlocks=self.unlocks)
         self.gui.draw_bottom_panel(self.screen, self.selected, self,
                                    inspected_enemy=self.inspected_enemy)
 
@@ -1665,8 +1720,12 @@ class Game:
         self.gui.draw_tooltip(self.screen)
 
         # v10_8d: pause menu overlay
-        if self.paused:
+        if self.paused and not self._advisor_visible:
             self._draw_pause_menu()
+
+        # v10_epsilon: Don't Panic advisor overlay
+        if self._advisor_visible:
+            self._draw_advisor_panel()
 
         # game over / win overlay — Phase 1 stats panel
         if self.game_over or self.game_won:
@@ -1708,14 +1767,14 @@ class Game:
 
         # Draw chevron arrow
         s = ATTACK_ARROW_SIZE
-        tip_x = ax + int(math.cos(angle) * s * 0.5)
-        tip_y = ay + int(math.sin(angle) * s * 0.5)
-        left_x = ax + int(math.cos(angle + 2.6) * s * 0.6)
-        left_y = ay + int(math.sin(angle + 2.6) * s * 0.6)
-        right_x = ax + int(math.cos(angle - 2.6) * s * 0.6)
-        right_y = ay + int(math.sin(angle - 2.6) * s * 0.6)
+        tip_x = ax + int(math.cos(angle) * s * ATTACK_ARROW_TIP_SCALE)
+        tip_y = ay + int(math.sin(angle) * s * ATTACK_ARROW_TIP_SCALE)
+        left_x = ax + int(math.cos(angle + ATTACK_ARROW_WING_ANGLE) * s * ATTACK_ARROW_WING_SCALE)
+        left_y = ay + int(math.sin(angle + ATTACK_ARROW_WING_ANGLE) * s * ATTACK_ARROW_WING_SCALE)
+        right_x = ax + int(math.cos(angle - ATTACK_ARROW_WING_ANGLE) * s * ATTACK_ARROW_WING_SCALE)
+        right_y = ay + int(math.sin(angle - ATTACK_ARROW_WING_ANGLE) * s * ATTACK_ARROW_WING_SCALE)
 
-        pulse = 0.6 + 0.4 * abs(math.sin(self.game_time * 4.0))
+        pulse = 0.6 + 0.4 * abs(math.sin(self.game_time * ATTACK_ARROW_PULSE_SPEED))
         col = tuple(int(c * pulse) for c in ATTACK_ARROW_COLOR)
         pygame.draw.polygon(self.screen, col,
                             [(tip_x, tip_y), (left_x, left_y), (right_x, right_y)])
@@ -1730,19 +1789,18 @@ class Game:
         # Semi-transparent dark backdrop
         cx = SCREEN_WIDTH // 2
         cy = GAME_AREA_Y + GAME_AREA_H // 3
-        banner_w, banner_h = 400, 36
+        banner_w, banner_h = INCIDENT_ALERT_BANNER_W, INCIDENT_ALERT_BANNER_H
         banner = pygame.Surface((banner_w, banner_h), pygame.SRCALPHA)
-        banner.fill((30, 10, 10, 180))
+        banner.fill(INCIDENT_ALERT_BANNER_BG)
         self.screen.blit(banner, (cx - banner_w // 2, cy - banner_h // 2))
         # Pulsing alpha based on state timer
-        import math
-        pulse = 0.7 + 0.3 * math.sin(self.enemy_ai.state_timer * 8.0)
+        pulse = 0.7 + 0.3 * math.sin(self.enemy_ai.state_timer * INCIDENT_ALERT_PULSE_SPEED)
         col = tuple(int(c * pulse) for c in INCIDENT_ALERT_COLOR)
         ftext(self.screen, text, cx, cy - 6, self.font_notif, col, center=True)
 
     def _render_notifications(self):
         """Draw floating notification messages."""
-        y = GAME_AREA_Y + 50
+        y = GAME_AREA_Y + NOTIFY_Y_OFFSET
         for text, timer, color in self._notifications:
             fade_color = tuple(max(0, min(255, int(c * max(0.0, min(1.0, timer))))) for c in color)
             ftext(self.screen, text, SCREEN_WIDTH // 2, y, self.font_notif,
@@ -2187,22 +2245,23 @@ class Game:
         # Phase 2: minimap edge flash during active incident
         if (self.enemy_ai.state in ("active", "imminent")
                 and self.enemy_ai.last_spawn_edges):
-            import math as _math
-            flash_alpha = int(120 * (0.5 + 0.5 * _math.sin(self.game_time * 6.0)))
+            flash_alpha = int(MINIMAP_FLASH_INTENSITY * (0.5 + 0.5 * math.sin(self.game_time * MINIMAP_FLASH_SPEED)))
             flash_surf = pygame.Surface((MINIMAP_SIZE, MINIMAP_SIZE), pygame.SRCALPHA)
+            fc = (*MINIMAP_FLASH_COLOR, flash_alpha)
+            lw = MINIMAP_FLASH_LINE_W
             for edge in self.enemy_ai.last_spawn_edges:
                 if edge == "top":
-                    pygame.draw.line(flash_surf, (255, 60, 40, flash_alpha),
-                                     (0, 0), (MINIMAP_SIZE, 0), 3)
+                    pygame.draw.line(flash_surf, fc,
+                                     (0, 0), (MINIMAP_SIZE, 0), lw)
                 elif edge == "bottom":
-                    pygame.draw.line(flash_surf, (255, 60, 40, flash_alpha),
-                                     (0, MINIMAP_SIZE - 1), (MINIMAP_SIZE, MINIMAP_SIZE - 1), 3)
+                    pygame.draw.line(flash_surf, fc,
+                                     (0, MINIMAP_SIZE - 1), (MINIMAP_SIZE, MINIMAP_SIZE - 1), lw)
                 elif edge == "left":
-                    pygame.draw.line(flash_surf, (255, 60, 40, flash_alpha),
-                                     (0, 0), (0, MINIMAP_SIZE), 3)
+                    pygame.draw.line(flash_surf, fc,
+                                     (0, 0), (0, MINIMAP_SIZE), lw)
                 elif edge == "right":
-                    pygame.draw.line(flash_surf, (255, 60, 40, flash_alpha),
-                                     (MINIMAP_SIZE - 1, 0), (MINIMAP_SIZE - 1, MINIMAP_SIZE), 3)
+                    pygame.draw.line(flash_surf, fc,
+                                     (MINIMAP_SIZE - 1, 0), (MINIMAP_SIZE - 1, MINIMAP_SIZE), lw)
             mm.blit(flash_surf, (0, 0))
 
         # v10_1: rally point flags on minimap
@@ -2220,10 +2279,10 @@ class Game:
         vh = max(4, int(vr.height * tile_scale))
         pygame.draw.rect(mm, (255, 215, 0), (vx, vy, vw, vh), 1)
 
-        # blit minimap, then Koch depth-1 frame on top
+        # blit minimap, then Koch depth-2 frame on top (VDD §9.8)
         self.screen.blit(mm, (MINIMAP_X, MINIMAP_Y))
         koch_border(self.screen, (MINIMAP_X, MINIMAP_Y, MINIMAP_SIZE, MINIMAP_SIZE),
-                    1, (80, 75, 55))
+                    2, (80, 75, 55))
 
     def _minimap_rect(self):
         return pygame.Rect(MINIMAP_X, MINIMAP_Y, MINIMAP_SIZE, MINIMAP_SIZE)
@@ -2290,18 +2349,17 @@ class Game:
         # save/load/settings: future stubs — no action yet
 
     def _draw_pause_menu(self):
-        import math as _m
         from fractal_font import fractal_font
         ticks = pygame.time.get_ticks()
 
         # darken background
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 160))
+        overlay.fill((0, 0, 0, OVERLAY_ALPHA_PAUSE))
         self.screen.blit(overlay, (0, 0))
 
         # title with subtle pulse
-        pulse = 0.85 + 0.15 * _m.sin(ticks * 0.003)
-        title_col = tuple(int(c * pulse) for c in (200, 220, 255))
+        pulse = PAUSE_PULSE_MIN + (1.0 - PAUSE_PULSE_MIN) * math.sin(ticks * PAUSE_PULSE_SPEED)
+        title_col = tuple(int(c * pulse) for c in PAUSE_TITLE_COLOR)
         fractal_font.draw(self.screen, "PAUSED", SCREEN_WIDTH // 2,
                           SCREEN_HEIGHT // 2 - 130, 36, title_col, center=True)
 
@@ -2358,6 +2416,82 @@ class Game:
                           f"Time: {mins}:{secs:02d}  |  Incident: {self.enemy_ai.incident_number}/{self.enemy_ai.incidents_required}",
                           SCREEN_WIDTH // 2, menu_y + menu_h + 34, 11,
                           (80, 90, 120), center=True)
+
+    def _draw_advisor_panel(self):
+        """v10_epsilon: Don't Panic advisor overlay — calm blue, 1-3 suggestions."""
+        from fractal_font import fractal_font
+
+        # darken background — gentle blue tint, not harsh black
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((10, 15, 40, 170))
+        self.screen.blit(overlay, (0, 0))
+
+        # panel dimensions
+        panel_w = min(500, SCREEN_WIDTH - 40)
+        suggestion_count = len(self._advisor_suggestions)
+        panel_h = 80 + max(suggestion_count, 1) * 50
+        px = SCREEN_WIDTH // 2 - panel_w // 2
+        py = SCREEN_HEIGHT // 2 - panel_h // 2
+
+        # panel background with radial gradient + Koch border
+        bg = radial_gradient(panel_w, panel_h, (25, 35, 60), (15, 20, 35))
+        bg.set_alpha(230)
+        self.screen.blit(bg, (px, py))
+        koch_border(self.screen, (px, py, panel_w, panel_h), 2, (60, 100, 180))
+
+        # title
+        fractal_font.draw(self.screen, "DON'T PANIC",
+                          SCREEN_WIDTH // 2, py + 16, 28,
+                          (100, 180, 255), center=True)
+
+        # suggestions
+        if self._advisor_suggestions:
+            sy = py + 55
+            cat_colors = {
+                "economy":   (100, 200, 120),
+                "defense":   (220, 120, 100),
+                "army":      (180, 160, 220),
+                "formation": (200, 180, 100),
+            }
+            for s in self._advisor_suggestions:
+                cat_col = cat_colors.get(s.category, (150, 150, 180))
+                # category tag
+                fractal_font.draw(self.screen, f"[{s.category.upper()}]",
+                                  px + 14, sy, 12, cat_col)
+                # suggestion text — wrap long text
+                text = s.text
+                max_chars = panel_w // 7  # rough char width estimate
+                if len(text) > max_chars:
+                    # simple word wrap
+                    words = text.split()
+                    line = ""
+                    lines = []
+                    for w in words:
+                        if len(line) + len(w) + 1 > max_chars:
+                            lines.append(line)
+                            line = w
+                        else:
+                            line = (line + " " + w).strip()
+                    if line:
+                        lines.append(line)
+                    for j, ln in enumerate(lines):
+                        fractal_font.draw(self.screen, ln,
+                                          px + 14, sy + 16 + j * 14, 13,
+                                          (200, 210, 230))
+                    sy += 16 + len(lines) * 14 + 10
+                else:
+                    fractal_font.draw(self.screen, text,
+                                      px + 14, sy + 16, 13, (200, 210, 230))
+                    sy += 42
+        else:
+            fractal_font.draw(self.screen, "Everything looks good. Keep it up!",
+                              SCREEN_WIDTH // 2, py + 65, 14,
+                              (120, 200, 140), center=True)
+
+        # footer
+        fractal_font.draw(self.screen, "Press H to close",
+                          SCREEN_WIDTH // 2, py + panel_h - 20, 11,
+                          (80, 100, 140), center=True)
 
     def _draw_overlay(self, text, color):
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)

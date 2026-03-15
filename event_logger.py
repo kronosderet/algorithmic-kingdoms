@@ -106,7 +106,7 @@ class EventLogger:
 
         # gather final resource totals
         r = game.resources
-        res_str = f"g:{int(r.gold)} w:{int(r.wood)} i:{int(r.iron)} s:{int(r.steel)} st:{int(r.stone)}"
+        res_str = f"Flux:{int(r.gold)} Fiber:{int(r.wood)} Ore:{int(r.iron)} Alloy:{int(r.steel)} Crystal:{int(r.stone)}"
         if game.game_won:
             outcome = "victory"
         elif getattr(game, 'game_surrendered', False):

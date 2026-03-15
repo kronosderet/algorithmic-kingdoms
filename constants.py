@@ -131,17 +131,29 @@ DIFFICULTY_PROFILES = {
 # Game-over tips & grades (Phase 1 UX overhaul)
 # ---------------------------------------------------------------------------
 INCIDENT_ALERT_COLOR = (255, 80, 60)
-TENSION_PULSE_SPEED = 3.0  # oscillation speed for foreboding pulse
+INCIDENT_ALERT_BANNER_W = 400
+INCIDENT_ALERT_BANNER_H = 36
+INCIDENT_ALERT_BANNER_BG = (30, 10, 10, 180)
+INCIDENT_ALERT_PULSE_SPEED = 8.0      # sine frequency for alert text pulse
+TENSION_PULSE_SPEED = 3.0             # oscillation speed for foreboding pulse
 ATTACK_ARROW_COLOR = (255, 60, 40)
 ATTACK_ARROW_SIZE = 20
-MINIMAP_FLASH_DURATION = 2.0  # seconds
+ATTACK_ARROW_PULSE_SPEED = 4.0        # sine frequency for arrow pulse
+ATTACK_ARROW_TIP_SCALE = 0.5          # tip offset multiplier
+ATTACK_ARROW_WING_SCALE = 0.6         # wing offset multiplier
+ATTACK_ARROW_WING_ANGLE = 2.6         # radians from tip direction
+MINIMAP_FLASH_DURATION = 2.0          # seconds
+MINIMAP_FLASH_COLOR = (255, 60, 40)
+MINIMAP_FLASH_INTENSITY = 120         # max alpha for edge flash
+MINIMAP_FLASH_SPEED = 6.0             # sine frequency for flash pulse
+MINIMAP_FLASH_LINE_W = 3              # flash line width
 
 GAME_OVER_TIPS_DEFEAT = [
     "Build Sentinels near economy buildings for early defence.",
     "Train Wardens before the first incident hits.",
     "Use Gatherers to collect resources — idle Gatherers waste time.",
     "Rangers outrange melee enemies. Mix them into your army.",
-    "Move 3+ military units together to discover formations.",
+    "Select 3+ military units and press F to discover formations.",
     "Squads in formation deal bonus resonance damage.",
     "Keep training Gatherers — more income means a bigger army.",
     "Watch the tension meter — it warns when enemies are coming.",
@@ -159,15 +171,18 @@ GAME_OVER_TIPS_VICTORY = [
 DIFFICULTY_DESCRIPTIONS = {
     "easy": [
         "Gentle pace — learn the game",
-        "300 Flux, 4 Gatherers, 7 incidents",
+        "300 Flux, 150 Fiber",
+        "4 Gatherers, 7 incidents",
     ],
     "medium": [
         "The intended challenge",
-        "200 Flux, 3 Gatherers, 14 incidents",
+        "200 Flux, 100 Fiber",
+        "3 Gatherers, 14 incidents",
     ],
     "hard": [
         "For seasoned commanders",
-        "180 Flux, 3 Gatherers, 21 incidents",
+        "180 Flux, 100 Fiber",
+        "3 Gatherers, 21 incidents",
     ],
 }
 
@@ -412,10 +427,10 @@ BUILDING_COLORS = {
 
 BUILDING_LABELS = {
     "town_hall": "TL", "barracks": "RF", "refinery": "HM", "tower": "SN",
-    "goldmine_hut": "GN", "lumber_camp": "GT", "quarry_hut": "QN",
-    "iron_depot": "IN", "scaffold": "LT",
-    "sawmill": "TS", "goldmine": "GS", "stoneworks": "SS",
-    "iron_works": "IS", "forge": "FF",
+    "goldmine_hut": "FN", "lumber_camp": "BN", "quarry_hut": "CN",
+    "iron_depot": "ON", "scaffold": "LT",
+    "sawmill": "FS", "goldmine": "XS", "stoneworks": "CS",
+    "iron_works": "OS", "forge": "FF",
 }
 
 # v10_7: Thematic display names — Resonance identity
@@ -423,7 +438,7 @@ DISPLAY_NAMES = {
     # Buildings
     "town_hall": "Tree of Life", "barracks": "Resonance Forge", "refinery": "Harmonic Mill",
     "tower": "Sentinel",
-    "goldmine_hut": "Flux Node", "lumber_camp": "Grove Tap",
+    "goldmine_hut": "Flux Node", "lumber_camp": "Fiber Node",
     "quarry_hut": "Crystal Node", "iron_depot": "Ore Node", "scaffold": "Lattice",
     "sawmill": "Fiber Spire", "goldmine": "Flux Spire",
     "stoneworks": "Crystal Spire", "iron_works": "Ore Spire", "forge": "Fractal Forge",
@@ -444,7 +459,7 @@ DISPLAY_NAMES = {
     "enemy_elite": "Thornknight",
     "enemy_healer": "Bloodtithe",
     "enemy_siege": "Hexweaver",
-    "entrenched": "Entrenched Titan",
+    "entrenched": "Bitter Root",
 }
 
 def display_name(key: str) -> str:
@@ -454,7 +469,7 @@ def display_name(key: str) -> str:
 # VDD Section 1.5: Resource display names (code name → UI name)
 RESOURCE_DISPLAY_NAMES: dict[str, str] = {
     "gold": "Flux", "wood": "Fiber", "iron": "Ore",
-    "steel": "Alloy", "stone": "Crystal", "sap": "Sap",
+    "steel": "Alloy", "stone": "Crystal", "sap": "Tonic",
 }
 
 # Unit definitions: (gold, wood, steel, hp, speed, attack, attack_range, attack_cd, train_time)
@@ -478,7 +493,7 @@ UNIT_COLORS = {  # Rainbow scheme: 7 colors for 7 unit types (ROYGBIV reversed)
 UNIT_LABELS = {"worker": "G", "soldier": "W", "archer": "R",
                "enemy_soldier": "HW", "enemy_archer": "FR", "enemy_raider": "BR",
                "enemy_shieldbearer": "IB", "enemy_elite": "TK", "enemy_healer": "BT",
-               "enemy_siege": "HX"}
+               "enemy_siege": "HX", "entrenched": "BX"}
 UNIT_RADIUS = {"worker": 10, "soldier": 12, "archer": 11,
                "enemy_soldier": 12, "enemy_archer": 11, "enemy_siege": 14, "enemy_elite": 12,
                "enemy_shieldbearer": 14, "enemy_healer": 10, "enemy_raider": 11}
@@ -929,8 +944,17 @@ DISCOVERY_HINTS = {
     FORMATION_POLAR_ROSE: "? · 3+ units",
     FORMATION_SIERPINSKI: "? · 4 at 3:1",
     FORMATION_GOLDEN_SPIRAL: "? · 5 at 3:2",
-    FORMATION_KOCH: "? · 6 at 3:3",
+    FORMATION_KOCH: "? · 6 at 1:1",
 }
+
+# ---------------------------------------------------------------------------
+# Overlay / pause menu visuals
+# ---------------------------------------------------------------------------
+OVERLAY_ALPHA_DARK = 170           # game-over overlay darkness
+OVERLAY_ALPHA_PAUSE = 160          # pause menu overlay darkness
+PAUSE_PULSE_SPEED = 0.003          # title pulse sine speed (per tick)
+PAUSE_PULSE_MIN = 0.85             # min brightness multiplier
+PAUSE_TITLE_COLOR = (200, 220, 255)
 
 # ---------------------------------------------------------------------------
 # v10_8: Resonance Fields
@@ -1074,7 +1098,7 @@ TRAIT_DISPLAY = {
     "brave":        {"color": (255, 215, 0),   "symbol": "B"},
     "cowardly":     {"color": (140, 140, 140), "symbol": "C"},
     "aggressive":   {"color": (220, 50, 50),   "symbol": "A"},
-    "cautious":     {"color": (80, 140, 220),  "symbol": "E"},
+    "cautious":     {"color": (80, 140, 220),  "symbol": "U"},
     "loyal":        {"color": (50, 200, 80),   "symbol": "L"},
     "lone_wolf":    {"color": (192, 192, 210), "symbol": "W"},
     "sharpshooter": {"color": (160, 80, 220),  "symbol": "X"},
@@ -1120,7 +1144,35 @@ CMD_RING_COLOR_BUILD = (100, 180, 255, 200)       # blue ring for build
 CMD_RING_COLOR_RALLY = (255, 160, 0, 200)         # orange for rally point
 
 # ---------------------------------------------------------------------------
-# Message log
+# Notifications
+# ---------------------------------------------------------------------------
+NOTIFY_DURATION_DEFAULT = 3.0      # default notification display time (seconds)
+NOTIFY_DURATION_SHORT = 1.5        # short notifications
+NOTIFY_DURATION_MEDIUM = 2.0       # medium notifications
+NOTIFY_DURATION_LONG = 4.0         # long notifications
+NOTIFY_Y_OFFSET = 50               # pixels below game area top
+
+# ---------------------------------------------------------------------------
+# Tooltip cursor offsets
+# ---------------------------------------------------------------------------
+TOOLTIP_CURSOR_DX = 14             # pixels right of cursor
+TOOLTIP_CURSOR_DY = 18             # pixels below cursor
+TOOLTIP_SCREEN_MARGIN = 4          # min pixels from screen edge
+
+# ---------------------------------------------------------------------------
+# Mini message log (bottom-right HUD panel)
+# ---------------------------------------------------------------------------
+MSG_LOG_MINI_FONT_SZ = 8          # fractal font size for messages
+MSG_LOG_MINI_HEADER_SZ = 10       # fractal font size for header
+MSG_LOG_MINI_LINE_H = 11          # pixel height per message line
+MSG_LOG_MINI_SHOW = 4             # number of messages shown
+MSG_LOG_MINI_PAD = 4              # internal padding
+MSG_LOG_MINI_W = 260              # panel width
+MSG_LOG_MINI_MARGIN = 8           # margin from screen edge
+MSG_LOG_MINI_BG = (18, 18, 28, 180)
+
+# ---------------------------------------------------------------------------
+# Message log (expanded)
 # ---------------------------------------------------------------------------
 MSG_LOG_MAX = 80               # max messages kept in buffer
 MSG_LOG_VISIBLE = 8            # lines visible when expanded
@@ -1172,7 +1224,7 @@ TOOLTIP_DATA = {
     "fmt_Rose": "Rose Formation (Polar Rose curve)\nIdeal ratio: 2:1 (octave harmony)\nAura: +DMG% per petal depth.\nBest for raw damage output.",
     "fmt_Spiral": "Spiral Formation (Golden Spiral)\nIdeal ratio: 3:2 (perfect fifth)\nAura: Evasion chance per depth.\nAssault/flanking formation.",
     "fmt_Sierpinski": "Sierpinski Formation (Recursive triangles)\nIdeal ratio: 3:1 (major interval)\nAura: AOE damage reduction.\nSpread anti-AOE formation.",
-    "fmt_Koch": "Koch Formation (Koch snowflake)\nIdeal ratio: 3:3 (perfect unison)\nAura: Slows nearby enemies.\nDefensive perimeter guard.",
+    "fmt_Koch": "Koch Formation (Koch snowflake)\nIdeal ratio: 1:1 (perfect unison)\nAura: Slows nearby enemies.\nDefensive perimeter guard.",
     # --- Harmony ---
     "harmony": "Harmony Quality — How well the squad's\nunit mix matches the formation's ideal ratio.\nHigher harmony = stronger resonance aura.",
     # --- Traits ---
@@ -1192,11 +1244,11 @@ TOOLTIP_DATA = {
     "bld_refinery": "Harmonic Mill — Ore processor.\nConverts 2 Ore → 1 Alloy.\nUpgrades to Fractal Forge.",
     "bld_tower": "Sentinel — Lattice anchor.\nResonance field damages nearby enemies.\nKoch snowflake aura, passive + pulse.",
     "bld_goldmine_hut": "Flux Node — Drop-off for Flux.\nReduces worker travel time.\nUnlocked by Flux Miner Foreman.",
-    "bld_lumber_camp": "Grove Tap — Drop-off for Fiber.\nReduces worker travel time.\nUnlocked by Fiberjack Foreman.",
+    "bld_lumber_camp": "Fiber Node — Drop-off for Fiber.\nReduces worker travel time.\nUnlocked by Fiberjack Foreman.",
     "bld_quarry_hut": "Crystal Node — Drop-off for Crystal.\nReduces worker travel time.\nUnlocked by Crystal Mason Foreman.",
     "bld_iron_depot": "Ore Node — Drop-off for Ore.\nReduces worker travel time.\nUnlocked by Ore Miner Foreman.",
     "bld_scaffold": "Lattice — Builder's scaffold.\n+25% build/repair speed nearby.\nUnlocked by Builder Foreman.",
-    "bld_sawmill": "Fiber Spire — Fiber production.\nPassive Fiber + worker-boosted output.\nUpgraded from Grove Tap.",
+    "bld_sawmill": "Fiber Spire — Fiber production.\nPassive Fiber + worker-boosted output.\nUpgraded from Fiber Node.",
     "bld_goldmine": "Flux Spire — Flux production.\nPassive Flux + worker-boosted output.\nUpgraded from Flux Node.",
     "bld_stoneworks": "Crystal Spire — Crystal production.\nPassive Crystal + worker-boosted output.\nUpgraded from Crystal Node.",
     "bld_iron_works": "Ore Spire — Ore production.\nPassive Ore + worker-boosted output.\nUpgraded from Ore Node.",
@@ -1206,21 +1258,21 @@ TOOLTIP_DATA = {
     "unit_soldier": "Warden — Melee fighter.\n140 HP, 14 ATK, short range.\nTough frontline with high HP.",
     "unit_archer": "Ranger — Ranged attacker.\n75 HP, 9 ATK, long range.\nBallistic arrows with rank accuracy.",
     # --- Enemy Types — The Dark 7 (one per player tone) ---
-    "enemy_enemy_soldier": "Hollow Warden — Anti-Warden (Re).\nMelee aggressor that breaks defenses.",
-    "enemy_enemy_archer": "Fade Ranger — Anti-Ranger (Mi).\nScattered suppressive fire from the void.",
-    "enemy_enemy_raider": "Blight Reaper — Anti-Gatherer (Do).\nDestroys what Gatherers build.",
-    "enemy_enemy_shieldbearer": "Ironbark — Anti-Shield (Fa).\n50% frontal armor. Flank to bypass!",
-    "enemy_enemy_elite": "Thornknight — Anti-Knight (Sol).\nFast, deadly charge. Hard to kill.",
-    "enemy_enemy_healer": "Bloodtithe — Anti-Healer (La).\nSacrifices allies to collapse dissonant formations.\nGains inverted harmonics power from each sacrifice.",
-    "enemy_enemy_siege": "Hexweaver — Anti-Sage (Ti).\nCorrupts resonance. 2x building damage.\nWeaves anti-harmonics from dissonant fields.",
+    "enemy_soldier": "Hollow Warden — Anti-Warden (Re).\nMelee aggressor that breaks defenses.",
+    "enemy_archer": "Fade Ranger — Anti-Ranger (Mi).\nScattered suppressive fire from the void.",
+    "enemy_raider": "Blight Reaper — Anti-Gatherer (Do).\nDestroys what Gatherers build.",
+    "enemy_shieldbearer": "Ironbark — Anti-Shield (Fa).\n50% frontal armor. Flank to bypass!",
+    "enemy_elite": "Thornknight — Anti-Knight (Sol).\nFast, deadly charge. Hard to kill.",
+    "enemy_healer": "Bloodtithe — Anti-Healer (La).\nSacrifices allies to collapse dissonant formations.\nGains inverted harmonics power from each sacrifice.",
+    "enemy_siege": "Hexweaver — Anti-Sage (Ti).\nCorrupts resonance. 2x building damage.\nWeaves anti-harmonics from dissonant fields.",
     # --- Global Buttons ---
-    "btn_Defend Base": "Rally all military to defend\nthe nearest Town Hall.",
+    "btn_Defend": "Rally all military to defend\nthe nearest Town Hall. [D]",
     "btn_Hunt Enemies": "Send all military to attack-move\ntoward the nearest enemy threat.",
-    "btn_Town Bell": "Ring the bell — all idle workers\ngarrison inside the Town Hall.",
-    "btn_Resume Work": "Ungarrison workers and send them\nback to their previous tasks.",
+    "btn_Bell": "Ring the bell — all idle Gatherers\ngarrison inside the Town Hall. [B]",
+    "btn_Resume": "Ungarrison Gatherers and send them\nback to their previous tasks. [N]",
     # --- Gather ---
-    "btn_Wood": "Send selected workers to gather\nFiber from the nearest trees.",
-    "btn_Gold": "Send selected workers to gather\nFlux from the nearest deposit.",
-    "btn_Iron": "Send selected workers to gather\nOre from the nearest vein.",
-    "btn_Stone": "Send selected workers to gather\nCrystal from the nearest quarry.",
+    "btn_Fiber": "Send selected Gatherers to collect\nFiber from the nearest trees.",
+    "btn_Flux": "Send selected Gatherers to collect\nFlux from the nearest deposit.",
+    "btn_Ore": "Send selected Gatherers to collect\nOre from the nearest vein.",
+    "btn_Crystal": "Send selected Gatherers to collect\nCrystal from the nearest quarry.",
 }
