@@ -360,6 +360,7 @@ def fractal_bar(
     color: tuple[int, ...],
     game_time: float = 0.0,
     border: bool = True,
+    border_col: tuple[int, ...] | None = None,
 ) -> None:
     """Draw a sine-wave textured bar with optional Koch border.
 
@@ -378,12 +379,15 @@ def fractal_bar(
         surf.blit(bar_surf, (x, y))
 
     if border:
-        border_color = (
-            min(255, color[0] // 2 + 40),
-            min(255, color[1] // 2 + 35),
-            min(255, color[2] // 2 + 30),
-        )
-        pygame.draw.rect(surf, border_color, (x, y, w, h), 1)
+        if border_col is not None:
+            bc = border_col
+        else:
+            bc = (
+                min(255, color[0] // 2 + 40),
+                min(255, color[1] // 2 + 35),
+                min(255, color[2] // 2 + 30),
+            )
+        pygame.draw.rect(surf, bc, (x, y, w, h), 1)
 
 
 def fractal_bar_simple(

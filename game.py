@@ -48,7 +48,7 @@ from constants import (SCREEN_WIDTH, SCREEN_HEIGHT, FPS, TILE_SIZE,
                        display_name)
 from utils import dist, pos_to_tile, draw_text, ruin_rebuild_cost
 from gui import ftext
-from fractal_ui import koch_border
+from fractal_ui import koch_border, radial_gradient
 from game_map import GameMap
 from camera import Camera
 from spatial_grid import SpatialGrid
@@ -75,6 +75,7 @@ class Game:
         self.peak_army_size = 0
         self.paused = False
         self.pause_menu_selection = 0  # v10_8d: highlighted menu item
+        self._ui_cache: dict[str, pygame.Surface] = {}  # cached UI surfaces
 
         # difficulty
         self.difficulty = difficulty
@@ -2290,6 +2291,7 @@ class Game:
 
     def _draw_pause_menu(self):
         import math as _m
+        from fractal_font import fractal_font
         ticks = pygame.time.get_ticks()
 
         # darken background
@@ -2300,40 +2302,40 @@ class Game:
         # title with subtle pulse
         pulse = 0.85 + 0.15 * _m.sin(ticks * 0.003)
         title_col = tuple(int(c * pulse) for c in (200, 220, 255))
-        ftext(self.screen, "PAUSED", SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 130,
-                  self.font_lg, title_col, center=True)
+        fractal_font.draw(self.screen, "PAUSED", SCREEN_WIDTH // 2,
+                          SCREEN_HEIGHT // 2 - 130, 36, title_col, center=True)
 
-        # menu panel background
+        # menu panel background with radial gradient + Koch border
         menu_w, menu_h = 280, len(self._PAUSE_ITEMS) * 40 + 10
         menu_x = SCREEN_WIDTH // 2 - menu_w // 2
         menu_y = SCREEN_HEIGHT // 2 - 80
-        panel_surf = pygame.Surface((menu_w, menu_h), pygame.SRCALPHA)
-        panel_surf.fill((20, 20, 35, 200))
-        pygame.draw.rect(panel_surf, (60, 70, 100), (0, 0, menu_w, menu_h), 1, border_radius=6)
-        self.screen.blit(panel_surf, (menu_x, menu_y))
+
+        if "pause_bg" not in self._ui_cache:
+            self._ui_cache["pause_bg"] = radial_gradient(menu_w, menu_h, (30, 30, 50), (15, 15, 25))
+        bg_surf = self._ui_cache["pause_bg"].copy()
+        bg_surf.set_alpha(220)
+        self.screen.blit(bg_surf, (menu_x, menu_y))
+        koch_border(self.screen, (menu_x, menu_y, menu_w, menu_h), 2, (60, 70, 100))
 
         # menu items
         mx, my = pygame.mouse.get_pos()
         for i, (label, action) in enumerate(self._PAUSE_ITEMS):
             item_y = menu_y + 5 + i * 40
             is_selected = (i == self.pause_menu_selection)
-            # mouse hover updates selection
             if menu_x <= mx <= menu_x + menu_w and item_y <= my <= item_y + 34:
                 self.pause_menu_selection = i
                 is_selected = True
 
             is_stub = action in ("save", "load", "settings")
 
-            # highlight bar
+            # highlight bar with Koch border accent
             if is_selected:
                 bar_col = (40, 50, 80, 180) if not is_stub else (35, 35, 50, 120)
                 bar_surf = pygame.Surface((menu_w - 8, 34), pygame.SRCALPHA)
                 bar_surf.fill(bar_col)
                 self.screen.blit(bar_surf, (menu_x + 4, item_y))
-                # left accent line
                 accent = (100, 180, 255) if not is_stub else (60, 60, 80)
-                pygame.draw.line(self.screen, accent, (menu_x + 4, item_y + 2),
-                                 (menu_x + 4, item_y + 32), 2)
+                koch_border(self.screen, (menu_x + 4, item_y, menu_w - 8, 34), 1, accent)
 
             # text
             if is_stub:
@@ -2342,19 +2344,20 @@ class Game:
                 text_col = (220, 230, 255)
             else:
                 text_col = (160, 170, 200)
-            ftext(self.screen, label, menu_x + 16, item_y + 9, self.font, text_col)
+            fractal_font.draw(self.screen, label, menu_x + 16, item_y + 9, 18, text_col)
 
         # footer hint
-        ftext(self.screen, "P to resume  |  Arrow keys to navigate  |  Enter to select",
-                  SCREEN_WIDTH // 2, menu_y + menu_h + 16, self.font_xs,
-                  (80, 90, 120), center=True)
+        fractal_font.draw(self.screen, "P to resume | Arrows to navigate | Enter to select",
+                          SCREEN_WIDTH // 2, menu_y + menu_h + 16, 11,
+                          (80, 90, 120), center=True)
 
         # game time display
         mins = int(self.game_time) // 60
         secs = int(self.game_time) % 60
-        ftext(self.screen, f"Time: {mins}:{secs:02d}  |  Incident: {self.enemy_ai.incident_number}/{self.enemy_ai.incidents_required}",
-                  SCREEN_WIDTH // 2, menu_y + menu_h + 34, self.font_xs,
-                  (80, 90, 120), center=True)
+        fractal_font.draw(self.screen,
+                          f"Time: {mins}:{secs:02d}  |  Incident: {self.enemy_ai.incident_number}/{self.enemy_ai.incidents_required}",
+                          SCREEN_WIDTH // 2, menu_y + menu_h + 34, 11,
+                          (80, 90, 120), center=True)
 
     def _draw_overlay(self, text, color):
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
